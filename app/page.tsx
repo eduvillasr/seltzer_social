@@ -42,22 +42,28 @@ export default function LandingPage() {
 
       {/* Nav */}
       <nav className="fixed top-0 left-0 right-0 z-50 glass">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 flex items-center justify-between h-16">
-          <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-cyan-400 to-cyan-600 flex items-center justify-center animate-glow">
-              <Droplets size={18} className="text-white" />
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 flex items-center justify-between h-14 sm:h-16">
+          <div className="flex items-center gap-2 sm:gap-2.5 min-w-0">
+            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-gradient-to-br from-cyan-400 to-cyan-600 flex items-center justify-center animate-glow flex-shrink-0">
+              <Droplets size={16} className="text-white sm:w-[18px] sm:h-[18px]" />
             </div>
-            <span className="text-lg font-bold" style={{ fontFamily: 'var(--font-display)', color: 'var(--text-primary)' }}>Seltzer Social</span>
+            <span className="text-base sm:text-lg font-bold truncate" style={{ fontFamily: 'var(--font-display)', color: 'var(--text-primary)' }}>Seltzer Social</span>
           </div>
-          <div className="flex items-center gap-2">
-            <Link href="/auth/login" className="btn-secondary">Sign In</Link>
-            <Link href="/auth/signup" className="btn-primary">Get Started <ArrowRight size={14} /></Link>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            {/* Hide "Sign In" label on tiny screens — signup page has a login link */}
+            <Link href="/auth/login" className="btn-secondary hidden sm:inline-flex">Sign In</Link>
+            <Link href="/auth/login" className="btn-ghost sm:hidden" style={{ fontSize: '13px', padding: '6px 10px' }}>Sign In</Link>
+            <Link href="/auth/signup" className="btn-primary" style={{ padding: '8px 14px', fontSize: '13px' }}>
+              <span className="hidden sm:inline">Get Started</span>
+              <span className="sm:hidden">Join</span>
+              <ArrowRight size={14} />
+            </Link>
           </div>
         </div>
       </nav>
 
       {/* Hero */}
-      <section className="relative pt-36 pb-20 px-4 hero-gradient overflow-hidden">
+      <section className="relative pt-24 pb-14 sm:pt-36 sm:pb-20 px-4 hero-gradient overflow-hidden">
         <div className="absolute top-32 left-[5%] w-96 h-96 rounded-full bg-cyan-500/5 blur-[120px]" />
         <div className="absolute top-48 right-[10%] w-72 h-72 rounded-full bg-violet-500/5 blur-[100px]" />
 
@@ -74,7 +80,7 @@ export default function LandingPage() {
               </div>
 
               <h1
-                className="text-5xl sm:text-6xl font-extrabold mb-6 leading-[1.08] animate-fade-in-up"
+                className="text-4xl sm:text-6xl font-extrabold mb-5 sm:mb-6 leading-[1.08] animate-fade-in-up break-anywhere"
                 style={{ fontFamily: 'var(--font-display)', animationDelay: '0.05s', color: 'var(--text-primary)' }}
               >
                 Rate seltzers.{' '}
@@ -82,17 +88,17 @@ export default function LandingPage() {
               </h1>
 
               <p
-                className="text-lg mb-8 leading-relaxed animate-fade-in-up"
+                className="text-base sm:text-lg mb-6 sm:mb-8 leading-relaxed animate-fade-in-up"
                 style={{ animationDelay: '0.15s', color: 'var(--text-secondary)', maxWidth: '480px' }}
               >
                 Build collaborative tier lists, write reviews, and discover who around you shares your taste. Turns out seltzer opinions say a lot about a person.
               </p>
 
-              <div className="flex flex-col sm:flex-row items-start gap-3 animate-fade-in-up" style={{ animationDelay: '0.25s' }}>
-                <Link href="/auth/signup" className="btn-primary" style={{ fontSize: '15px', padding: '13px 28px' }}>
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-start gap-3 animate-fade-in-up" style={{ animationDelay: '0.25s' }}>
+                <Link href="/auth/signup" className="btn-primary justify-center" style={{ fontSize: '15px', padding: '13px 28px' }}>
                   Get Started <ArrowRight size={16} />
                 </Link>
-                <Link href="/auth/login" className="btn-secondary" style={{ fontSize: '15px', padding: '13px 28px' }}>
+                <Link href="/auth/login" className="btn-secondary justify-center" style={{ fontSize: '15px', padding: '13px 28px' }}>
                   I have an account
                 </Link>
               </div>

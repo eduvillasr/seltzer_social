@@ -89,8 +89,13 @@ export function Navigation() {
   return (
     <>
       <nav
-        className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50"
-        style={{ width: 'calc(100% - 24px)', maxWidth: '460px' }}
+        className="fixed left-1/2 -translate-x-1/2 z-50"
+        style={{
+          width: 'calc(100% - 24px)',
+          maxWidth: '460px',
+          // Float above the home indicator on iPhones; falls back to 16px on devices without inset
+          bottom: 'calc(16px + env(safe-area-inset-bottom, 0px))',
+        }}
       >
         <div
           className="relative rounded-full overflow-hidden"
