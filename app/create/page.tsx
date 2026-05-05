@@ -2,85 +2,93 @@
 
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Droplets, Search, Check, Plus, Upload, X } from 'lucide-react';
+import {
+  ArrowLeft, Droplets, Search, Check, Plus, Upload, X, ListPlus, ArrowRight, CheckCircle2,
+} from 'lucide-react';
 import { Navigation } from '@/components/Navigation';
 import { RatingInput } from '@/components/RatingInput';
-import { createReview, supabase, searchSeltzers, uploadReviewImage } from '@/lib/supabase';
-import { AuthUser } from '@/types';
-
-interface Seltzer {
-  id: string;
-  name: string;
-  brand: string;
-  image_url: string | null;
-}
+import { showToast } from '@/components/Toast';
+import {
+  createReview, supabase, searchSeltzers, uploadReviewImage,
+  getSharedTierLists, createSharedTierListSuggestion, findOrCreateSeltzer,
+} from '@/lib/supabase';
+import { AuthUser, SharedTierList, Seltzer } from '@/types';
 
 const DEFAULT_BRANDS = [
-  'AHA',
-  'Bubly',
-  'Canada Dry',
-  'Hal\'s New York',
-  'Kirkland Signature',
-  'LaCroix',
-  'Liquid Death',
-  'Nixie',
-  'Perrier',
-  'Polar',
-  'Rambler',
-  'San Pellegrino',
-  'Sanzo',
-  'Schweppes',
-  'Spindrift',
-  'Topo Chico',
-  'Truly',
-  'Waterloo',
-  'White Claw',
+  'AHA', 'Bubly', 'Canada Dry', "Hal's New York", 'Kirkland Signature',
+  'LaCroix', 'Liquid Death', 'Nixie', 'Perrier', 'Polar', 'Rambler',
+  'San Pellegrino', 'Sanzo', 'Schweppes', 'Spindrift', 'Topo Chico',
+  'Truly', 'Waterloo', 'White Claw',
 ];
 
 export default function CreateReview() {
   const router = useRouter();
   const [user, setUser] = useState<AuthUser | null>(null);
 
+  // ── canonical drink picker state ──
+  const [allSeltzers, setAllSeltzers] = useState<Seltzer[]>([]);
+  const [drinkQuery, setDrinkQuery]   = useState('');
+  const [pickedSeltzer, setPickedSeltzer] = useState<Seltzer | null>(null);
+  const [pickerOpen, setPickerOpen]   = useState(false);
+
+  // adding-new-drink mini-form
+  const [showNewForm, setShowNewForm] = useState(false);
+  const [newBrand, setNewBrand]       = useState('');
+  const [newName, setNewName]         = useState('');
+
+  // brands collected from existing seltzers + defaults
   const [availableBrands, setAvailableBrands] = useState<string[]>(DEFAULT_BRANDS);
-  const [brandQuery, setBrandQuery] = useState('');
-  const [selectedBrand, setSelectedBrand] = useState('');
-  const [isBrandMenuOpen, setIsBrandMenuOpen] = useState(false);
-  const [drinkName, setDrinkName] = useState('');
+  const [brandQuery, setBrandQuery]   = useState('');
+  const [brandMenuOpen, setBrandMenuOpen] = useState(false);
+  const brandWrapRef = useRef<HTMLDivElement>(null);
+
+  // ── review fields ──
+  const [title, setTitle]       = useState('');
+  const [rating, setRating]     = useState(3.0);
+  const [content, setContent]   = useState('');
   const [reviewImage, setReviewImage] = useState<File | null>(null);
   const [imagePreviewUrl, setImagePreviewUrl] = useState('');
 
-  // Review state
-  const [rating, setRating] = useState(3.0);
-  const [content, setContent] = useState('');
-
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError]     = useState('');
+
+  // post-submit prompt
+  const [createdReview, setCreatedReview] = useState<{
+    id: string; title: string; seltzer_name: string; brand: string; rating: number;
+    image_url: string; seltzer_id: string | null;
+  } | null>(null);
+  const [myTierLists, setMyTierLists] = useState<SharedTierList[]>([]);
+  const [suggestingListId, setSuggestingListId] = useState<string | null>(null);
 
   useEffect(() => { checkAuth(); loadSeltzers(); }, []);
 
   useEffect(() => {
-    if (!reviewImage) {
-      setImagePreviewUrl('');
-      return;
-    }
-
+    if (!reviewImage) { setImagePreviewUrl(''); return; }
     const url = URL.createObjectURL(reviewImage);
     setImagePreviewUrl(url);
     return () => URL.revokeObjectURL(url);
   }, [reviewImage]);
 
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (brandWrapRef.current && !brandWrapRef.current.contains(e.target as Node)) {
+        setBrandMenuOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   async function loadSeltzers() {
     const { data } = await searchSeltzers('');
     if (!data) return;
-    const brandsFromDatabase = data
-      .map((s: Seltzer) => s.brand)
-      .filter(Boolean);
-    const uniqueBrands = Array.from(new Set([...DEFAULT_BRANDS, ...brandsFromDatabase]))
-      .sort((a, b) => a.localeCompare(b));
-    setAvailableBrands(uniqueBrands);
+    setAllSeltzers(data as Seltzer[]);
+    const brandsFromDb = (data as Seltzer[]).map((s) => s.brand).filter(Boolean);
+    const merged = Array.from(new Set([...DEFAULT_BRANDS, ...brandsFromDb])).sort((a, b) => a.localeCompare(b));
+    setAvailableBrands(merged);
   }
 
   async function checkAuth() {
@@ -89,48 +97,87 @@ export default function CreateReview() {
     setUser({ id: data.session.user.id, email: data.session.user.email || '' });
   }
 
-  function selectBrand(brand: string) {
-    setSelectedBrand(brand);
-    setBrandQuery(brand);
-    setIsBrandMenuOpen(false);
+  // ─── drink picker ────────────────────────────────────────────
+  const filteredDrinks = useMemo(() => {
+    const q = drinkQuery.trim().toLowerCase();
+    if (!q) return allSeltzers.slice(0, 12);
+    return allSeltzers.filter((s) =>
+      s.name.toLowerCase().includes(q) || s.brand.toLowerCase().includes(q)
+    ).slice(0, 12);
+  }, [allSeltzers, drinkQuery]);
+
+  function selectSeltzer(s: Seltzer) {
+    setPickedSeltzer(s);
+    setDrinkQuery('');
+    setPickerOpen(false);
+    setShowNewForm(false);
   }
 
-  function addCustomBrand() {
-    const customBrand = brandQuery.trim();
-    if (!customBrand) return;
-    setAvailableBrands((brands) => (
-      brands.some((brand) => brand.toLowerCase() === customBrand.toLowerCase())
-        ? brands
-        : [...brands, customBrand].sort((a, b) => a.localeCompare(b))
-    ));
-    selectBrand(customBrand);
+  function startAddNew() {
+    setShowNewForm(true);
+    setPickerOpen(false);
+    // pre-fill from typed query if it looks like "Brand · Name" or just plain name
+    const q = drinkQuery.trim();
+    if (q) {
+      const sep = q.includes('·') ? '·' : (q.includes(' - ') ? ' - ' : null);
+      if (sep) {
+        const [b, n] = q.split(sep);
+        setNewBrand(b.trim());
+        setNewName((n || '').trim());
+      } else {
+        setNewName(q);
+      }
+    }
   }
 
+  // ─── brand input (for new-drink form) ────────────────────────
+  const filteredBrands = useMemo(() => {
+    const q = brandQuery.trim().toLowerCase();
+    if (!q) return availableBrands.slice(0, 10);
+    return availableBrands.filter((b) => b.toLowerCase().includes(q)).slice(0, 10);
+  }, [availableBrands, brandQuery]);
+
+  // ─── image ───────────────────────────────────────────────────
   function handleImageChange(file: File | undefined) {
     if (!file) return;
-    if (!file.type.startsWith('image/')) {
-      setError('Upload an image file of the can.');
-      return;
-    }
-    if (file.size > 5 * 1024 * 1024) {
-      setError('Choose an image under 5MB. The app will shrink it into a small feed thumbnail.');
-      return;
-    }
+    if (!file.type.startsWith('image/')) { setError('Upload an image file.'); return; }
+    if (file.size > 5 * 1024 * 1024)     { setError('Choose an image under 5MB.'); return; }
     setError('');
     setReviewImage(file);
   }
 
+  // ─── submit ──────────────────────────────────────────────────
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!user) { setError('Must be logged in'); return; }
 
-    const name = drinkName.trim();
-    const brand = selectedBrand || brandQuery.trim();
+    // Resolve the canonical drink first
+    let seltzer = pickedSeltzer;
 
-    if (!brand) { setError('Choose a brand or add it if it is missing.'); return; }
-    if (!name) { setError('Specific drink name is required.'); return; }
-    if (!reviewImage) { setError('Please upload a plain can image before publishing.'); return; }
+    if (!seltzer) {
+      // user chose "add new" but never confirmed it — try to use the form
+      if (showNewForm) {
+        const brand = (newBrand || brandQuery).trim();
+        const name  = newName.trim();
+        if (!brand || !name) { setError('Brand and drink name are required.'); return; }
+        setLoading(true);
+        const { data: created, error: createErr } = await findOrCreateSeltzer(brand, name, user.id);
+        if (createErr || !created) {
+          setError(createErr?.message || 'Could not save the new drink.');
+          setLoading(false);
+          return;
+        }
+        seltzer = created as Seltzer;
+        setAllSeltzers((prev) => prev.some((p) => p.id === created.id) ? prev : [created as Seltzer, ...prev]);
+        setPickedSeltzer(created as Seltzer);
+        setShowNewForm(false);
+      } else {
+        setError('Pick a drink (or add a new one) before publishing.');
+        return;
+      }
+    }
 
+    if (!reviewImage) { setError('Please upload a can image.'); return; }
     setLoading(true);
     setError('');
 
@@ -142,28 +189,66 @@ export default function CreateReview() {
     }
 
     const { data, error: dbError } = await createReview({
-      user_id: user.id,
-      seltzer_name: name,
-      brand,
+      user_id:      user.id,
+      title:        title.trim() || null,
+      seltzer_id:   seltzer.id,
+      seltzer_name: seltzer.name,
+      brand:        seltzer.brand,
       rating,
-      content: content || undefined,
-      image_url: imageUrl,
+      content:      content || undefined,
+      image_url:    imageUrl,
     });
 
-    if (dbError) { setError(dbError.message); setLoading(false); return; }
-    router.push(`/review/${data.id}`);
+    if (dbError) {
+      const msg = dbError.message?.includes('seltzer_id')
+        ? 'Run supabase_canonical_drinks.sql in Supabase first — the schema is missing the seltzer_id column.'
+        : dbError.message;
+      setError(msg);
+      showToast('Could not publish review', 'error', msg);
+      setLoading(false);
+      return;
+    }
+    showToast('Review published 🥂', 'success', `${seltzer.brand} · ${seltzer.name}`);
+
+    const { data: lists } = await getSharedTierLists(user.id);
+    setLoading(false);
+    if (lists && lists.length > 0) {
+      setMyTierLists(lists);
+      setCreatedReview({
+        id: data.id,
+        title: title.trim() || seltzer.name,
+        seltzer_name: seltzer.name,
+        brand: seltzer.brand,
+        rating,
+        image_url: imageUrl,
+        seltzer_id: seltzer.id,
+      });
+    } else {
+      router.push(`/review/${data.id}`);
+    }
   }
 
-  const filteredBrands = useMemo(() => {
-    const query = brandQuery.trim().toLowerCase();
-    if (!query) return [];
-    return availableBrands
-      .filter((brand) => brand.toLowerCase().startsWith(query))
-      .slice(0, 10);
-  }, [availableBrands, brandQuery]);
-
-  const canAddBrand = brandQuery.trim().length > 0 &&
-    !availableBrands.some((brand) => brand.toLowerCase() === brandQuery.trim().toLowerCase());
+  async function handleSuggestToList(listId: string) {
+    if (!createdReview || !user) return;
+    setSuggestingListId(listId);
+    function ratingToTier(r: number) {
+      if (r >= 4.5) return 'S'; if (r >= 4) return 'A'; if (r >= 3) return 'B';
+      if (r >= 2) return 'C'; if (r >= 1) return 'D'; return 'F';
+    }
+    await createSharedTierListSuggestion({
+      list_id: listId,
+      created_by: user.id,
+      seltzer_id:   createdReview.seltzer_id,
+      seltzer_name: createdReview.seltzer_name,
+      brand:        createdReview.brand || undefined,
+      proposed_rating: createdReview.rating,
+      proposed_tier:   ratingToTier(createdReview.rating),
+      review_id: createdReview.id,
+    });
+    setSuggestingListId(null);
+    showToast('Suggestion sent', 'success', "Your partner will see it in their inbox.");
+    router.push(`/review/${createdReview.id}`);
+  }
 
   if (!user) {
     return (
@@ -172,6 +257,70 @@ export default function CreateReview() {
           <Droplets size={18} className="text-white" />
         </div>
       </div>
+    );
+  }
+
+  // post-submit prompt
+  if (createdReview) {
+    return (
+      <>
+        <Navigation />
+        <main className="max-w-md mx-auto px-4 pt-20 pb-32">
+          <div className="animate-fade-in-up space-y-5">
+            <div className="glass-card text-center">
+              <div className="w-12 h-12 rounded-2xl flex items-center justify-center mx-auto mb-4" style={{ background: 'rgba(52,211,153,0.15)' }}>
+                <CheckCircle2 size={22} className="text-emerald-400" />
+              </div>
+              <h2 className="text-xl font-bold mb-1" style={{ fontFamily: 'var(--font-display)' }}>Review published!</h2>
+              <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+                <span className="font-semibold" style={{ color: 'var(--text-primary)' }}>{createdReview.title}</span>
+                {createdReview.title !== createdReview.seltzer_name && (
+                  <span style={{ color: 'var(--text-muted)' }}> · {createdReview.brand} · {createdReview.seltzer_name}</span>
+                )}
+              </p>
+            </div>
+
+            <div className="glass-card">
+              <div className="flex items-center gap-2 mb-4">
+                <ListPlus size={17} className="text-cyan-400" />
+                <h3 className="font-bold" style={{ fontFamily: 'var(--font-display)', color: 'var(--text-primary)' }}>
+                  Suggest to a shared list?
+                </h3>
+              </div>
+              <div className="space-y-2">
+                {myTierLists.map((list) => (
+                  <button
+                    key={list.id}
+                    onClick={() => handleSuggestToList(list.id)}
+                    disabled={!!suggestingListId}
+                    className="w-full flex items-center justify-between gap-3 rounded-xl px-4 py-3 text-left transition-all hover:bg-white/5"
+                    style={{ border: '1px solid var(--border-subtle)', background: 'rgba(15,20,36,0.4)' }}
+                  >
+                    <div className="min-w-0">
+                      <p className="font-semibold text-sm truncate" style={{ color: 'var(--text-primary)' }}>{list.name}</p>
+                      <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                        @{list.owner?.username} + @{list.partner?.username}
+                      </p>
+                    </div>
+                    {suggestingListId === list.id
+                      ? <span className="text-xs" style={{ color: 'var(--text-muted)' }}>Adding...</span>
+                      : <ArrowRight size={15} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
+                    }
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <button
+              onClick={() => router.push(`/review/${createdReview.id}`)}
+              className="btn-secondary w-full justify-center"
+              style={{ padding: '12px' }}
+            >
+              Skip, go to my review
+            </button>
+          </div>
+        </main>
+      </>
     );
   }
 
@@ -192,183 +341,265 @@ export default function CreateReview() {
             Write a <span className="gradient-text">Review</span>
           </h1>
           <p className="text-sm mt-1" style={{ color: 'var(--text-secondary)' }}>
-            Choose the brand, name the drink, and upload a clean can photo.
+            Pick the drink, give it a personal title if you want, and rate it.
           </p>
         </div>
 
         <div className="glass-card animate-fade-in-up">
           <form onSubmit={handleSubmit} className="space-y-5">
-            <div className="space-y-4">
-              <div className="relative">
-                <label className="block text-xs font-semibold mb-2 uppercase tracking-wider" style={{ color: 'var(--text-secondary)' }}>
-                  Brand <span className="text-rose-400">*</span>
-                </label>
-                <div className="relative">
-                  <Search
-                    size={16}
-                    style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }}
-                  />
-                  <input
-                    type="text"
-                    value={brandQuery}
-                    onFocus={() => setIsBrandMenuOpen(true)}
-                    onChange={(e) => {
-                      setBrandQuery(e.target.value);
-                      setSelectedBrand('');
-                      setIsBrandMenuOpen(true);
-                    }}
-                    placeholder="Search or add a brand..."
-                    className="input-field"
-                    style={{ paddingLeft: '42px' }}
-                    autoFocus
-                  />
-                </div>
 
-                {isBrandMenuOpen && brandQuery.trim().length > 0 && (
-                  <div
-                    className="animate-slide-down"
-                    style={{
-                      position: 'absolute',
-                      zIndex: 20,
-                      left: 0,
-                      right: 0,
-                      top: 'calc(100% + 8px)',
-                      maxHeight: '260px',
-                      overflowY: 'auto',
-                      padding: '6px',
-                      borderRadius: '14px',
-                      background: 'rgba(10,14,26,0.98)',
-                      border: '1px solid var(--border-medium)',
-                      boxShadow: '0 18px 42px rgba(0,0,0,0.45)',
-                    }}
+            {/* ── DRINK PICKER ─────────────────────────────── */}
+            <div className="relative">
+              <label className="block text-xs font-semibold mb-2 uppercase tracking-wider" style={{ color: 'var(--text-secondary)' }}>
+                Drink <span className="text-rose-400">*</span>
+              </label>
+
+              {pickedSeltzer ? (
+                /* selected pill */
+                <div
+                  className="flex items-center gap-3 rounded-xl p-3"
+                  style={{ background: 'rgba(34,211,238,0.06)', border: '1px solid rgba(34,211,238,0.2)' }}
+                >
+                  <div className="w-10 h-10 rounded-lg flex-shrink-0 flex items-center justify-center" style={{ background: 'rgba(34,211,238,0.12)' }}>
+                    <Droplets size={16} className="text-cyan-400" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-bold text-sm truncate" style={{ color: 'var(--text-primary)' }}>{pickedSeltzer.name}</p>
+                    <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{pickedSeltzer.brand}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => { setPickedSeltzer(null); setPickerOpen(true); }}
+                    style={{ color: 'var(--text-muted)' }}
                   >
-                    {filteredBrands.map((brand) => (
-                      <button
-                        key={brand}
-                        type="button"
-                        onMouseDown={(event) => event.preventDefault()}
-                        onClick={() => selectBrand(brand)}
-                        className="w-full flex items-center justify-between rounded-lg px-3 py-2 text-sm transition-colors hover:bg-white/5"
-                        style={{ color: 'var(--text-primary)' }}
-                      >
-                        <span className="truncate">{brand}</span>
-                        {brand === selectedBrand && <Check size={14} className="text-cyan-400" />}
-                      </button>
-                    ))}
+                    <X size={16} />
+                  </button>
+                </div>
+              ) : showNewForm ? (
+                /* mini "add new" form */
+                <div className="space-y-2.5 rounded-xl p-3" style={{ background: 'rgba(15,20,36,0.4)', border: '1px solid var(--border-subtle)' }}>
+                  <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Adding a new drink to the canonical list — everyone can find it after.</p>
 
-                    {filteredBrands.length === 0 && canAddBrand && (
-                      <button
-                        type="button"
-                        onMouseDown={(event) => event.preventDefault()}
-                        onClick={addCustomBrand}
-                        className="w-full flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold transition-colors hover:bg-white/5"
-                        style={{ color: 'var(--cyan-400)' }}
+                  {/* Brand input with autocomplete */}
+                  <div ref={brandWrapRef} className="relative">
+                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: 'var(--text-muted)' }} />
+                    <input
+                      type="text"
+                      value={newBrand || brandQuery}
+                      onFocus={() => setBrandMenuOpen(true)}
+                      onChange={(e) => { setNewBrand(''); setBrandQuery(e.target.value); setBrandMenuOpen(true); }}
+                      placeholder="Brand"
+                      className="input-field pl-9"
+                      style={{ height: '38px', fontSize: '13px' }}
+                    />
+                    {brandMenuOpen && (filteredBrands.length > 0 || brandQuery.trim()) && (
+                      <div
+                        className="absolute z-20 left-0 right-0 mt-1 rounded-xl overflow-y-auto"
+                        style={{
+                          maxHeight: '220px', padding: '4px',
+                          background: 'rgba(10,14,26,0.98)',
+                          border: '1px solid var(--border-medium)',
+                          boxShadow: '0 18px 42px rgba(0,0,0,0.45)',
+                        }}
                       >
-                        <Plus size={14} /> Add "{brandQuery.trim()}"
-                      </button>
+                        {filteredBrands.map((b) => (
+                          <button
+                            key={b}
+                            type="button"
+                            onMouseDown={(ev) => ev.preventDefault()}
+                            onClick={() => { setNewBrand(b); setBrandQuery(''); setBrandMenuOpen(false); }}
+                            className="w-full text-left rounded-lg px-3 py-1.5 text-sm hover:bg-white/5"
+                            style={{ color: 'var(--text-primary)' }}
+                          >
+                            {b}
+                          </button>
+                        ))}
+                        {brandQuery.trim() && !availableBrands.some((b) => b.toLowerCase() === brandQuery.trim().toLowerCase()) && (
+                          <button
+                            type="button"
+                            onMouseDown={(ev) => ev.preventDefault()}
+                            onClick={() => { setNewBrand(brandQuery.trim()); setBrandQuery(''); setBrandMenuOpen(false); }}
+                            className="w-full text-left rounded-lg px-3 py-1.5 text-sm font-semibold hover:bg-white/5"
+                            style={{ color: 'var(--cyan-400)' }}
+                          >
+                            <Plus size={12} className="inline-block mr-1" /> Use "{brandQuery.trim()}"
+                          </button>
+                        )}
+                      </div>
                     )}
                   </div>
-                )}
-              </div>
 
-              <div>
-                <label className="block text-xs font-semibold mb-2 uppercase tracking-wider" style={{ color: 'var(--text-secondary)' }}>
-                  Specific Drink <span className="text-rose-400">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={drinkName}
-                  onChange={(e) => setDrinkName(e.target.value)}
-                  onFocus={() => setIsBrandMenuOpen(false)}
-                  placeholder="Flavor - Variety, e.g. Yuzu - Sparkling Water"
-                  className="input-field"
-                />
-                <p className="text-[11px] mt-2" style={{ color: 'var(--text-muted)' }}>
-                  Keep the brand separate. Use a consistent drink format like "Flavor - Variety".
-                </p>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold mb-2 uppercase tracking-wider" style={{ color: 'var(--text-secondary)' }}>
-                  Can Image <span className="text-rose-400">*</span>
-                </label>
-                <label
-                  className="block cursor-pointer rounded-xl p-4 transition-colors hover:bg-white/5"
-                  style={{ border: '1px dashed var(--border-strong)', background: 'rgba(15,20,36,0.5)' }}
-                >
                   <input
-                    type="file"
-                    accept="image/*"
-                    className="sr-only"
-                    onChange={(e) => handleImageChange(e.target.files?.[0])}
+                    type="text"
+                    value={newName}
+                    onChange={(e) => setNewName(e.target.value)}
+                    placeholder="Drink name (e.g. Mango Lime - Sparkling Water)"
+                    className="input-field"
+                    style={{ height: '38px', fontSize: '13px' }}
                   />
-                  {imagePreviewUrl ? (
-                    <div className="flex items-center gap-3">
-                      <img
-                        src={imagePreviewUrl}
-                        alt="Uploaded can preview"
-                        className="w-16 h-20 rounded-lg object-cover"
-                        style={{ border: '1px solid var(--border-subtle)' }}
-                      />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold truncate" style={{ color: 'var(--text-primary)' }}>{reviewImage?.name}</p>
-                        <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Tap to replace this image</p>
-                      </div>
+
+                  <button
+                    type="button"
+                    onClick={() => { setShowNewForm(false); setNewBrand(''); setNewName(''); setPickerOpen(true); }}
+                    className="text-xs hover:text-cyan-400 transition-colors"
+                    style={{ color: 'var(--text-muted)' }}
+                  >
+                    ← Back to search
+                  </button>
+                </div>
+              ) : (
+                /* search input + dropdown */
+                <div className="relative">
+                  <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2" style={{ color: 'var(--text-muted)' }} />
+                  <input
+                    type="text"
+                    value={drinkQuery}
+                    onChange={(e) => { setDrinkQuery(e.target.value); setPickerOpen(true); }}
+                    onFocus={() => setPickerOpen(true)}
+                    placeholder="Search drinks…"
+                    className="input-field pl-10"
+                    autoFocus
+                  />
+
+                  {pickerOpen && (
+                    <div
+                      className="absolute z-20 left-0 right-0 mt-1 rounded-xl overflow-y-auto"
+                      style={{
+                        maxHeight: '320px', padding: '4px',
+                        background: 'rgba(10,14,26,0.98)',
+                        border: '1px solid var(--border-medium)',
+                        boxShadow: '0 18px 42px rgba(0,0,0,0.45)',
+                      }}
+                    >
+                      {filteredDrinks.length === 0 && !drinkQuery.trim() ? (
+                        <p className="px-3 py-2 text-xs" style={{ color: 'var(--text-muted)' }}>
+                          No drinks yet — add one!
+                        </p>
+                      ) : filteredDrinks.length === 0 ? (
+                        <p className="px-3 py-2 text-xs" style={{ color: 'var(--text-muted)' }}>
+                          No matches for "{drinkQuery}"
+                        </p>
+                      ) : (
+                        filteredDrinks.map((s) => (
+                          <button
+                            key={s.id}
+                            type="button"
+                            onMouseDown={(ev) => ev.preventDefault()}
+                            onClick={() => selectSeltzer(s)}
+                            className="w-full flex items-center gap-3 rounded-lg px-3 py-2 hover:bg-white/5 transition-colors text-left"
+                          >
+                            <div className="w-8 h-8 rounded-md flex-shrink-0 flex items-center justify-center" style={{ background: 'rgba(34,211,238,0.1)' }}>
+                              <Droplets size={12} className="text-cyan-400" />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p className="text-sm font-semibold truncate" style={{ color: 'var(--text-primary)' }}>{s.name}</p>
+                              <p className="text-[11px] truncate" style={{ color: 'var(--text-muted)' }}>{s.brand}</p>
+                            </div>
+                          </button>
+                        ))
+                      )}
+
                       <button
                         type="button"
-                        onClick={(event) => {
-                          event.preventDefault();
-                          setReviewImage(null);
-                        }}
-                        className="btn-ghost"
-                        style={{ padding: '8px' }}
-                        aria-label="Remove uploaded image"
+                        onMouseDown={(ev) => ev.preventDefault()}
+                        onClick={startAddNew}
+                        className="w-full text-left rounded-lg px-3 py-2 mt-1 font-semibold text-sm hover:bg-white/5 transition-colors flex items-center gap-2"
+                        style={{ color: 'var(--cyan-400)', borderTop: '1px solid var(--border-subtle)' }}
                       >
-                        <X size={15} />
+                        <Plus size={14} /> Add new drink{drinkQuery.trim() && `: "${drinkQuery.trim()}"`}
                       </button>
                     </div>
-                  ) : (
-                    <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 rounded-xl flex items-center justify-center" style={{ background: 'rgba(6,182,212,0.1)' }}>
-                        <Upload size={18} className="text-cyan-400" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Upload can photo</p>
-                        <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Plain front-facing image, text and artwork visible.</p>
-                      </div>
-                    </div>
                   )}
-                </label>
-                <div className="mt-3 rounded-xl p-3" style={{ background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.16)' }}>
-                  <p className="text-xs font-semibold mb-1" style={{ color: 'var(--amber-400)' }}>Upload guidelines</p>
-                  <p className="text-xs leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
-                    Use a plain image of the seltzer can. The brand text, flavor text, and can artwork should be readable. Avoid fruit-only photos, lifestyle shots, busy shelves, heavy crop, blur, or hidden labels.
-                  </p>
                 </div>
-              </div>
+              )}
             </div>
 
-              {/* Rating */}
-              <div
-                className="rounded-xl p-3"
-                style={{ background: 'rgba(6,182,212,0.05)', border: '1px solid var(--border-subtle)' }}
-              >
-                <RatingInput value={rating} onChange={setRating} />
-              </div>
+            {/* ── REVIEW TITLE (optional) ──────────────────── */}
+            <div>
+              <label className="block text-xs font-semibold mb-2 uppercase tracking-wider" style={{ color: 'var(--text-secondary)' }}>
+                Review Title <span style={{ color: 'var(--text-muted)', fontWeight: 500, textTransform: 'none', letterSpacing: 0 }}>· optional</span>
+              </label>
+              <input
+                type="text"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder={pickedSeltzer ? `e.g. "Ultimate summer drink"` : 'Pick a drink first'}
+                className="input-field"
+                maxLength={80}
+              />
+              <p className="text-[11px] mt-2" style={{ color: 'var(--text-muted)' }}>
+                Free-form. Leave blank to use the drink name.
+              </p>
+            </div>
 
-              {/* Review text */}
-              <div>
-                <label className="block text-xs font-semibold mb-2 uppercase tracking-wider" style={{ color: 'var(--text-secondary)' }}>
-                  Your Review
-                </label>
-                <textarea
-                  value={content}
-                  onChange={(e) => setContent(e.target.value)}
-                  placeholder="What did you think? How's the fizz? The flavor?"
-                  rows={4}
-                  className="input-field resize-none"
+            {/* ── IMAGE ────────────────────────────────────── */}
+            <div>
+              <label className="block text-xs font-semibold mb-2 uppercase tracking-wider" style={{ color: 'var(--text-secondary)' }}>
+                Can Image <span className="text-rose-400">*</span>
+              </label>
+              <label
+                className="block cursor-pointer rounded-xl p-4 transition-colors hover:bg-white/5"
+                style={{ border: '1px dashed var(--border-strong)', background: 'rgba(15,20,36,0.5)' }}
+              >
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="sr-only"
+                  onChange={(e) => handleImageChange(e.target.files?.[0])}
                 />
-              </div>
+                {imagePreviewUrl ? (
+                  <div className="flex items-center gap-3">
+                    <img
+                      src={imagePreviewUrl}
+                      alt="Preview"
+                      className="w-16 h-20 rounded-lg object-cover"
+                      style={{ border: '1px solid var(--border-subtle)' }}
+                    />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold truncate" style={{ color: 'var(--text-primary)' }}>{reviewImage?.name}</p>
+                      <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Tap to replace</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={(e) => { e.preventDefault(); setReviewImage(null); }}
+                      className="btn-ghost"
+                      style={{ padding: '8px' }}
+                    >
+                      <X size={15} />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-xl flex items-center justify-center" style={{ background: 'rgba(6,182,212,0.1)' }}>
+                      <Upload size={18} className="text-cyan-400" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Upload can photo</p>
+                      <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Plain front-facing image, label readable.</p>
+                    </div>
+                  </div>
+                )}
+              </label>
+            </div>
+
+            {/* ── RATING ───────────────────────────────────── */}
+            <div className="rounded-xl p-3" style={{ background: 'rgba(6,182,212,0.05)', border: '1px solid var(--border-subtle)' }}>
+              <RatingInput value={rating} onChange={setRating} />
+            </div>
+
+            {/* ── REVIEW BODY ──────────────────────────────── */}
+            <div>
+              <label className="block text-xs font-semibold mb-2 uppercase tracking-wider" style={{ color: 'var(--text-secondary)' }}>
+                Your Review
+              </label>
+              <textarea
+                value={content}
+                onChange={(e) => setContent(e.target.value)}
+                placeholder="What did you think? How's the fizz? The flavor?"
+                rows={4}
+                className="input-field resize-none"
+              />
+            </div>
 
             {error && (
               <div className="bg-red-500/10 border border-red-500/20 text-red-400 px-4 py-3 rounded-xl text-xs">

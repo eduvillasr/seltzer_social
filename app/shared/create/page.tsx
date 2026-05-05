@@ -8,6 +8,7 @@ import { Navigation } from '@/components/Navigation';
 import { Avatar } from '@/components/Avatar';
 import { createSharedTierList, getMutualFollows, supabase } from '@/lib/supabase';
 import { User } from '@/types';
+import { CanLoader } from '@/components/CanLoader';
 
 export default function CreateSharedListPage() {
   const router = useRouter();
@@ -62,7 +63,7 @@ export default function CreateSharedListPage() {
         </p>
 
         {loading ? (
-          <p className="text-sm" style={{ color: 'var(--text-tertiary)' }}>Loading...</p>
+          <CanLoader />
         ) : (
           <form onSubmit={submit} className="glass-card space-y-5">
             <div>

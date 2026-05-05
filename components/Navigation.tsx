@@ -4,15 +4,21 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-import { Plus, Home, Search, Settings, User } from 'lucide-react';
-import { ensureUserProfile, supabase } from '@/lib/supabase';
+import { usePathname, useRouter } from 'next/navigation';
+import { Plus, Home, Search, Bell, User } from 'lucide-react';
+import { ensureUserProfile, getUnreadNotificationCount, supabase } from '@/lib/supabase';
 import { AuthUser } from '@/types';
+
+// Routes where Navigation shouldn't push to choose-username (would loop, or
+// the page is part of the auth flow itself)
+const AUTH_ROUTES = ['/', '/auth/login', '/auth/signup', '/auth/callback', '/auth/choose-username'];
 
 export function Navigation() {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [username, setUsername] = useState('');
+  const [unreadCount, setUnreadCount] = useState(0);
   const pathname = usePathname();
+  const router = useRouter();
 
   useEffect(() => {
     checkUser();
@@ -21,20 +27,32 @@ export function Navigation() {
         if (session?.user) {
           setUser({ id: session.user.id, email: session.user.email || '' });
           loadProfile(session.user.id);
+          loadUnread(session.user.id);
         } else {
           setUser(null);
           setUsername('');
+          setUnreadCount(0);
         }
       }
     );
     return () => { authListener?.subscription.unsubscribe(); };
   }, []);
 
+  // Refresh unread count when navigating away from inbox
+  useEffect(() => {
+    if (user?.id && pathname !== '/inbox') {
+      loadUnread(user.id);
+    } else if (pathname === '/inbox') {
+      setUnreadCount(0);
+    }
+  }, [pathname]);
+
   async function checkUser() {
     const { data } = await supabase.auth.getSession();
     if (data.session?.user) {
       setUser({ id: data.session.user.id, email: data.session.user.email || '' });
       loadProfile(data.session.user.id);
+      loadUnread(data.session.user.id);
     }
   }
 
@@ -43,10 +61,22 @@ export function Navigation() {
     const authUser = sessionData.session?.user;
     const { data } = authUser
       ? await ensureUserProfile(authUser)
-      : await supabase.from('users').select('username, avatar_url').eq('id', uid).single();
+      : await supabase.from('users').select('username, avatar_url').eq('id', uid).maybeSingle();
 
-    if (!data) return;
+    if (!data) {
+      // Authenticated but no profile row yet → make them pick a username,
+      // unless we're already inside the auth flow.
+      if (pathname && !AUTH_ROUTES.includes(pathname)) {
+        router.replace('/auth/choose-username');
+      }
+      return;
+    }
     setUsername(data.username);
+  }
+
+  async function loadUnread(uid: string) {
+    const { count } = await getUnreadNotificationCount(uid);
+    setUnreadCount(count);
   }
 
   if (!user) return null;
@@ -117,6 +147,28 @@ export function Navigation() {
             </Link>
 
             <Link
+              href="/inbox"
+              className="relative flex flex-col items-center gap-0.5 py-2 px-4 rounded-full transition-all"
+              style={{
+                background: isActive('/inbox') ? 'rgba(6, 182, 212, 0.15)' : 'transparent',
+                color: isActive('/inbox') ? 'var(--cyan-400)' : 'var(--text-tertiary)',
+              }}
+            >
+              <div className="relative">
+                <Bell size={20} strokeWidth={isActive('/inbox') ? 2.5 : 2} />
+                {unreadCount > 0 && (
+                  <span
+                    className="absolute -top-1.5 -right-2 min-w-[16px] h-4 px-1 rounded-full text-[9px] font-bold flex items-center justify-center"
+                    style={{ background: 'var(--amber-400)', color: '#0a0e1a' }}
+                  >
+                    {unreadCount > 9 ? '9+' : unreadCount}
+                  </span>
+                )}
+              </div>
+              <span style={{ fontSize: '10px', fontWeight: 600 }}>Inbox</span>
+            </Link>
+
+            <Link
               href={`/profile/${username}`}
               className="flex flex-col items-center gap-0.5 py-2 px-4 rounded-full transition-all"
               style={{
@@ -126,18 +178,6 @@ export function Navigation() {
             >
               <User size={20} strokeWidth={pathname?.startsWith('/profile') ? 2.5 : 2} />
               <span style={{ fontSize: '10px', fontWeight: 600 }}>Profile</span>
-            </Link>
-
-            <Link
-              href="/settings"
-              className="flex flex-col items-center gap-0.5 py-2 px-4 rounded-full transition-all"
-              style={{
-                background: isActive('/settings') ? 'rgba(6, 182, 212, 0.15)' : 'transparent',
-                color: isActive('/settings') ? 'var(--cyan-400)' : 'var(--text-tertiary)',
-              }}
-            >
-              <Settings size={20} strokeWidth={isActive('/settings') ? 2.5 : 2} />
-              <span style={{ fontSize: '10px', fontWeight: 600 }}>Settings</span>
             </Link>
           </div>
         </div>

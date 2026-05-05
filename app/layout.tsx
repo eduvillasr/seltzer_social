@@ -2,6 +2,7 @@
 
 import type { Metadata } from 'next';
 import './globals.css';
+import { ToastHost } from '@/components/Toast';
 
 export const metadata: Metadata = {
   title: 'Seltzer Social — Rate. Review. Discover.',
@@ -17,6 +18,7 @@ export default function RootLayout({
     <html lang="en">
       <body>
         {children}
+        <ToastHost />
       </body>
     </html>
   );

@@ -32,8 +32,24 @@ export default function Login() {
     if (authError) { setError(authError.message); setLoading(false); }
   }
 
+  const bubbles = [
+    { size: 18, left: '8%',  delay: '0s',   duration: '7s'  },
+    { size: 10, left: '18%', delay: '2s',   duration: '9s'  },
+    { size: 24, left: '30%', delay: '1s',   duration: '11s' },
+    { size: 14, left: '45%', delay: '3.5s', duration: '8s'  },
+    { size: 20, left: '60%', delay: '0.5s', duration: '10s' },
+    { size: 12, left: '72%', delay: '2.5s', duration: '7.5s'},
+    { size: 28, left: '83%', delay: '1.5s', duration: '12s' },
+    { size: 10, left: '92%', delay: '4s',   duration: '9s'  },
+  ];
+
   return (
-    <div className="min-h-screen hero-gradient flex items-center justify-center px-4">
+    <div className="min-h-screen hero-gradient flex items-center justify-center px-4 relative overflow-hidden">
+      <div className="bubble-container">
+        {bubbles.map((b, i) => (
+          <div key={i} className="bubble" style={{ width: b.size, height: b.size, left: b.left, bottom: '-10%', animationDelay: b.delay, animationDuration: b.duration }} />
+        ))}
+      </div>
       <div className="w-full max-w-md relative z-10 animate-fade-in-up">
         <div className="text-center mb-8">
           <Link href="/" className="inline-flex mb-6">

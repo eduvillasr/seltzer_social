@@ -2,19 +2,27 @@
 
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ReviewCard } from '@/components/ReviewCard';
+import { TierAddCard } from '@/components/TierAddCard';
 import { Navigation } from '@/components/Navigation';
-import { Review, AuthUser } from '@/types';
-import { getSmartFeed, getFollowingCount, getSubscribedSharedTierActivities, getSharedSuggestionActivities, supabase } from '@/lib/supabase';
-import { Plus, Droplets, Search, Sparkles, ListPlus, Vote } from 'lucide-react';
+import { Review, AuthUser, SharedTierListItem } from '@/types';
+import { getSmartFeed, getFollowingCount, getSubscribedSharedTierActivities, supabase } from '@/lib/supabase';
+import { Plus, Droplets, Search, Sparkles, ListPlus, RotateCcw } from 'lucide-react';
+import { FeedSkeleton } from '@/components/Skeletons';
+import { usePullToRefresh } from '@/hooks/usePullToRefresh';
+
+type FeedItem =
+  | { kind: 'review';  at: number; review: Review }
+  | { kind: 'tierAdd'; at: number; activity: SharedTierListItem };
+
+type Section = { label: string; items: FeedItem[] };
 
 export default function FeedPage() {
   const [reviews, setReviews] = useState<Review[]>([]);
-  const [sharedActivities, setSharedActivities] = useState<any[]>([]);
-  const [suggestionActivities, setSuggestionActivities] = useState<any[]>([]);
+  const [activities, setActivities] = useState<SharedTierListItem[]>([]);
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [followingCount, setFollowingCount] = useState(0);
@@ -27,30 +35,119 @@ export default function FeedPage() {
     if (!data.session?.user) { router.push('/'); return; }
     const uid = data.session.user.id;
     setCurrentUser({ id: uid, email: data.session.user.email || '' });
+
+    // Soft-redirect first-time users (no following + no own reviews) to onboarding,
+    // unless they've already opted out via this flag in localStorage.
+    const skipKey = `seltzer:skip-onboard:${uid}`;
+    if (typeof window !== 'undefined' && !window.localStorage.getItem(skipKey)) {
+      const [{ count: followCount }, { count: reviewCount }] = await Promise.all([
+        getFollowingCount(uid),
+        supabase.from('reviews').select('id', { count: 'exact', head: true }).eq('user_id', uid).then(({ count }) => ({ count: count ?? 0 })),
+      ]);
+      if (followCount === 0 && reviewCount === 0) {
+        router.push('/onboarding');
+        return;
+      }
+      window.localStorage.setItem(skipKey, '1');
+    }
+
     loadFeed(uid);
   }
 
-  async function loadFeed(uid: string) {
-    setLoading(true);
+  async function loadFeed(uid: string, withSpinner = true) {
+    if (withSpinner) setLoading(true);
     const { count: fc } = await getFollowingCount(uid);
     setFollowingCount(fc);
-    const [{ data }, { data: activities }, { data: suggestions }] = await Promise.all([
+    const [{ data }, { data: acts }] = await Promise.all([
       getSmartFeed(uid, 50),
-      getSubscribedSharedTierActivities(uid, 12),
-      getSharedSuggestionActivities(uid, 12),
+      getSubscribedSharedTierActivities(uid, 24),
     ]);
-    setReviews(data || []);
-    setSharedActivities(activities || []);
-    setSuggestionActivities(suggestions || []);
-    setLoading(false);
+    setReviews((data as Review[]) || []);
+    setActivities((acts as SharedTierListItem[]) || []);
+    if (withSpinner) setLoading(false);
   }
+
+  const { pull, progress, isRefreshing, triggered, bind } = usePullToRefresh(async () => {
+    if (currentUser) await loadFeed(currentUser.id, false);
+  });
+
+  // ── merge + group ───────────────────────────────────────────
+  const sections = useMemo<Section[]>(() => {
+    const items: FeedItem[] = [];
+    for (const r of reviews) {
+      items.push({ kind: 'review', at: new Date(r.created_at).getTime(), review: r });
+    }
+    for (const a of activities) {
+      items.push({ kind: 'tierAdd', at: new Date(a.created_at).getTime(), activity: a });
+    }
+    items.sort((x, y) => y.at - x.at);
+
+    // group by relative day buckets
+    const now = Date.now();
+    const dayMs = 24 * 60 * 60 * 1000;
+    const startOfToday = new Date(); startOfToday.setHours(0, 0, 0, 0);
+    const todayMs = startOfToday.getTime();
+    const yesterdayMs = todayMs - dayMs;
+    const weekAgoMs = todayMs - 7 * dayMs;
+
+    const buckets: Record<string, FeedItem[]> = {
+      'Today': [],
+      'Yesterday': [],
+      'This week': [],
+      'Earlier': [],
+    };
+    for (const item of items) {
+      if (item.at >= todayMs)        buckets['Today'].push(item);
+      else if (item.at >= yesterdayMs) buckets['Yesterday'].push(item);
+      else if (item.at >= weekAgoMs) buckets['This week'].push(item);
+      else                            buckets['Earlier'].push(item);
+    }
+    return (Object.entries(buckets) as [string, FeedItem[]][])
+      .filter(([, arr]) => arr.length > 0)
+      .map(([label, arr]) => ({ label, items: arr }));
+  }, [reviews, activities]);
+
+  const isEmpty = !loading && sections.length === 0;
 
   return (
     <>
       <Navigation />
-      <main className="max-w-md mx-auto px-4 pt-10 pb-32">
 
-        {/* Subtle header — feed label */}
+      {/* Pull-to-refresh indicator (mobile) */}
+      <div
+        className="fixed top-0 left-1/2 -translate-x-1/2 z-40 pointer-events-none flex items-center justify-center"
+        style={{
+          width: 36, height: 36,
+          borderRadius: '50%',
+          background: 'rgba(15,20,36,0.85)',
+          backdropFilter: 'blur(12px)',
+          border: '1px solid var(--border-subtle)',
+          opacity: progress,
+          transform: `translate(-50%, ${Math.max(8, pull - 24)}px) scale(${0.6 + 0.4 * progress})`,
+          transition: pull === 0 ? 'transform 240ms ease, opacity 240ms ease' : 'none',
+        }}
+      >
+        <RotateCcw
+          size={16}
+          className={isRefreshing ? 'animate-spin' : ''}
+          style={{
+            color: triggered ? 'var(--cyan-400)' : 'var(--text-muted)',
+            transform: `rotate(${progress * -180}deg)`,
+            transition: isRefreshing ? 'none' : 'transform 80ms linear',
+          }}
+        />
+      </div>
+
+      <main
+        {...bind}
+        className="max-w-md mx-auto px-4 pt-10 pb-32"
+        style={{
+          transform: pull > 0 ? `translateY(${pull * 0.4}px)` : undefined,
+          transition: pull === 0 ? 'transform 280ms cubic-bezier(0.18, 0.89, 0.32, 1.28)' : 'none',
+        }}
+      >
+
+        {/* Header */}
         <div className="flex items-center justify-between mb-5 animate-fade-in-up">
           <div className="flex items-center gap-2">
             <Sparkles size={14} className="text-cyan-400" />
@@ -69,27 +166,26 @@ export default function FeedPage() {
           )}
         </div>
 
+        {/* Promo: start a shared list */}
         <Link
           href="/shared/create"
-          className="mb-4 flex items-center justify-between rounded-2xl px-4 py-3 transition-colors hover:bg-white/5"
-          style={{ background: 'rgba(6,182,212,0.08)', border: '1px solid rgba(6,182,212,0.14)' }}
+          className="mb-5 flex items-center justify-between rounded-2xl px-4 py-3 transition-colors hover:bg-white/5"
+          style={{
+            background: 'linear-gradient(135deg, rgba(6,182,212,0.10), rgba(245,158,11,0.06))',
+            border: '1px solid rgba(6,182,212,0.18)',
+          }}
         >
           <div>
             <p className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>Start a shared tier list</p>
-            <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>Invite a mutual follower, then people can subscribe.</p>
+            <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>Rank seltzers together with a friend.</p>
           </div>
           <ListPlus size={18} className="text-cyan-400" />
         </Link>
 
         {/* Feed */}
         {loading ? (
-          <div className="text-center py-20">
-            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-cyan-400 to-violet-500 flex items-center justify-center mx-auto mb-4 animate-float animate-glow">
-              <Droplets size={20} className="text-white" />
-            </div>
-            <p className="text-sm" style={{ color: 'var(--text-tertiary)' }}>Loading...</p>
-          </div>
-        ) : reviews.length === 0 && sharedActivities.length === 0 && suggestionActivities.length === 0 ? (
+          <FeedSkeleton count={3} />
+        ) : isEmpty ? (
           <div className="glass-card text-center py-12 animate-fade-in-up">
             <Droplets size={32} className="mx-auto mb-3" style={{ color: 'var(--text-muted)' }} />
             <h3 className="text-lg font-bold mb-2" style={{ fontFamily: 'var(--font-display)' }}>
@@ -103,53 +199,37 @@ export default function FeedPage() {
             </Link>
           </div>
         ) : (
-          <div className="space-y-4 stagger-children">
-            {suggestionActivities.map((suggestion) => {
-              const tried = suggestion.trials?.some((trial: any) => trial.user_id === currentUser?.id);
-              return (
-                <Link
-                  key={`suggestion-${suggestion.id}`}
-                  href={`/shared/${suggestion.list_id}`}
-                  className="glass-card block"
-                  style={{ padding: '16px', borderColor: tried ? 'var(--border-subtle)' : 'rgba(251,191,36,0.22)' }}
-                >
-                  <div className="flex items-start gap-3">
-                    <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: 'rgba(251,191,36,0.1)', color: 'var(--amber-400)' }}>
-                      <Vote size={17} />
-                    </div>
-                    <div>
-                      <p className="text-xs uppercase tracking-wider mb-1" style={{ color: tried ? 'var(--cyan-400)' : 'var(--amber-400)' }}>
-                        {tried ? 'Ready to vote' : 'Try it to vote'}
-                      </p>
-                      <p className="text-sm leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
-                        <span className="font-bold" style={{ color: 'var(--text-primary)' }}>@{suggestion.created_by_user?.username}</span>
-                        {' '}suggested adding <span className="font-bold" style={{ color: 'var(--text-primary)' }}>{suggestion.seltzer_name}</span> to{' '}
-                        <span className="font-bold" style={{ color: 'var(--text-primary)' }}>{suggestion.list?.name}</span>.
-                      </p>
-                    </div>
-                  </div>
-                </Link>
-              );
-            })}
-            {sharedActivities.map((activity) => (
-              <Link
-                key={`shared-${activity.id}`}
-                href={`/shared/${activity.list_id}`}
-                className="glass-card block"
-                style={{ padding: '16px' }}
-              >
-                <p className="text-xs uppercase tracking-wider mb-1" style={{ color: 'var(--cyan-400)' }}>Shared list update</p>
-                <p className="text-sm leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
-                  <span className="font-bold" style={{ color: 'var(--text-primary)' }}>@{activity.list?.owner?.username}</span>
-                  {' '}and{' '}
-                  <span className="font-bold" style={{ color: 'var(--text-primary)' }}>@{activity.list?.partner?.username}</span>
-                  {' '}just added <span className="font-bold" style={{ color: 'var(--text-primary)' }}>{activity.seltzer_name}</span> to{' '}
-                  <span className="font-bold" style={{ color: 'var(--text-primary)' }}>{activity.list?.name}</span>.
-                </p>
-              </Link>
-            ))}
-            {reviews.map((review) => (
-              <ReviewCard key={review.id} review={review} currentUserId={currentUser?.id} />
+          <div className="space-y-6">
+            {sections.map((section, sIdx) => (
+              <section key={section.label} className="space-y-3 stagger-children">
+                {/* Section header */}
+                <div className="flex items-center gap-3">
+                  <span
+                    className="text-[10px] font-bold uppercase tracking-[0.18em]"
+                    style={{ color: 'var(--text-muted)' }}
+                  >
+                    {section.label}
+                  </span>
+                  <span className="flex-1 h-px" style={{ background: 'var(--border-subtle)' }} />
+                  <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                    {section.items.length}
+                  </span>
+                </div>
+
+                {/* Items */}
+                {section.items.map((item, idx) => {
+                  if (item.kind === 'review') {
+                    return (
+                      <ReviewCard
+                        key={`r-${item.review.id}`}
+                        review={item.review}
+                        currentUserId={currentUser?.id}
+                      />
+                    );
+                  }
+                  return <TierAddCard key={`t-${item.activity.id}`} activity={item.activity} />;
+                })}
+              </section>
             ))}
           </div>
         )}

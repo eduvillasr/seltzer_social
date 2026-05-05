@@ -2,20 +2,20 @@
 
 'use client';
 
-import { use, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Navigation } from '@/components/Navigation';
 import { Avatar } from '@/components/Avatar';
 import { ArrowLeft, Users, UserPlus, UserMinus } from 'lucide-react';
 import { getUserByUsername, getFollowers, supabase, isFollowing as checkIsFollowing, followUser, unfollowUser } from '@/lib/supabase';
 import { User } from '@/types';
+import { CanLoader } from '@/components/CanLoader';
 
 interface PageProps {
-  params: Promise<{ username: string }>;
+  params: { username: string };
 }
 
-export default function FollowersPage({ params: paramsPromise }: PageProps) {
-  const params = use(paramsPromise);
+export default function FollowersPage({ params }: PageProps) {
   const [followers, setFollowers] = useState<(User & { isFollowing?: boolean })[]>([]);
   const [profileUser, setProfileUser] = useState<User | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
@@ -73,7 +73,7 @@ export default function FollowersPage({ params: paramsPromise }: PageProps) {
         </p>
 
         {loading ? (
-          <p className="text-center py-12 text-sm" style={{ color: 'var(--text-tertiary)' }}>Loading...</p>
+          <CanLoader />
         ) : followers.length === 0 ? (
           <div className="glass-card text-center py-10">
             <Users size={28} className="mx-auto mb-3" style={{ color: 'var(--text-muted)' }} />

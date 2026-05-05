@@ -44,29 +44,80 @@ export async function getUser(userId: string) {
   return { data, error };
 }
 
-export async function ensureUserProfile(authUser: { id: string; email?: string | null; user_metadata?: any }) {
-  const { data: existing } = await supabase
+/**
+ * Returns the user's profile row if one exists. NEVER auto-generates a username.
+ * Callers that get back `{ data: null }` should route the user to /auth/choose-username
+ * so they can pick their own.
+ */
+export async function ensureUserProfile(authUser: { id: string }) {
+  const { data, error } = await supabase
     .from('users')
     .select('*')
     .eq('id', authUser.id)
     .maybeSingle();
 
-  if (existing) return { data: existing, error: null };
+  return { data, error };
+}
 
-  const emailName = authUser.email?.split('@')[0] || 'seltzer';
-  const displayName = authUser.user_metadata?.user_name || authUser.user_metadata?.name || emailName;
-  const baseUsername = String(displayName)
-    .toLowerCase()
-    .replace(/[^a-z0-9_]/g, '')
-    .slice(0, 18) || 'seltzer';
-  const username = `${baseUsername}${authUser.id.slice(0, 6)}`;
+// ── Username helpers ─────────────────────────────────────────────────
+export const USERNAME_RE = /^[a-zA-Z][a-zA-Z0-9_]{2,19}$/;
+const RESERVED_USERNAMES = new Set([
+  'admin', 'root', 'system', 'support', 'help', 'auth', 'login', 'signup',
+  'logout', 'api', 'feed', 'profile', 'inbox', 'search', 'create', 'shared',
+  'review', 'reviews', 'compare', 'onboarding', 'settings', 'seltzer',
+]);
+
+export function validateUsername(input: string): { ok: true } | { ok: false; reason: string } {
+  const u = input.trim();
+  if (u.length < 3) return { ok: false, reason: 'At least 3 characters' };
+  if (u.length > 20) return { ok: false, reason: 'Up to 20 characters' };
+  if (!USERNAME_RE.test(u)) return { ok: false, reason: 'Letters, numbers, underscores. Must start with a letter.' };
+  if (RESERVED_USERNAMES.has(u.toLowerCase())) return { ok: false, reason: 'That one\'s reserved' };
+  return { ok: true };
+}
+
+/**
+ * Returns true when the username is free. Case-insensitive lookup.
+ */
+export async function isUsernameAvailable(username: string) {
+  const u = username.trim();
+  if (!u) return false;
+  const { data, error } = await supabase
+    .from('users')
+    .select('id')
+    .ilike('username', u)
+    .maybeSingle();
+  if (error) return false;
+  return !data;
+}
+
+/**
+ * Claim a username for an authenticated user. Idempotent: if the row already
+ * exists with the same username, returns it. Errors out on collisions.
+ */
+export async function claimUsername(userId: string, username: string) {
+  const u = username.trim();
+  const validation = validateUsername(u);
+  if (!validation.ok) return { data: null, error: new Error(validation.reason) };
+
+  // Re-check availability right before insert (handles races with someone else
+  // claiming it between when the user typed it and when they hit submit).
+  const free = await isUsernameAvailable(u);
+  if (!free) {
+    // If THIS user already owns it, that's fine.
+    const { data: mine } = await supabase
+      .from('users').select('id, username').eq('id', userId).maybeSingle();
+    if (mine && mine.username.toLowerCase() === u.toLowerCase()) {
+      return { data: mine, error: null };
+    }
+    return { data: null, error: new Error('Username already taken') };
+  }
 
   const { data, error } = await supabase
     .from('users')
-    .insert([{ id: authUser.id, username }])
+    .insert([{ id: userId, username: u }])
     .select('*')
     .single();
-
   return { data, error };
 }
 
@@ -135,7 +186,7 @@ export async function uploadAvatar(userId: string, file: File): Promise<{ url: s
   return { url: urlData.publicUrl, error: null };
 }
 
-// SELTZER DATABASE
+// SELTZER DATABASE (canonical drinks)
 export async function searchSeltzers(query: string) {
   if (!query || query.length < 1) {
     const { data, error } = await supabase.from('seltzers').select('*').order('brand').limit(20);
@@ -149,27 +200,74 @@ export async function searchSeltzers(query: string) {
   return { data, error };
 }
 
+/**
+ * Find a seltzer by case-insensitive (brand, name) or create a new one.
+ * Returns the canonical row so callers can use seltzer_id.
+ */
+export async function findOrCreateSeltzer(brand: string, name: string, createdBy?: string) {
+  const cleanBrand = brand.trim();
+  const cleanName  = name.trim();
+  if (!cleanBrand || !cleanName) return { data: null, error: new Error('Brand and name required') };
+
+  // Look up existing
+  const { data: found } = await supabase
+    .from('seltzers')
+    .select('*')
+    .ilike('brand', cleanBrand)
+    .ilike('name', cleanName)
+    .maybeSingle();
+  if (found) return { data: found, error: null };
+
+  // Insert new — uniqueness index guards against races
+  const insertRow: any = { brand: cleanBrand, name: cleanName };
+  if (createdBy) insertRow.created_by = createdBy;
+  const { data: inserted, error: insertError } = await supabase
+    .from('seltzers')
+    .insert([insertRow])
+    .select('*')
+    .single();
+
+  // Race recovery: if a parallel insert won, just fetch
+  if (insertError) {
+    const { data: retry } = await supabase
+      .from('seltzers')
+      .select('*')
+      .ilike('brand', cleanBrand)
+      .ilike('name', cleanName)
+      .maybeSingle();
+    if (retry) return { data: retry, error: null };
+    return { data: null, error: insertError };
+  }
+  return { data: inserted, error: null };
+}
+
 export async function createReview(review: {
   user_id: string;
+  title?: string | null;
+  seltzer_id?: string | null;
   seltzer_name: string;
   brand?: string;
   rating: number;
   content?: string;
   image_url?: string;
 }) {
-  const { data, error } = await supabase.from('reviews').insert([review]).select('*').single();
+  const payload = {
+    ...review,
+    title: review.title?.trim() || null,
+  };
+  const { data, error } = await supabase.from('reviews').insert([payload]).select('*').single();
   return { data, error };
 }
 
 export async function getReview(id: string) {
-  const { data, error } = await supabase.from('reviews').select('*, user:users(*)').eq('id', id).single();
+  const { data, error } = await supabase.from('reviews').select('*, user:users(*), seltzer:seltzers(*)').eq('id', id).single();
   return { data, error };
 }
 
 export async function getReviews(limit: number = 20, offset: number = 0) {
   const { data, error } = await supabase
     .from('reviews')
-    .select('*, user:users(*)')
+    .select('*, user:users(*), seltzer:seltzers(*)')
     .order('created_at', { ascending: false })
     .range(offset, offset + limit - 1);
   return { data, error };
@@ -192,7 +290,7 @@ export async function getSmartFeed(userId: string, limit: number = 50) {
 
   const { data, error } = await supabase
     .from('reviews')
-    .select('*, user:users(*)')
+    .select('*, user:users(*), seltzer:seltzers(*)')
     .in('user_id', allIds)
     .order('created_at', { ascending: false })
     .limit(limit);
@@ -203,7 +301,7 @@ export async function getSmartFeed(userId: string, limit: number = 50) {
 export async function getUserReviews(userId: string) {
   const { data, error } = await supabase
     .from('reviews')
-    .select('*, user:users(*)')
+    .select('*, user:users(*), seltzer:seltzers(*)')
     .eq('user_id', userId)
     .order('created_at', { ascending: false });
   return { data, error };
@@ -279,6 +377,10 @@ export async function getUserRepost(userId: string, reviewId: string) {
 // TRIED IT
 export async function createTriedIt(userId: string, reviewId: string, rating: number) {
   const { data, error } = await supabase.from('tried_it').upsert([{ user_id: userId, review_id: reviewId, rating }], { onConflict: 'user_id, review_id' }).select().single();
+  return { data, error };
+}
+export async function getUserTriedIt(userId: string, reviewId: string) {
+  const { data, error } = await supabase.from('tried_it').select('*').eq('user_id', userId).eq('review_id', reviewId).maybeSingle();
   return { data, error };
 }
 export async function getTriedItStats(reviewId: string) {
@@ -411,7 +513,7 @@ export async function unsubscribeFromSharedTierList(userId: string, listId: stri
 export async function getSharedTierListItems(listId: string) {
   const { data, error } = await supabase
     .from('shared_tier_list_items')
-    .select('*, added_by_user:users!shared_tier_list_items_added_by_fkey(*)')
+    .select('*, added_by_user:users!shared_tier_list_items_added_by_fkey(*), review:reviews(id, image_url, user_id, user:users(id, username))')
     .eq('list_id', listId)
     .order('rating', { ascending: false });
   return { data: data || [], error };
@@ -420,11 +522,13 @@ export async function getSharedTierListItems(listId: string) {
 export async function addSharedTierListItem(item: {
   list_id: string;
   added_by: string;
+  seltzer_id?: string | null;
   seltzer_name: string;
   brand?: string;
   rating: number;
   tier: string;
   note?: string;
+  review_id?: string;
 }) {
   const { data, error } = await supabase
     .from('shared_tier_list_items')
@@ -439,28 +543,143 @@ export async function addSharedTierListItem(item: {
   return { data, error };
 }
 
+export async function updateSharedTierListItem(
+  itemId: string,
+  listId: string,
+  updates: { rating?: number; tier?: string; note?: string | null }
+) {
+  const { data, error } = await supabase
+    .from('shared_tier_list_items')
+    .update(updates)
+    .eq('id', itemId)
+    .select('*');
+  if (error) return { data: null, error };
+  if (!data || data.length === 0) {
+    return {
+      data: null,
+      error: new Error(
+        'Update blocked. Run supabase_tier_list_policies.sql to add the missing RLS policy.',
+      ),
+    };
+  }
+  await supabase.from('shared_tier_lists').update({ updated_at: new Date().toISOString() }).eq('id', listId);
+  return { data: data[0], error: null };
+}
+
+export async function bulkAddSharedTierListItems(
+  items: {
+    list_id: string;
+    added_by: string;
+    seltzer_id?: string | null;
+    seltzer_name: string;
+    brand?: string;
+    rating: number;
+    tier: string;
+    note?: string;
+    review_id?: string;
+  }[]
+) {
+  if (items.length === 0) return { data: [], error: null };
+  const { data, error } = await supabase
+    .from('shared_tier_list_items')
+    .insert(items)
+    .select('*');
+  if (!error && items[0]?.list_id) {
+    await supabase.from('shared_tier_lists').update({ updated_at: new Date().toISOString() }).eq('id', items[0].list_id);
+  }
+  return { data: data || [], error };
+}
+
+export async function deleteSharedTierListItem(itemId: string, listId: string) {
+  // We need to confirm a row was actually deleted — RLS silently no-ops if
+  // the policy isn't in place, so .delete() can succeed without affecting rows.
+  const { data, error } = await supabase
+    .from('shared_tier_list_items')
+    .delete()
+    .eq('id', itemId)
+    .select('id');
+  if (error) return { error };
+  if (!data || data.length === 0) {
+    return {
+      error: new Error(
+        'Delete blocked. Run supabase_tier_list_policies.sql to add the missing RLS policy.',
+      ),
+    };
+  }
+  await supabase.from('shared_tier_lists').update({ updated_at: new Date().toISOString() }).eq('id', listId);
+  return { error: null };
+}
+
+/** Delete a shared tier list. Children cascade via FK on delete cascade. */
+export async function deleteSharedTierList(listId: string) {
+  const { data, error } = await supabase
+    .from('shared_tier_lists')
+    .delete()
+    .eq('id', listId)
+    .select('id');
+  if (error) return { error };
+  if (!data || data.length === 0) {
+    return {
+      error: new Error(
+        'Delete blocked. Run supabase_tier_list_policies.sql to add the missing RLS policy.',
+      ),
+    };
+  }
+  return { error: null };
+}
+
 export async function createSharedTierListSuggestion(suggestion: {
   list_id: string;
   created_by: string;
   action?: 'add' | 'move' | 'remove' | 'edit';
+  seltzer_id?: string | null;
   seltzer_name: string;
   brand?: string;
   proposed_rating: number;
   proposed_tier: string;
   proposed_note?: string;
+  review_id?: string;
 }) {
   const { data, error } = await supabase
     .from('shared_tier_list_suggestions')
     .insert([{ ...suggestion, action: suggestion.action || 'add' }])
     .select('*')
     .single();
+
+  if (!error && data) {
+    // Notify the other list member via inbox (fire and forget)
+    supabase
+      .from('shared_tier_lists')
+      .select('owner_id, partner_id, name, owner:users!shared_tier_lists_owner_id_fkey(username), partner:users!shared_tier_lists_partner_id_fkey(username)')
+      .eq('id', suggestion.list_id)
+      .single()
+      .then(({ data: list }) => {
+        if (!list) return;
+        const recipientId = list.owner_id === suggestion.created_by ? list.partner_id : list.owner_id;
+        const senderUsername = list.owner_id === suggestion.created_by
+          ? (list.owner as any)?.username
+          : (list.partner as any)?.username;
+        const isAdd = !suggestion.action || suggestion.action === 'add';
+        const link = isAdd && suggestion.review_id
+          ? `/review/${suggestion.review_id}`
+          : `/shared/${suggestion.list_id}`;
+        supabase.from('notifications').insert([{
+          user_id: recipientId,
+          type: 'suggestion',
+          title: `@${senderUsername || 'Someone'} suggested ${isAdd ? 'adding' : 'editing'} ${suggestion.seltzer_name}`,
+          body: `In your shared list "${list.name}" · ${suggestion.proposed_tier} tier · ${Number(suggestion.proposed_rating).toFixed(1)}`,
+          link,
+        }]).then(() => {});
+      });
+  }
+
   return { data, error };
 }
 
 export async function getSharedTierListSuggestions(listId: string) {
   const { data, error } = await supabase
     .from('shared_tier_list_suggestions')
-    .select('*, created_by_user:users!shared_tier_list_suggestions_created_by_fkey(*), votes:shared_tier_list_votes(*), trials:shared_tier_suggestion_trials(*)')
+    .select('*, created_by_user:users!shared_tier_list_suggestions_created_by_fkey(*), votes:shared_tier_list_votes(*), trials:shared_tier_suggestion_trials(*), review:reviews(id, image_url)')
     .eq('list_id', listId)
     .eq('status', 'pending')
     .order('created_at', { ascending: false });
@@ -489,20 +708,19 @@ export async function voteOnSharedSuggestion(suggestion: any, list: any, userId:
   if (votesError) return { error: votesError };
 
   const memberIds = [list.owner_id, list.partner_id].filter(Boolean);
-  const memberVotes = (votes || []).filter((row: any) => memberIds.includes(row.user_id));
-  const approvals = memberVotes.filter((row: any) => row.vote === 'approve').length;
-  const rejections = memberVotes.filter((row: any) => row.vote === 'reject').length;
-  const majority = Math.floor(memberIds.length / 2) + 1;
+
+  // The suggester shouldn't be required to vote on their own suggestion —
+  // only the *other* member(s) need to decide. This also means a single
+  // partner vote on a 2-person list is immediately decisive.
+  const voterIds = memberIds.filter((id: string) => id !== suggestion.created_by);
+  const voterVotes = (votes || []).filter((row: any) => voterIds.includes(row.user_id));
+  const approvals  = voterVotes.filter((row: any) => row.vote === 'approve').length;
+  const rejections = voterVotes.filter((row: any) => row.vote === 'reject').length;
+  const needed = voterIds.length; // 1 for a 2-person list
 
   let status: 'pending' | 'approved' | 'rejected' = 'pending';
-  if (approvals >= majority) status = 'approved';
-  if (rejections >= majority) status = 'rejected';
-
-  if (status === 'pending' && memberVotes.length === memberIds.length && approvals === rejections) {
-    const creatorVote = memberVotes.find((row: any) => row.user_id === list.owner_id)?.vote;
-    if (creatorVote === 'approve') status = 'approved';
-    if (creatorVote === 'reject') status = 'rejected';
-  }
+  if (approvals >= needed) status = 'approved';
+  if (rejections >= needed) status = 'rejected';
 
   if (status === 'pending') return { error: null };
 
@@ -515,6 +733,7 @@ export async function voteOnSharedSuggestion(suggestion: any, list: any, userId:
       rating: Number(suggestion.proposed_rating),
       tier: suggestion.proposed_tier,
       note: suggestion.proposed_note || undefined,
+      review_id: suggestion.review_id || undefined,
     });
     if (itemError) return { error: itemError };
   }
@@ -523,13 +742,25 @@ export async function voteOnSharedSuggestion(suggestion: any, list: any, userId:
     .from('shared_tier_list_suggestions')
     .update({ status, resolved_at: new Date().toISOString() })
     .eq('id', suggestion.id);
+
+  // Notify the suggester of the result (fire and forget)
+  if (!error && suggestion.created_by !== userId) {
+    supabase.from('notifications').insert([{
+      user_id: suggestion.created_by,
+      type: status === 'approved' ? 'suggestion_approved' : 'suggestion_rejected',
+      title: `Your suggestion was ${status}`,
+      body: `${suggestion.seltzer_name} in "${list.name}"`,
+      link: status === 'approved' ? `/shared/${suggestion.list_id}` : undefined,
+    }]).then(() => {});
+  }
+
   return { error };
 }
 
 export async function getSharedTierActivities(limit: number = 10) {
   const { data, error } = await supabase
     .from('shared_tier_list_items')
-    .select('*, added_by_user:users!shared_tier_list_items_added_by_fkey(*), list:shared_tier_lists!shared_tier_list_items_list_id_fkey(*, owner:users!shared_tier_lists_owner_id_fkey(*), partner:users!shared_tier_lists_partner_id_fkey(*))')
+    .select('*, added_by_user:users!shared_tier_list_items_added_by_fkey(*), review:reviews(id, image_url), list:shared_tier_lists!shared_tier_list_items_list_id_fkey(*, owner:users!shared_tier_lists_owner_id_fkey(*), partner:users!shared_tier_lists_partner_id_fkey(*))')
     .eq('list.is_public', true)
     .order('created_at', { ascending: false })
     .limit(limit);
@@ -565,9 +796,106 @@ export async function getSubscribedSharedTierActivities(userId: string, limit: n
 
   const { data, error } = await supabase
     .from('shared_tier_list_items')
-    .select('*, added_by_user:users!shared_tier_list_items_added_by_fkey(*), list:shared_tier_lists!shared_tier_list_items_list_id_fkey(*, owner:users!shared_tier_lists_owner_id_fkey(*), partner:users!shared_tier_lists_partner_id_fkey(*))')
+    .select('*, added_by_user:users!shared_tier_list_items_added_by_fkey(*), review:reviews(id, image_url), list:shared_tier_lists!shared_tier_list_items_list_id_fkey(*, owner:users!shared_tier_lists_owner_id_fkey(*), partner:users!shared_tier_lists_partner_id_fkey(*))')
     .in('list_id', subscribedIds)
     .order('created_at', { ascending: false })
     .limit(limit);
+  return { data: data || [], error };
+}
+
+// NOTIFICATIONS / INBOX
+export async function createNotification(notification: {
+  user_id: string;
+  type: 'suggestion' | 'mention' | 'suggestion_approved' | 'suggestion_rejected';
+  title: string;
+  body?: string;
+  link?: string;
+}) {
+  const { data, error } = await supabase
+    .from('notifications')
+    .insert([notification])
+    .select('*')
+    .single();
+  return { data, error };
+}
+
+export async function getNotifications(userId: string) {
+  const { data, error } = await supabase
+    .from('notifications')
+    .select('*')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false })
+    .limit(50);
+  return { data: data || [], error };
+}
+
+export async function getUnreadNotificationCount(userId: string) {
+  const { count, error } = await supabase
+    .from('notifications')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', userId)
+    .eq('read', false);
+  return { count: count || 0, error };
+}
+
+export async function markNotificationRead(notificationId: string) {
+  const { error } = await supabase
+    .from('notifications')
+    .update({ read: true })
+    .eq('id', notificationId);
+  return { error };
+}
+
+export async function markAllNotificationsRead(userId: string) {
+  const { error } = await supabase
+    .from('notifications')
+    .update({ read: true })
+    .eq('user_id', userId)
+    .eq('read', false);
+  return { error };
+}
+
+export async function deleteNotification(notificationId: string) {
+  const { error } = await supabase
+    .from('notifications')
+    .delete()
+    .eq('id', notificationId);
+  return { error };
+}
+
+// Look up user IDs for @mentioned usernames in comment text
+export async function getUserIdsByUsernames(usernames: string[]) {
+  if (usernames.length === 0) return { data: [], error: null };
+  const { data, error } = await supabase
+    .from('users')
+    .select('id, username')
+    .in('username', usernames);
+  return { data: data || [], error };
+}
+
+// Get pending suggestions linked to a review (for voting on review page)
+export async function getSuggestionsByReviewId(reviewId: string) {
+  const { data, error } = await supabase
+    .from('shared_tier_list_suggestions')
+    .select('*, created_by_user:users!shared_tier_list_suggestions_created_by_fkey(*), votes:shared_tier_list_votes(*), trials:shared_tier_suggestion_trials(*), list:shared_tier_lists!shared_tier_list_suggestions_list_id_fkey(*, owner:users!shared_tier_lists_owner_id_fkey(*), partner:users!shared_tier_lists_partner_id_fkey(*))')
+    .eq('review_id', reviewId)
+    .eq('status', 'pending');
+  return { data: data || [], error };
+}
+
+// SEARCH — tier lists
+export async function searchSharedTierLists(query: string) {
+  let req = supabase
+    .from('shared_tier_lists')
+    .select('*, owner:users!shared_tier_lists_owner_id_fkey(*), partner:users!shared_tier_lists_partner_id_fkey(*)')
+    .eq('is_public', true)
+    .order('updated_at', { ascending: false })
+    .limit(25);
+
+  if (query.trim()) {
+    req = req.ilike('name', `%${query.trim()}%`);
+  }
+
+  const { data, error } = await req;
   return { data: data || [], error };
 }

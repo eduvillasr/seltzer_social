@@ -2,32 +2,40 @@
 
 'use client';
 
-import { use, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Heart, MessageCircle, Repeat2, Star, ArrowLeft, Users } from 'lucide-react';
-import { Review } from '@/types';
+import { Heart, MessageCircle, Star, ArrowLeft, Droplets, Check, X, ExternalLink } from 'lucide-react';
+import { Review, SharedTierListSuggestion } from '@/types';
 import { Navigation } from '@/components/Navigation';
 import { CommentSection } from '@/components/CommentSection';
 import { RatingInput } from '@/components/RatingInput';
+import { CanLoader } from '@/components/CanLoader';
+import { reviewHeadline, reviewDrinkLabel, hasCustomTitle } from '@/lib/reviewDisplay';
 import {
   getReview, supabase, createLike, deleteLike, getUserLike,
-  createRepost, deleteRepost, getUserRepost, createTriedIt, getTriedItStats,
+  createTriedIt, getTriedItStats, getUserTriedIt,
+  getSuggestionsByReviewId, voteOnSharedSuggestion, markSharedSuggestionTried,
+  getSharedTierList,
 } from '@/lib/supabase';
 
 interface ReviewPageProps {
-  params: Promise<{ id: string }>;
+  params: { id: string };
 }
 
-export default function ReviewPage({ params: paramsPromise }: ReviewPageProps) {
-  const params = use(paramsPromise);
+export default function ReviewPage({ params }: ReviewPageProps) {
   const [review, setReview] = useState<Review | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [currentUsername, setCurrentUsername] = useState<string>('');
   const [isLiked, setIsLiked] = useState(false);
-  const [isReposted, setIsReposted] = useState(false);
   const [triedItRating, setTriedItRating] = useState<number>(3);
-  const [triedItSubmitted, setTriedItSubmitted] = useState(false);
   const [triedItStats, setTriedItStats] = useState({ count: 0, avgRating: 0 });
+  const [existingTriedIt, setExistingTriedIt] = useState<{ rating: number } | null>(null);
+  const [triedItSubmitted, setTriedItSubmitted] = useState(false);
   const [loading, setLoading] = useState(true);
+
+  // Pending tier list suggestion linked to this review
+  const [suggestions, setSuggestions] = useState<SharedTierListSuggestion[]>([]);
+  const [trialRatings, setTrialRatings] = useState<Record<string, number>>({});
 
   useEffect(() => {
     checkUser();
@@ -38,18 +46,45 @@ export default function ReviewPage({ params: paramsPromise }: ReviewPageProps) {
     const { data } = await supabase.auth.getSession();
     if (data.session?.user) {
       setCurrentUserId(data.session.user.id);
+      const { data: profile } = await supabase
+        .from('users')
+        .select('username')
+        .eq('id', data.session.user.id)
+        .single();
+      if (profile) setCurrentUsername(profile.username);
     }
   }
 
   async function loadReview() {
     setLoading(true);
     const { data, error } = await getReview(params.id);
-    if (!error) {
+    if (!error && data) {
       setReview(data);
       loadTriedItStats();
+      loadSuggestions();
     }
     setLoading(false);
   }
+
+  async function loadSuggestions() {
+    const { data } = await getSuggestionsByReviewId(params.id);
+    setSuggestions(data || []);
+    const defaults: Record<string, number> = {};
+    (data || []).forEach((s: SharedTierListSuggestion) => { defaults[s.id] = Number(s.proposed_rating); });
+    setTrialRatings(defaults);
+  }
+
+  // Load like + tried-it status once we have both review and userId
+  useEffect(() => {
+    if (!currentUserId || !review) return;
+    getUserLike(currentUserId, review.id).then(({ data }) => setIsLiked(!!data));
+    const isOwn = currentUserId === review.user_id;
+    if (!isOwn) {
+      getUserTriedIt(currentUserId, review.id).then(({ data }) => {
+        if (data) { setExistingTriedIt({ rating: data.rating }); setTriedItRating(data.rating); }
+      });
+    }
+  }, [currentUserId, review]);
 
   async function loadTriedItStats() {
     const { count, avgRating } = await getTriedItStats(params.id);
@@ -67,30 +102,33 @@ export default function ReviewPage({ params: paramsPromise }: ReviewPageProps) {
     }
   }
 
-  async function handleRepost() {
-    if (!currentUserId || !review) return;
-    if (isReposted) {
-      await deleteRepost(currentUserId, review.id);
-      setIsReposted(false);
-    } else {
-      await createRepost(currentUserId, review.id);
-      setIsReposted(true);
-    }
-  }
-
   async function handleTriedIt() {
     if (!currentUserId || !review) return;
     await createTriedIt(currentUserId, review.id, triedItRating);
+    setExistingTriedIt({ rating: triedItRating });
     setTriedItSubmitted(true);
     loadTriedItStats();
+  }
+
+  async function handleMarkTried(suggestion: SharedTierListSuggestion) {
+    if (!currentUserId) return;
+    const ratingValue = trialRatings[suggestion.id] ?? Number(suggestion.proposed_rating);
+    await markSharedSuggestionTried(suggestion.id, currentUserId, ratingValue);
+    loadSuggestions();
+  }
+
+  async function handleVote(suggestion: SharedTierListSuggestion, nextVote: 'approve' | 'reject') {
+    if (!currentUserId || !suggestion.list) return;
+    await voteOnSharedSuggestion(suggestion, suggestion.list, currentUserId, nextVote);
+    loadSuggestions();
   }
 
   if (loading) {
     return (
       <>
         <Navigation />
-        <main className="max-w-2xl mx-auto px-4 pt-24 pb-24 text-center">
-          <p className="text-slate-400">Loading review...</p>
+        <main className="max-w-2xl mx-auto px-4 pt-24 pb-24">
+          <CanLoader label="Pouring review…" />
         </main>
       </>
     );
@@ -101,102 +139,219 @@ export default function ReviewPage({ params: paramsPromise }: ReviewPageProps) {
       <>
         <Navigation />
         <main className="max-w-2xl mx-auto px-4 pt-24 pb-24 text-center">
-          <p className="text-slate-500">Review not found</p>
+          <p style={{ color: 'var(--text-secondary)' }}>Review not found</p>
         </main>
       </>
     );
   }
 
-  const initial = review.user?.username?.charAt(0)?.toUpperCase() || '?';
+  const isOwnReview = currentUserId === review.user_id;
   const stars = Array(5).fill(0).map((_, i) => (
-    <Star key={i} size={22} className={i < Math.floor(review.rating) ? 'fill-amber-400 text-amber-400' : 'text-slate-200'} />
+    <Star key={i} size={22} className={i < Math.floor(review.rating) ? 'star-filled' : 'star-empty'} />
   ));
+
+  // Only show suggestions for list members (owner or partner)
+  const visibleSuggestions = suggestions.filter((s) => {
+    if (!currentUserId || !s.list) return false;
+    return s.list.owner_id === currentUserId || s.list.partner_id === currentUserId;
+  });
 
   return (
     <>
       <Navigation />
       <main className="max-w-2xl mx-auto px-4 pt-24 pb-24 space-y-6">
-        {/* Back */}
-        <Link href="/feed" className="inline-flex items-center gap-2 text-sm text-slate-500 hover:text-slate-800 transition-colors">
+        <Link href="/feed" className="inline-flex items-center gap-2 text-sm hover:opacity-80 transition-opacity" style={{ color: 'var(--text-tertiary)' }}>
           <ArrowLeft size={16} /> Back to feed
         </Link>
 
-        {/* Review */}
-        <div className="card animate-fade-in-up" style={{ borderRadius: 'var(--radius-xl)' }}>
+        {/* Review card */}
+        <div className="glass-card animate-fade-in-up">
           <div className="flex items-center gap-3 mb-5">
             <Link href={`/profile/${review.user?.username}`}>
-              <div className="w-12 h-12 rounded-full avatar-gradient cursor-pointer hover:opacity-90">{initial}</div>
+              <div className="w-12 h-12 rounded-full avatar-gradient cursor-pointer hover:opacity-90 flex items-center justify-center text-base font-bold">
+                {review.user?.username?.charAt(0)?.toUpperCase()}
+              </div>
             </Link>
             <div>
               <Link href={`/profile/${review.user?.username}`}>
-                <p className="font-semibold text-slate-800 hover:text-cyan-600 transition-colors cursor-pointer">{review.user?.username}</p>
+                <p className="font-semibold hover:text-cyan-400 transition-colors cursor-pointer" style={{ color: 'var(--text-primary)' }}>{review.user?.username}</p>
               </Link>
-              <p className="text-sm text-slate-400">{new Date(review.created_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</p>
+              <p className="text-sm" style={{ color: 'var(--text-muted)' }}>{new Date(review.created_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</p>
             </div>
+            <div className="badge-amber ml-auto"><Star size={11} className="star-filled" />{review.rating.toFixed(1)}</div>
           </div>
 
-          <h1 className="text-3xl font-bold text-slate-900 mb-1" style={{ fontFamily: 'var(--font-display)' }}>{review.seltzer_name}</h1>
-          {review.brand && <p className="text-lg text-slate-500 mb-4">{review.brand}</p>}
+          <h1 className="text-3xl font-bold mb-1" style={{ fontFamily: 'var(--font-display)', color: 'var(--text-primary)' }}>{reviewHeadline(review)}</h1>
+          {hasCustomTitle(review) ? (
+            <p className="text-base mb-4" style={{ color: 'var(--text-tertiary)' }}>{reviewDrinkLabel(review)}</p>
+          ) : (
+            review.brand && <p className="text-base mb-4" style={{ color: 'var(--text-tertiary)' }}>{review.brand}</p>
+          )}
 
           <div className="flex items-center gap-3 mb-5">
             <div className="flex gap-1">{stars}</div>
-            <span className="text-2xl font-bold text-slate-800">{review.rating.toFixed(1)}</span>
           </div>
 
           {review.content && (
-            <p className="text-slate-600 leading-relaxed whitespace-pre-wrap mb-6">{review.content}</p>
+            <p className="leading-relaxed whitespace-pre-wrap mb-6" style={{ color: 'var(--text-secondary)' }}>{review.content}</p>
           )}
 
-          {/* Actions */}
-          <div className="flex items-center gap-1 pt-4 border-t border-slate-100">
-            <button onClick={handleLike} className={`flex items-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${isLiked ? 'text-rose-500 bg-rose-50' : 'text-slate-400 hover:text-rose-500 hover:bg-rose-50'}`}>
-              <Heart size={17} className={isLiked ? 'fill-rose-500' : ''} /> Like
+          {review.image_url && (
+            <img src={review.image_url} alt={review.seltzer_name} className="w-full rounded-xl object-cover max-h-80 mb-5" />
+          )}
+
+          <div className="flex items-center gap-1 pt-4" style={{ borderTop: '1px solid var(--border-subtle)' }}>
+            <button
+              onClick={handleLike}
+              disabled={!currentUserId}
+              className={`action-btn ${isLiked ? 'active-like' : ''}`}
+            >
+              <Heart size={17} className={isLiked ? 'fill-current' : ''} /> Like
             </button>
-            <button className="flex items-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium text-slate-400 hover:text-cyan-600 hover:bg-cyan-50 transition-all">
-              <MessageCircle size={17} /> Comment
-            </button>
-            <button onClick={handleRepost} className={`flex items-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${isReposted ? 'text-emerald-500 bg-emerald-50' : 'text-slate-400 hover:text-emerald-500 hover:bg-emerald-50'}`}>
-              <Repeat2 size={17} /> Repost
-            </button>
+            <span className="action-btn" style={{ cursor: 'default' }}>
+              <MessageCircle size={17} /> Comments
+            </span>
+            {triedItStats.count > 0 && (
+              <span className="badge-cyan ml-auto" style={{ fontSize: '11px' }}>
+                <Droplets size={11} /> {triedItStats.count} tried · avg {triedItStats.avgRating.toFixed(1)}
+              </span>
+            )}
           </div>
         </div>
 
-        {/* Tried It */}
-        <div className="card animate-fade-in-up" style={{ borderRadius: 'var(--radius-xl)', animationDelay: '0.1s' }}>
-          <div className="flex items-center gap-2 mb-4">
-            <Users size={18} className="text-cyan-600" />
-            <h2 className="font-bold text-lg text-slate-800" style={{ fontFamily: 'var(--font-display)' }}>
-              Have you tried this?
-            </h2>
-          </div>
+        {/* Pending tier list vote cards — only visible to list members */}
+        {visibleSuggestions.map((suggestion) => {
+          const tried = suggestion.trials?.some((t) => t.user_id === currentUserId);
+          const userVote = suggestion.votes?.find((v) => v.user_id === currentUserId)?.vote;
+          const isOwnSuggestion = suggestion.created_by === currentUserId;
 
-          <div className="badge-aqua inline-flex mb-5">
-            {triedItStats.count} people tried this &middot; avg {triedItStats.avgRating.toFixed(1)}
-          </div>
+          return (
+            <div
+              key={suggestion.id}
+              className="glass-card animate-fade-in-up space-y-3"
+              style={{ borderColor: 'rgba(251,191,36,0.25)', background: 'rgba(251,191,36,0.04)' }}
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <p className="text-xs uppercase tracking-wider font-semibold mb-1" style={{ color: 'var(--amber-400)' }}>
+                    Tier List Request
+                  </p>
+                  <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+                    <span className="font-bold" style={{ color: 'var(--text-primary)' }}>@{suggestion.created_by_user?.username}</span>
+                    {' '}wants to add this to{' '}
+                    <Link href={`/shared/${suggestion.list_id}`} className="font-bold hover:text-cyan-400 transition-colors" style={{ color: 'var(--text-primary)' }}>
+                      {suggestion.list?.name}
+                    </Link>
+                    {' '}as{' '}
+                    <span className="font-bold" style={{ color: 'var(--cyan-400)' }}>
+                      {suggestion.proposed_tier} tier · {Number(suggestion.proposed_rating).toFixed(1)}
+                    </span>
+                  </p>
+                  {suggestion.proposed_note && (
+                    <p className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>{suggestion.proposed_note}</p>
+                  )}
+                </div>
+                <Link href={`/shared/${suggestion.list_id}`} className="text-xs flex items-center gap-0.5 flex-shrink-0 hover:opacity-80" style={{ color: 'var(--text-muted)' }}>
+                  <ExternalLink size={11} /> List
+                </Link>
+              </div>
 
-          {currentUserId ? (
-            triedItSubmitted ? (
-              <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 px-4 py-3 rounded-xl text-sm">
-                Thanks for rating! Your score: {triedItRating.toFixed(1)}
+              {!isOwnSuggestion && currentUserId && (
+                !tried ? (
+                  <div className="rounded-xl p-3" style={{ background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.14)' }}>
+                    <p className="text-xs font-semibold mb-2" style={{ color: 'var(--amber-400)' }}>Rate it before voting</p>
+                    <div className="flex items-end gap-2">
+                      <RatingInput
+                        value={trialRatings[suggestion.id] ?? Number(suggestion.proposed_rating)}
+                        onChange={(v) => setTrialRatings((prev) => ({ ...prev, [suggestion.id]: v }))}
+                        label="Your score"
+                        size="sm"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handleMarkTried(suggestion)}
+                        className="btn-primary"
+                        style={{ padding: '8px 12px', fontSize: '12px' }}
+                      >
+                        Tried It
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleVote(suggestion, 'approve')}
+                      className={userVote === 'approve' ? 'btn-primary flex-1 justify-center' : 'btn-secondary flex-1 justify-center'}
+                      style={{ padding: '9px', fontSize: '12px' }}
+                    >
+                      <Check size={13} /> Approve
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleVote(suggestion, 'reject')}
+                      className={userVote === 'reject' ? 'btn-primary flex-1 justify-center' : 'btn-secondary flex-1 justify-center'}
+                      style={{ padding: '9px', fontSize: '12px' }}
+                    >
+                      <X size={13} /> Reject
+                    </button>
+                  </div>
+                )
+              )}
+
+              {isOwnSuggestion && (
+                <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                  Waiting for your partner to vote.
+                  {userVote && <span style={{ color: 'var(--cyan-400)' }}> You voted: {userVote}.</span>}
+                </p>
+              )}
+            </div>
+          );
+        })}
+
+        {/* Tried It — hidden for own reviews */}
+        {!isOwnReview && currentUserId && (
+          <div className="glass-card animate-fade-in-up" style={{ animationDelay: '0.1s' }}>
+            <div className="flex items-center gap-2 mb-4">
+              <Droplets size={18} className="text-cyan-400" />
+              <h2 className="font-bold text-lg" style={{ fontFamily: 'var(--font-display)', color: 'var(--text-primary)' }}>
+                {existingTriedIt ? "You've tried this" : 'Have you tried this?'}
+              </h2>
+              {existingTriedIt && (
+                <span className="badge-cyan ml-auto" style={{ fontSize: '11px' }}>Your rating: {existingTriedIt.rating.toFixed(1)}</span>
+              )}
+            </div>
+
+            {triedItStats.count > 0 && (
+              <p className="text-sm mb-4" style={{ color: 'var(--text-secondary)' }}>
+                {triedItStats.count} {triedItStats.count === 1 ? 'person' : 'people'} tried this · community avg {triedItStats.avgRating.toFixed(1)}
+              </p>
+            )}
+
+            {triedItSubmitted ? (
+              <div className="rounded-xl px-4 py-3 text-sm" style={{ background: 'rgba(52,211,153,0.1)', border: '1px solid rgba(52,211,153,0.2)', color: '#34d399' }}>
+                Rating submitted! Your score: {triedItRating.toFixed(1)}
               </div>
             ) : (
-              <div className="bg-slate-50 rounded-xl p-5">
-                <RatingInput value={triedItRating} onChange={setTriedItRating} label="Your rating" />
+              <div className="rounded-xl p-5" style={{ background: 'rgba(15,20,36,0.4)', border: '1px solid var(--border-subtle)' }}>
+                <RatingInput value={triedItRating} onChange={setTriedItRating} label={existingTriedIt ? 'Update your rating' : 'Your rating'} />
                 <button onClick={handleTriedIt} className="btn-primary mt-4" style={{ padding: '10px 24px' }}>
-                  Submit Rating
+                  {existingTriedIt ? 'Update Rating' : 'Submit Rating'}
                 </button>
               </div>
-            )
-          ) : (
-            <p className="text-sm text-slate-500">
-              <Link href="/auth/login" className="text-cyan-600 font-medium hover:underline">Sign in</Link> to rate
-            </p>
-          )}
-        </div>
+            )}
+          </div>
+        )}
 
         {/* Comments */}
-        <div className="card animate-fade-in-up" style={{ borderRadius: 'var(--radius-xl)', animationDelay: '0.2s' }}>
-          <CommentSection reviewId={review.id} currentUserId={currentUserId || undefined} />
+        <div className="glass-card animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
+          <CommentSection
+            reviewId={review.id}
+            reviewSlug={review.seltzer_name}
+            currentUserId={currentUserId || undefined}
+            currentUsername={currentUsername || undefined}
+            reviewOwnerId={review.user_id}
+          />
         </div>
       </main>
     </>

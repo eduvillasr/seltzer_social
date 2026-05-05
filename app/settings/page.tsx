@@ -7,8 +7,9 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Navigation } from '@/components/Navigation';
 import { Avatar } from '@/components/Avatar';
+import { showToast } from '@/components/Toast';
 import { ensureUserProfile, supabase, uploadAvatar, updateUserProfile } from '@/lib/supabase';
-import { ArrowLeft, LogOut, Bell, Shield, HelpCircle, Info, ChevronRight, Droplets, Camera, Check } from 'lucide-react';
+import { ArrowLeft, LogOut, Bell, Shield, HelpCircle, Info, ChevronRight, Droplets, Camera, Check, X, Upload } from 'lucide-react';
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -21,7 +22,10 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [savedMsg, setSavedMsg] = useState('');
+
+  // staged avatar preview before commit
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [pendingPreview, setPendingPreview] = useState<string>('');
 
   useEffect(() => { checkAuth(); }, []);
 
@@ -31,43 +35,59 @@ export default function SettingsPage() {
     setUserId(data.session.user.id);
     setEmail(data.session.user.email || '');
     const { data: userData } = await ensureUserProfile(data.session.user);
-    if (userData) {
-      setUsername(userData.username);
-      setBio(userData.bio || '');
-      setAvatarUrl(userData.avatar_url);
-    }
+    if (!userData) { router.replace('/auth/choose-username'); return; }
+    setUsername(userData.username);
+    setBio(userData.bio || '');
+    setAvatarUrl(userData.avatar_url);
     setLoading(false);
   }
 
-  async function handleAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {
+  // ─── avatar staging + commit ─────────────────────────────────
+  function pickAvatar(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
-    if (!file || !userId) return;
-    if (file.size > 5 * 1024 * 1024) {
-      alert('Choose an image under 5MB. The app will shrink it into a small profile icon.');
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      showToast('Pick an image file', 'error');
       return;
     }
+    if (file.size > 5 * 1024 * 1024) {
+      showToast('Image too large', 'error', 'Pick something under 5MB');
+      return;
+    }
+    setPendingFile(file);
+    if (pendingPreview) URL.revokeObjectURL(pendingPreview);
+    setPendingPreview(URL.createObjectURL(file));
+  }
+
+  function discardPending() {
+    if (pendingPreview) URL.revokeObjectURL(pendingPreview);
+    setPendingFile(null);
+    setPendingPreview('');
+  }
+
+  async function commitAvatar() {
+    if (!pendingFile || !userId) return;
     setUploading(true);
-    const { url, error } = await uploadAvatar(userId, file);
+    const { url, error } = await uploadAvatar(userId, pendingFile);
+    setUploading(false);
     if (url) {
       setAvatarUrl(url);
-      setSavedMsg('Avatar updated!');
-      setTimeout(() => setSavedMsg(''), 2000);
+      discardPending();
+      showToast('Avatar updated', 'success');
     } else if (error) {
-      const isMissingBucket = error.message?.toLowerCase().includes('bucket not found');
-      alert(isMissingBucket
-        ? 'Upload failed because no public image storage bucket exists. Create either an avatars bucket or a review-images bucket in Supabase Storage.'
-        : 'Upload failed: ' + error.message);
+      const msg = error.message?.toLowerCase().includes('bucket not found')
+        ? 'No public image storage bucket exists. Create an "avatars" bucket in Supabase Storage.'
+        : error.message;
+      showToast('Upload failed', 'error', msg);
     }
-    setUploading(false);
   }
 
   async function saveBio() {
     if (!userId) return;
     setSaving(true);
     await updateUserProfile(userId, { bio });
-    setSavedMsg('Profile saved!');
-    setTimeout(() => setSavedMsg(''), 2000);
     setSaving(false);
+    showToast('Profile saved', 'success');
   }
 
   async function handleLogout() {
@@ -104,31 +124,86 @@ export default function SettingsPage() {
         <div className="glass-card mb-5 animate-fade-in-up">
           <div className="flex items-center gap-4 mb-4">
             <div className="relative">
-              <Avatar username={username} avatarUrl={avatarUrl} size={72} />
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                disabled={uploading}
-                className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full flex items-center justify-center transition-transform hover:scale-110"
-                style={{
-                  background: 'linear-gradient(135deg, var(--cyan-400), var(--cyan-600))',
-                  border: '2px solid var(--bg-primary)',
-                  boxShadow: '0 0 12px rgba(6,182,212,0.4)',
-                }}
+              <div
+                onClick={() => !uploading && fileInputRef.current?.click()}
+                className="relative cursor-pointer group"
+                style={{ width: 72, height: 72 }}
               >
-                <Camera size={12} className="text-white" />
-              </button>
+                {pendingPreview ? (
+                  <img
+                    src={pendingPreview}
+                    alt="New avatar"
+                    className="w-[72px] h-[72px] rounded-full object-cover"
+                    style={{ border: '2px solid var(--cyan-400)', boxShadow: '0 0 16px rgba(34,211,238,0.4)' }}
+                  />
+                ) : (
+                  <Avatar username={username} avatarUrl={avatarUrl} size={72} />
+                )}
+                {/* hover overlay */}
+                <div
+                  className="absolute inset-0 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                  style={{ background: 'rgba(10,14,26,0.55)', backdropFilter: 'blur(2px)' }}
+                >
+                  <Upload size={18} className="text-white" />
+                </div>
+                {/* uploading spinner */}
+                {uploading && (
+                  <div className="absolute inset-0 rounded-full flex items-center justify-center" style={{ background: 'rgba(10,14,26,0.65)' }}>
+                    <div className="w-6 h-6 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+                  </div>
+                )}
+              </div>
+
+              {/* camera badge — only when no preview */}
+              {!pendingPreview && (
+                <button
+                  onClick={() => !uploading && fileInputRef.current?.click()}
+                  disabled={uploading}
+                  className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full flex items-center justify-center transition-transform hover:scale-110"
+                  style={{
+                    background: 'linear-gradient(135deg, var(--cyan-400), var(--cyan-600))',
+                    border: '2px solid var(--bg-primary)',
+                    boxShadow: '0 0 12px rgba(6,182,212,0.4)',
+                  }}
+                  title="Change avatar"
+                >
+                  <Camera size={12} className="text-white" />
+                </button>
+              )}
+
               <input
                 ref={fileInputRef}
                 type="file"
                 accept="image/*"
-                onChange={handleAvatarChange}
+                onChange={pickAvatar}
                 className="hidden"
               />
             </div>
             <div className="flex-1 min-w-0">
               <p className="font-bold text-base" style={{ color: 'var(--text-primary)' }}>@{username}</p>
               <p className="text-xs truncate" style={{ color: 'var(--text-muted)' }}>{email}</p>
-              {uploading && <p className="text-xs text-cyan-400 mt-1">Uploading...</p>}
+
+              {/* staged actions */}
+              {pendingPreview && (
+                <div className="flex items-center gap-1.5 mt-2">
+                  <button
+                    onClick={commitAvatar}
+                    disabled={uploading}
+                    className="btn-primary"
+                    style={{ padding: '5px 10px', fontSize: '11px' }}
+                  >
+                    <Check size={11} /> {uploading ? 'Saving…' : 'Save photo'}
+                  </button>
+                  <button
+                    onClick={discardPending}
+                    disabled={uploading}
+                    className="btn-secondary"
+                    style={{ padding: '5px 8px', fontSize: '11px' }}
+                  >
+                    <X size={11} />
+                  </button>
+                </div>
+              )}
             </div>
           </div>
 
@@ -153,11 +228,6 @@ export default function SettingsPage() {
             </div>
           </div>
 
-          {savedMsg && (
-            <div className="mt-3 px-3 py-2 rounded-lg text-xs text-center font-semibold" style={{ background: 'rgba(34,211,238,0.1)', color: 'var(--cyan-400)' }}>
-              {savedMsg}
-            </div>
-          )}
         </div>
 
         {/* Account */}
