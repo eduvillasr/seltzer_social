@@ -71,6 +71,27 @@ export default function FeedPage() {
     if (currentUser) await loadFeed(currentUser.id, false);
   });
 
+  // Silently refresh when the user comes back to the tab.
+  // Throttled so a quick window-switch storm doesn't hammer the DB.
+  useEffect(() => {
+    if (!currentUser) return;
+    let lastRefresh = Date.now();
+    const REFRESH_COOLDOWN_MS = 30_000;
+    function maybeRefresh() {
+      const now = Date.now();
+      if (document.visibilityState === 'visible' && now - lastRefresh > REFRESH_COOLDOWN_MS) {
+        lastRefresh = now;
+        loadFeed(currentUser!.id, false);
+      }
+    }
+    document.addEventListener('visibilitychange', maybeRefresh);
+    window.addEventListener('focus', maybeRefresh);
+    return () => {
+      document.removeEventListener('visibilitychange', maybeRefresh);
+      window.removeEventListener('focus', maybeRefresh);
+    };
+  }, [currentUser]);
+
   // ── merge + group ───────────────────────────────────────────
   const sections = useMemo<Section[]>(() => {
     const items: FeedItem[] = [];
@@ -202,16 +223,27 @@ export default function FeedPage() {
           <div className="space-y-6">
             {sections.map((section, sIdx) => (
               <section key={section.label} className="space-y-3 stagger-children">
-                {/* Section header */}
-                <div className="flex items-center gap-3">
+                {/* Sticky section header — clings to the top while you scroll its bucket */}
+                <div
+                  className="flex items-center gap-3 -mx-4 px-4 py-2"
+                  style={{
+                    position: 'sticky',
+                    top: 0,
+                    zIndex: 5,
+                    background: 'rgba(10,14,26,0.78)',
+                    backdropFilter: 'blur(14px) saturate(180%)',
+                    WebkitBackdropFilter: 'blur(14px) saturate(180%)',
+                    borderBottom: '1px solid var(--border-subtle)',
+                  }}
+                >
                   <span
                     className="text-[10px] font-bold uppercase tracking-[0.18em]"
-                    style={{ color: 'var(--text-muted)' }}
+                    style={{ color: 'var(--text-secondary)' }}
                   >
                     {section.label}
                   </span>
                   <span className="flex-1 h-px" style={{ background: 'var(--border-subtle)' }} />
-                  <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                  <span className="text-[10px] font-semibold" style={{ color: 'var(--text-muted)' }}>
                     {section.items.length}
                   </span>
                 </div>

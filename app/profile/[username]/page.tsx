@@ -121,6 +121,85 @@ export default function ProfilePage({ params }: ProfilePageProps) {
       .map(([brand, count]) => ({ brand, count }));
   }, [reviews]);
 
+  // ─── advanced taste metrics ──────────────────────────────────
+  const taste = useMemo(() => {
+    if (reviews.length === 0) return null;
+
+    // Tier distribution
+    const tierCounts: Record<string, number> = { S: 0, A: 0, B: 0, C: 0, D: 0, F: 0 };
+    for (const r of reviews) tierCounts[ratingToTier(r.rating)]++;
+
+    // Brand stats
+    const byBrand: Record<string, { count: number; sum: number }> = {};
+    for (const r of reviews) {
+      const b = (r.brand?.trim() || 'Unknown');
+      if (!byBrand[b]) byBrand[b] = { count: 0, sum: 0 };
+      byBrand[b].count++;
+      byBrand[b].sum += r.rating;
+    }
+    const brandEntries = Object.entries(byBrand);
+    const topBrandByCount = brandEntries.sort((a, b) => b[1].count - a[1].count)[0];
+    const brandsWith2Plus = brandEntries.filter(([, v]) => v.count >= 2);
+    const bestBrand = brandsWith2Plus.length > 0
+      ? brandsWith2Plus.sort((a, b) => b[1].sum / b[1].count - a[1].sum / a[1].count)[0]
+      : null;
+    const worstBrand = brandsWith2Plus.length > 0
+      ? brandsWith2Plus.sort((a, b) => a[1].sum / a[1].count - b[1].sum / b[1].count)[0]
+      : null;
+
+    // Generosity vs. critic — variance from neutral 3.0
+    const harshCount    = reviews.filter((r) => r.rating < 3).length;
+    const generousCount = reviews.filter((r) => r.rating >= 4).length;
+    const generosityScore = generousCount / reviews.length; // 0..1
+
+    // Pickiness — std deviation of ratings (high = wide spread, low = consistent)
+    const mean = reviews.reduce((s, r) => s + r.rating, 0) / reviews.length;
+    const variance = reviews.reduce((s, r) => s + (r.rating - mean) ** 2, 0) / reviews.length;
+    const stdDev = Math.sqrt(variance);
+
+    // Brand loyalty — % of reviews from top brand
+    const loyaltyPct = topBrandByCount
+      ? Math.round((topBrandByCount[1].count / reviews.length) * 100)
+      : 0;
+
+    // Sweet spot — most-rated tier
+    const sweetTier = (Object.entries(tierCounts).sort((a, b) => b[1] - a[1])[0])[0];
+
+    // Variety — unique brands rated
+    const uniqueBrands = brandEntries.length;
+
+    // Generosity label
+    const generosityLabel =
+      generosityScore >= 0.65 ? 'Generous' :
+      generosityScore >= 0.4  ? 'Balanced'  :
+      generosityScore >= 0.2  ? 'Selective' :
+                                'Harsh critic';
+
+    // Pickiness label (std dev — higher = more polarized opinions)
+    const pickinessLabel =
+      stdDev >= 1.2 ? 'Polarized'  :
+      stdDev >= 0.8 ? 'Opinionated':
+      stdDev >= 0.4 ? 'Steady'     :
+                      'Lockstep';
+
+    return {
+      tierCounts,
+      topBrandByCount,
+      bestBrand,
+      worstBrand,
+      generosityScore,
+      generosityLabel,
+      stdDev,
+      pickinessLabel,
+      loyaltyPct,
+      sweetTier,
+      uniqueBrands,
+      harshCount,
+      generousCount,
+      mean,
+    };
+  }, [reviews]);
+
   if (loading) {
     return (<><Navigation /><main className="max-w-md mx-auto px-4 pt-20 pb-32"><CanLoader /></main></>);
   }
@@ -255,6 +334,99 @@ export default function ProfilePage({ params }: ProfilePageProps) {
           </Link>
         )}
 
+        {/* ─── Taste profile (advanced metrics) ─── */}
+        {taste && reviews.length >= 2 && (
+          <div
+            className="rounded-3xl overflow-hidden animate-fade-in-up"
+            style={{
+              background: 'linear-gradient(135deg, rgba(34,211,238,0.06), rgba(167,139,250,0.06))',
+              border: '1px solid var(--border-subtle)',
+              padding: '16px',
+            }}
+          >
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-[10px] font-bold uppercase tracking-[0.18em]" style={{ color: 'var(--cyan-400)' }}>
+                Taste Profile
+              </span>
+              <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                {reviews.length} reviews · avg {taste.mean.toFixed(1)}
+              </span>
+            </div>
+
+            {/* Trait pills */}
+            <div className="flex flex-wrap gap-2 mb-4">
+              <TraitPill label={taste.generosityLabel} sub="critic style" tone="cyan" />
+              <TraitPill label={taste.pickinessLabel} sub="opinion spread" tone="violet" />
+              <TraitPill
+                label={`${taste.loyaltyPct}% loyal`}
+                sub={taste.topBrandByCount?.[0] ?? ''}
+                tone="amber"
+              />
+              <TraitPill label={`Sweet spot ${taste.sweetTier}`} sub="most-rated tier" tone="emerald" />
+            </div>
+
+            {/* Tier distribution bar chart */}
+            <div className="mb-4">
+              <p className="text-[10px] font-bold uppercase tracking-wider mb-1.5" style={{ color: 'var(--text-muted)' }}>
+                Tier distribution
+              </p>
+              <div className="flex items-end gap-1.5 h-16">
+                {(['S','A','B','C','D','F'] as const).map((t) => {
+                  const c = taste.tierCounts[t];
+                  const max = Math.max(...Object.values(taste.tierCounts));
+                  const heightPct = max ? (c / max) * 100 : 0;
+                  return (
+                    <div key={t} className="flex-1 flex flex-col items-center justify-end h-full">
+                      <span className="text-[9px] font-bold mb-0.5" style={{ color: c > 0 ? TIER_COLORS[t] : 'var(--text-muted)' }}>
+                        {c}
+                      </span>
+                      <div
+                        className="w-full rounded-t transition-all"
+                        style={{
+                          height: `${Math.max(heightPct, 4)}%`,
+                          background: c > 0 ? `${TIER_COLORS[t]}cc` : 'rgba(148,163,184,0.08)',
+                          boxShadow: c > 0 ? `0 0 12px ${TIER_COLORS[t]}33` : 'none',
+                        }}
+                      />
+                      <span className="text-[10px] font-extrabold mt-1" style={{ color: TIER_COLORS[t] }}>
+                        {t}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Best & worst brand callouts */}
+            {(taste.bestBrand || taste.worstBrand) && (
+              <div className="grid grid-cols-2 gap-2">
+                {taste.bestBrand && (
+                  <BrandCallout
+                    label="Reaches highest"
+                    brand={taste.bestBrand[0]}
+                    avg={taste.bestBrand[1].sum / taste.bestBrand[1].count}
+                    count={taste.bestBrand[1].count}
+                    tone="#10b981"
+                  />
+                )}
+                {taste.worstBrand && taste.bestBrand && taste.worstBrand[0] !== taste.bestBrand[0] && (
+                  <BrandCallout
+                    label="Falls flattest"
+                    brand={taste.worstBrand[0]}
+                    avg={taste.worstBrand[1].sum / taste.worstBrand[1].count}
+                    count={taste.worstBrand[1].count}
+                    tone="#fb7185"
+                  />
+                )}
+              </div>
+            )}
+
+            <p className="text-[10px] mt-3 text-center" style={{ color: 'var(--text-muted)' }}>
+              {taste.uniqueBrands} {taste.uniqueBrands === 1 ? 'brand' : 'brands'} explored
+            </p>
+          </div>
+        )}
+
         {/* ─── Top brands strip ─── */}
         {topBrands.length > 0 && (
           <div>
@@ -350,6 +522,41 @@ function Stat({ label, value, color }: { label: string; value: number; color: st
     <div className="text-center">
       <p className="text-base font-extrabold" style={{ color }}>{value}</p>
       <p className="text-[10px] mt-0.5" style={{ color: 'var(--text-muted)' }}>{label}</p>
+    </div>
+  );
+}
+
+const PILL_TONES: Record<string, { fg: string; bg: string; border: string }> = {
+  cyan:    { fg: 'var(--cyan-400)',   bg: 'rgba(34,211,238,0.08)',  border: 'rgba(34,211,238,0.22)' },
+  violet:  { fg: 'var(--violet-400)', bg: 'rgba(167,139,250,0.08)', border: 'rgba(167,139,250,0.22)' },
+  amber:   { fg: 'var(--amber-400)',  bg: 'rgba(251,191,36,0.08)',  border: 'rgba(251,191,36,0.22)' },
+  emerald: { fg: '#34d399',           bg: 'rgba(52,211,153,0.08)',  border: 'rgba(52,211,153,0.22)' },
+};
+
+function TraitPill({ label, sub, tone }: { label: string; sub: string; tone: keyof typeof PILL_TONES }) {
+  const t = PILL_TONES[tone];
+  return (
+    <div
+      className="rounded-xl px-3 py-1.5 flex flex-col"
+      style={{ background: t.bg, border: `1px solid ${t.border}` }}
+    >
+      <span className="text-xs font-bold leading-tight" style={{ color: t.fg }}>{label}</span>
+      {sub && <span className="text-[10px] truncate" style={{ color: 'var(--text-muted)' }}>{sub}</span>}
+    </div>
+  );
+}
+
+function BrandCallout({ label, brand, avg, count, tone }: { label: string; brand: string; avg: number; count: number; tone: string }) {
+  return (
+    <div
+      className="rounded-xl p-2.5"
+      style={{ background: `${tone}10`, border: `1px solid ${tone}33` }}
+    >
+      <p className="text-[9px] font-bold uppercase tracking-wider" style={{ color: tone }}>{label}</p>
+      <p className="text-sm font-extrabold mt-0.5 truncate" style={{ color: 'var(--text-primary)' }}>{brand}</p>
+      <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+        avg {avg.toFixed(1)} · {count} reviews
+      </p>
     </div>
   );
 }

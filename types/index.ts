@@ -147,10 +147,20 @@ export interface SharedTierListSuggestionTrial {
   created_at: string;
 }
 
+export type NotificationType =
+  | 'suggestion'
+  | 'suggestion_approved'
+  | 'suggestion_rejected'
+  | 'mention'
+  | 'like'
+  | 'comment'
+  | 'follow'
+  | 'tried_it';
+
 export interface Notification {
   id: string;
   user_id: string;
-  type: 'suggestion' | 'mention' | 'suggestion_approved' | 'suggestion_rejected';
+  type: NotificationType;
   title: string;
   body: string | null;
   link: string | null;

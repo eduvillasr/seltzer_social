@@ -5,7 +5,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Bell, Check, CheckCheck, Trash2, Vote, AtSign } from 'lucide-react';
+import { Bell, Check, CheckCheck, Trash2, Vote, AtSign, Heart, MessageCircle, UserPlus, Droplets } from 'lucide-react';
 import { Navigation } from '@/components/Navigation';
 import { CanLoader } from '@/components/CanLoader';
 import { Notification } from '@/types';
@@ -18,26 +18,14 @@ import {
 } from '@/lib/supabase';
 
 const TYPE_META: Record<string, { icon: React.ReactNode; color: string; label: string }> = {
-  suggestion: {
-    icon: <Vote size={16} />,
-    color: 'var(--amber-400)',
-    label: 'Tier List Request',
-  },
-  suggestion_approved: {
-    icon: <Check size={16} />,
-    color: 'var(--cyan-400)',
-    label: 'Request Approved',
-  },
-  suggestion_rejected: {
-    icon: <Trash2 size={16} />,
-    color: 'var(--coral-400)',
-    label: 'Request Rejected',
-  },
-  mention: {
-    icon: <AtSign size={16} />,
-    color: 'var(--violet-400)',
-    label: 'Mention',
-  },
+  suggestion:           { icon: <Vote size={16} />,         color: 'var(--amber-400)',  label: 'Tier List Request' },
+  suggestion_approved:  { icon: <Check size={16} />,        color: 'var(--cyan-400)',   label: 'Request Approved'  },
+  suggestion_rejected:  { icon: <Trash2 size={16} />,       color: 'var(--coral-400)',  label: 'Request Rejected'  },
+  mention:              { icon: <AtSign size={16} />,       color: 'var(--violet-400)', label: 'Mention'           },
+  like:                 { icon: <Heart size={16} />,        color: '#fb7185',           label: 'New Like'          },
+  comment:              { icon: <MessageCircle size={16} />,color: 'var(--cyan-400)',   label: 'New Comment'       },
+  follow:               { icon: <UserPlus size={16} />,     color: 'var(--violet-400)', label: 'New Follower'      },
+  tried_it:             { icon: <Droplets size={16} />,     color: 'var(--cyan-400)',   label: 'Someone Tried It'  },
 };
 
 export default function InboxPage() {

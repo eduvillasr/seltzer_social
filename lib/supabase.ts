@@ -331,7 +331,29 @@ export async function uploadReviewImage(userId: string, file: File): Promise<{ u
 // LIKES
 export async function createLike(userId: string, reviewId: string) {
   const { data, error } = await supabase.from('likes').insert([{ user_id: userId, review_id: reviewId }]).select().single();
+  if (!error) notifyOnLike(userId, reviewId);
   return { data, error };
+}
+
+async function notifyOnLike(actorId: string, reviewId: string) {
+  // Look up the review owner + a friendly title for the notification body.
+  const { data: review } = await supabase
+    .from('reviews')
+    .select('user_id, title, seltzer_name, brand')
+    .eq('id', reviewId)
+    .maybeSingle();
+  if (!review || review.user_id === actorId) return; // don't notify yourself
+  const { data: actor } = await supabase
+    .from('users').select('username').eq('id', actorId).maybeSingle();
+  const actorName = actor?.username ? `@${actor.username}` : 'Someone';
+  const drink = review.title?.trim() || review.seltzer_name;
+  supabase.from('notifications').insert([{
+    user_id: review.user_id,
+    type: 'like',
+    title: `${actorName} liked your review`,
+    body: drink + (review.brand ? ` · ${review.brand}` : ''),
+    link: `/review/${reviewId}`,
+  }]).then(() => {});
 }
 export async function deleteLike(userId: string, reviewId: string) {
   const { error } = await supabase.from('likes').delete().eq('user_id', userId).eq('review_id', reviewId);
@@ -349,7 +371,29 @@ export async function getUserLike(userId: string, reviewId: string) {
 // COMMENTS
 export async function createComment(userId: string, reviewId: string, content: string) {
   const { data, error } = await supabase.from('comments').insert([{ user_id: userId, review_id: reviewId, content }]).select('*, user:users(*)').single();
+  if (!error) notifyOnComment(userId, reviewId, content);
   return { data, error };
+}
+
+async function notifyOnComment(actorId: string, reviewId: string, content: string) {
+  const { data: review } = await supabase
+    .from('reviews')
+    .select('user_id, title, seltzer_name')
+    .eq('id', reviewId)
+    .maybeSingle();
+  if (!review || review.user_id === actorId) return;
+  const { data: actor } = await supabase
+    .from('users').select('username').eq('id', actorId).maybeSingle();
+  const actorName = actor?.username ? `@${actor.username}` : 'Someone';
+  const drink = review.title?.trim() || review.seltzer_name;
+  const snippet = content.length > 60 ? content.slice(0, 60) + '…' : content;
+  supabase.from('notifications').insert([{
+    user_id: review.user_id,
+    type: 'comment',
+    title: `${actorName} commented on ${drink}`,
+    body: `"${snippet}"`,
+    link: `/review/${reviewId}`,
+  }]).then(() => {});
 }
 export async function getComments(reviewId: string) {
   const { data, error } = await supabase.from('comments').select('*, user:users(*)').eq('review_id', reviewId).order('created_at', { ascending: true });
@@ -376,8 +420,33 @@ export async function getUserRepost(userId: string, reviewId: string) {
 
 // TRIED IT
 export async function createTriedIt(userId: string, reviewId: string, rating: number) {
+  // Detect first-time vs. update so we only notify on first try.
+  const { data: existing } = await supabase
+    .from('tried_it').select('id').eq('user_id', userId).eq('review_id', reviewId).maybeSingle();
+  const isFirstTime = !existing;
   const { data, error } = await supabase.from('tried_it').upsert([{ user_id: userId, review_id: reviewId, rating }], { onConflict: 'user_id, review_id' }).select().single();
+  if (!error && isFirstTime) notifyOnTriedIt(userId, reviewId, rating);
   return { data, error };
+}
+
+async function notifyOnTriedIt(actorId: string, reviewId: string, rating: number) {
+  const { data: review } = await supabase
+    .from('reviews')
+    .select('user_id, title, seltzer_name')
+    .eq('id', reviewId)
+    .maybeSingle();
+  if (!review || review.user_id === actorId) return;
+  const { data: actor } = await supabase
+    .from('users').select('username').eq('id', actorId).maybeSingle();
+  const actorName = actor?.username ? `@${actor.username}` : 'Someone';
+  const drink = review.title?.trim() || review.seltzer_name;
+  supabase.from('notifications').insert([{
+    user_id: review.user_id,
+    type: 'tried_it',
+    title: `${actorName} tried ${drink}`,
+    body: `Their rating: ${rating.toFixed(1)} ⭐`,
+    link: `/review/${reviewId}`,
+  }]).then(() => {});
 }
 export async function getUserTriedIt(userId: string, reviewId: string) {
   const { data, error } = await supabase.from('tried_it').select('*').eq('user_id', userId).eq('review_id', reviewId).maybeSingle();
@@ -393,7 +462,22 @@ export async function getTriedItStats(reviewId: string) {
 // FOLLOWS
 export async function followUser(followerId: string, followingId: string) {
   const { data, error } = await supabase.from('follows').insert([{ follower_id: followerId, following_id: followingId }]).select().single();
+  if (!error) notifyOnFollow(followerId, followingId);
   return { data, error };
+}
+
+async function notifyOnFollow(actorId: string, recipientId: string) {
+  if (actorId === recipientId) return;
+  const { data: actor } = await supabase
+    .from('users').select('username').eq('id', actorId).maybeSingle();
+  if (!actor?.username) return;
+  supabase.from('notifications').insert([{
+    user_id: recipientId,
+    type: 'follow',
+    title: `@${actor.username} followed you`,
+    body: null,
+    link: `/profile/${actor.username}`,
+  }]).then(() => {});
 }
 export async function unfollowUser(followerId: string, followingId: string) {
   const { error } = await supabase.from('follows').delete().eq('follower_id', followerId).eq('following_id', followingId);
@@ -806,7 +890,7 @@ export async function getSubscribedSharedTierActivities(userId: string, limit: n
 // NOTIFICATIONS / INBOX
 export async function createNotification(notification: {
   user_id: string;
-  type: 'suggestion' | 'mention' | 'suggestion_approved' | 'suggestion_rejected';
+  type: 'suggestion' | 'suggestion_approved' | 'suggestion_rejected' | 'mention' | 'like' | 'comment' | 'follow' | 'tried_it';
   title: string;
   body?: string;
   link?: string;
