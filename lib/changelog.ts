@@ -1,0 +1,355 @@
+// lib/changelog.ts
+// What's New — single source of truth for the in-app release notes.
+//
+// To add a new entry: prepend it to RELEASES (newest first). Bump
+// CURRENT_VERSION to match. The "new release" indicator on the
+// /whats-new link uses CURRENT_VERSION + a localStorage seen-key.
+
+export type ChangeKind = 'new' | 'improved' | 'fixed';
+
+export interface ChangeEntry {
+  kind: ChangeKind;
+  title: string;
+  detail?: string;
+}
+
+export interface Release {
+  version: string;
+  date: string;          // ISO yyyy-mm-dd
+  headline: string;      // one-liner mood for the release
+  changes: ChangeEntry[];
+}
+
+export const CURRENT_VERSION = '0.11.0';
+
+/** localStorage key for "last version the user opened the changelog at". */
+export const SEEN_KEY = 'seltzer:last-seen-version';
+
+/** Whether there's a release the user hasn't seen yet. Browser-safe. */
+export function hasUnseenRelease(): boolean {
+  if (typeof window === 'undefined') return false;
+  return window.localStorage.getItem(SEEN_KEY) !== CURRENT_VERSION;
+}
+
+export const RELEASES: Release[] = [
+  {
+    version: '0.11.0',
+    date: '2026-05-06',
+    headline: 'Tier lists, smarter together',
+    changes: [
+      {
+        kind: 'new',
+        title: 'Shared ratings average automatically',
+        detail: 'When two members add the same drink to a tier list, ratings now average across contributors instead of overwriting. Detailed view shows "avg of 2" inline so you know it\'s a group score.',
+      },
+      {
+        kind: 'new',
+        title: 'Tier list invitations',
+        detail: 'You can\'t pull a friend into a shared tier list without their consent anymore. New lists with a partner start as a "pending invite". The partner gets a notification, sees an Accept / Decline banner on the list page, and the list only goes public once accepted.',
+      },
+      {
+        kind: 'new',
+        title: 'What\'s New page',
+        detail: 'See every release and what changed at /whats-new (also linked from Settings). A small dot on the link tells you when there\'s something new since you last looked.',
+      },
+      {
+        kind: 'fixed',
+        title: 'Suggesting from a new review no longer triggers a vote',
+        detail: 'When you publish a review and tap a tier list to add it, the drink now goes straight in for member lists — no awkward "waiting for partner to vote" detour.',
+      },
+    ],
+  },
+  {
+    version: '0.10.0',
+    date: '2026-05-06',
+    headline: 'Reviews you can actually edit',
+    changes: [
+      {
+        kind: 'new',
+        title: 'Change the drink on a review',
+        detail: 'On the edit screen there\'s now a Drink section with a search-or-add picker. Tap "Change" to swap a review onto a different canonical seltzer without rewriting it.',
+      },
+      {
+        kind: 'improved',
+        title: '0.1-precision rating on mobile',
+        detail: 'Tap a star for a whole number, slide your thumb along the row to fine-tune, or use the ± buttons for exact 0.1 steps. The number input also opens the decimal keypad on iOS now.',
+      },
+      {
+        kind: 'improved',
+        title: 'Bigger star tap targets',
+        detail: 'Stars in the rating input are 4–8px larger across all sizes. Easier to hit one-handed.',
+      },
+    ],
+  },
+  {
+    version: '0.9.0',
+    date: '2026-05-05',
+    headline: 'Install Seltzer Social on your home screen',
+    changes: [
+      {
+        kind: 'new',
+        title: 'Progressive Web App',
+        detail: 'You can now install Seltzer Social directly from the browser. Android shows a one-tap "Install" prompt; iOS Safari shows step-by-step instructions. Launches fullscreen, no browser chrome, your own home-screen icon.',
+      },
+      {
+        kind: 'new',
+        title: 'Custom app icon + splash',
+        detail: 'A cyan-gradient droplet icon shows up on your home screen, and the app launches with a matching dark-navy splash to feel native.',
+      },
+      {
+        kind: 'improved',
+        title: 'Friendly install nudge',
+        detail: 'A subtle prompt slides up above the bottom nav on first visit. Dismiss it and we won\'t bother you for 14 days.',
+      },
+      {
+        kind: 'improved',
+        title: 'Offline fallback',
+        detail: 'Lose connection mid-scroll? You\'ll get a small "you\'re offline" page instead of a browser error.',
+      },
+    ],
+  },
+  {
+    version: '0.8.0',
+    date: '2026-05-05',
+    headline: 'Discover, share, and earn',
+    changes: [
+      {
+        kind: 'new',
+        title: 'Discover page',
+        detail: 'Trending drinks, highest-rated, active tier lists, and top reviewers — all on /discover. Linked from Search.',
+      },
+      {
+        kind: 'new',
+        title: 'Public drink pages',
+        detail: 'Every canonical drink has its own page with the community tier letter, average rating, total reviews, and every review of that drink.',
+      },
+      {
+        kind: 'new',
+        title: 'Share cards',
+        detail: 'Reviews and tier lists now generate beautiful preview images automatically. Paste a link in iMessage / Discord / Twitter and a rich card pops with the can photo, rating, and quote.',
+      },
+      {
+        kind: 'new',
+        title: 'Tier list invite links',
+        detail: 'Share button on every tier list. Native share sheet on mobile, copy-to-clipboard on desktop. Friends land on the list and can subscribe in one tap.',
+      },
+      {
+        kind: 'new',
+        title: 'Achievements + dog tags',
+        detail: '20 badges across bronze → legendary tiers. Unlock by reviewing, exploring brands, getting likes, building tier lists. Pin up to 3 to your profile as Battlefield-style "honors".',
+      },
+      {
+        kind: 'new',
+        title: 'Beta Tester badge',
+        detail: 'A platinum achievement automatically granted to early beta testers. Pin it to flex.',
+      },
+      {
+        kind: 'new',
+        title: 'Comment replies',
+        detail: 'Reply to any comment with one tap. Replies thread under their parent. The original commenter gets a notification.',
+      },
+    ],
+  },
+  {
+    version: '0.7.0',
+    date: '2026-05-05',
+    headline: 'Reviews come alive',
+    changes: [
+      {
+        kind: 'new',
+        title: 'Edit your reviews',
+        detail: 'Pencil icon on your own review opens a full editor — change the title, rating, text, or re-upload a new can photo. Delete is in there too.',
+      },
+      {
+        kind: 'new',
+        title: 'Community Score callout',
+        detail: 'When someone "tries" a drink you reviewed, a community-score card now appears on the review with the average plus a visual "+0.4 above your rating" comparison.',
+      },
+      {
+        kind: 'new',
+        title: 'Comment count indicator',
+        detail: 'Like the like-count, the comment button now shows the number whenever a review has any comments.',
+      },
+      {
+        kind: 'new',
+        title: 'Half-star precision',
+        detail: 'Stars now show 4.5 as four full stars + one half — no more 4.8 displaying as 4 stars flat.',
+      },
+      {
+        kind: 'new',
+        title: '"Read more" on long reviews',
+        detail: 'Long reviews on the feed clamp to 5 lines with a Read more toggle. No need to click into the review just to see the rest.',
+      },
+    ],
+  },
+  {
+    version: '0.6.0',
+    date: '2026-05-05',
+    headline: 'A feed that feels alive',
+    changes: [
+      {
+        kind: 'new',
+        title: 'Way more notifications',
+        detail: 'Likes, comments, follows, "tried it" ratings, and replies all hit your inbox now. Each gets a distinct icon and color.',
+      },
+      {
+        kind: 'new',
+        title: 'Sticky day headers',
+        detail: 'The Today / Yesterday / This week / Earlier headers now stick to the top of the viewport with a frosted-glass blur as you scroll. Adds a real Twitter / Instagram cadence.',
+      },
+      {
+        kind: 'new',
+        title: 'Auto-refresh on focus',
+        detail: 'Switch back to the tab after lunch and the feed silently re-fetches. Throttled to every 30 seconds so it never hammers the database.',
+      },
+      {
+        kind: 'new',
+        title: 'Taste Profile on profiles',
+        detail: 'Computed from your review history: critic style (Generous → Harsh), opinion spread, brand loyalty %, sweet-spot tier, plus a tier distribution histogram and best/worst brands.',
+      },
+      {
+        kind: 'fixed',
+        title: 'Notifications were silently failing',
+        detail: 'Supabase JS v2 lazy queries needed an explicit .then() — fixed. Inserts actually fire now.',
+      },
+    ],
+  },
+  {
+    version: '0.5.0',
+    date: '2026-05-04',
+    headline: 'Profile + onboarding glow-up',
+    changes: [
+      {
+        kind: 'new',
+        title: 'Onboarding flow',
+        detail: 'New users get a 3-step welcome — pick a few people to follow, then choose to write your first review or start a tier list.',
+      },
+      {
+        kind: 'new',
+        title: 'Compare with @user',
+        detail: 'On any other profile, tap Compare to see a side-by-side of every drink you\'ve both reviewed. Big "taste agreement %" headline plus per-drink delta bars.',
+      },
+      {
+        kind: 'new',
+        title: 'Profile redesign',
+        detail: 'Bigger avatar, cleaner stats grid (Reviews / Lists / Followers / Following), top-rated review highlight, top brands strip.',
+      },
+      {
+        kind: 'new',
+        title: 'Pull-to-refresh on feed',
+        detail: 'Drag the feed down past the threshold and release — silent reload, spring-back animation.',
+      },
+      {
+        kind: 'improved',
+        title: 'Avatar upload',
+        detail: 'Image now stages as a preview with a cyan ring before commit. Save to confirm, ✕ to discard. Replaces the old jarring instant-upload behavior.',
+      },
+      {
+        kind: 'improved',
+        title: 'Toast notifications',
+        detail: 'Glassy slide-down toasts replaced inline error banners and silent successes across the app.',
+      },
+      {
+        kind: 'improved',
+        title: 'Skeleton loaders',
+        detail: 'Feed shows shimmering placeholder cards instead of an empty page while loading.',
+      },
+    ],
+  },
+  {
+    version: '0.4.0',
+    date: '2026-05-04',
+    headline: 'Reviews are about a drink, not just a string',
+    changes: [
+      {
+        kind: 'new',
+        title: 'Canonical drinks',
+        detail: 'Every drink lives in a shared catalog now. When you write a review, you pick the drink from that catalog (or add it once for everyone). No more "Polar Mango" vs "polar mango" duplicates.',
+      },
+      {
+        kind: 'new',
+        title: 'Optional review titles',
+        detail: 'Reviews can have a free-text title separate from the drink — write "Ultimate summer drink" while keeping the canonical drink as "Polar · Mango Lime".',
+      },
+      {
+        kind: 'new',
+        title: 'Username chooser flow',
+        detail: 'Real-time availability check, validation rules, reserved-name protection, and a fallback chooser screen for OAuth users.',
+      },
+      {
+        kind: 'new',
+        title: 'Email confirmation flow',
+        detail: 'After signup you land on a "check your email" screen with a resend button. Confirmation links route to a dedicated /auth/callback page.',
+      },
+      {
+        kind: 'improved',
+        title: 'Mobile optimizations',
+        detail: 'Proper viewport meta, safe-area insets so the bottom nav floats above iPhone\'s home indicator, 16px input font-size to stop iOS zoom-on-focus, dynamic viewport height fixes.',
+      },
+    ],
+  },
+  {
+    version: '0.3.0',
+    date: '2026-05-04',
+    headline: 'Tier lists, redone',
+    changes: [
+      {
+        kind: 'new',
+        title: 'Direct edit for list members',
+        detail: 'You + your partner can now add/edit/delete drinks instantly — no suggestion + vote loop for your own list. Suggestions and voting kick in only for non-members.',
+      },
+      {
+        kind: 'new',
+        title: 'Bulk add from your reviews',
+        detail: 'Multi-select your existing reviews to seed a tier list in one shot. Auto-tiered from rating, deduped by review.',
+      },
+      {
+        kind: 'new',
+        title: 'Search + collapse + compact view',
+        detail: 'Top search bar filters across all tiers, each tier letter is tappable to collapse, and the default view is a dense thumbnail grid that scales to hundreds of drinks.',
+      },
+      {
+        kind: 'new',
+        title: 'Delete a tier list',
+        detail: 'Three-dot menu in the header → Delete this list. Confirmation modal requires you to type the list name to proceed.',
+      },
+      {
+        kind: 'fixed',
+        title: 'Removing a drink actually works now',
+        detail: 'The original migration was missing UPDATE/DELETE RLS policies, so edits silently no-op\'d. Added the policies + surfaced an explicit error message when they\'re missing.',
+      },
+      {
+        kind: 'fixed',
+        title: 'Suggestion voting was stuck',
+        detail: 'The majority threshold required both members to vote approve. Now the suggester is excluded from the count, so the partner\'s single vote is decisive on a 2-person list.',
+      },
+    ],
+  },
+  {
+    version: '0.2.0',
+    date: '2026-05-03',
+    headline: 'Inbox + founder badges',
+    changes: [
+      {
+        kind: 'new',
+        title: 'Inbox',
+        detail: 'Suggestions, mentions, and other notifications moved out of the feed and into a dedicated inbox tab with read/unread states.',
+      },
+      {
+        kind: 'new',
+        title: 'Founder badge',
+        detail: 'Tiny gold checkmark next to founder usernames — visible on review cards, comments, profile, and tier list activity.',
+      },
+      {
+        kind: 'new',
+        title: '@mentions in comments',
+        detail: 'Type @username and the comment turns it into a clickable link. The mentioned user gets a notification.',
+      },
+      {
+        kind: 'new',
+        title: 'Animated bubble loader',
+        detail: 'Replaced "Loading…" text with a small fizzing-bubbles animation that fits the brand.',
+      },
+    ],
+  },
+];

@@ -5,7 +5,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Bell, Check, CheckCheck, Trash2, Vote, AtSign, Heart, MessageCircle, UserPlus, Droplets, CornerDownRight } from 'lucide-react';
+import { Bell, Check, CheckCheck, Trash2, Vote, AtSign, Heart, MessageCircle, UserPlus, Droplets, CornerDownRight, ListPlus, X } from 'lucide-react';
 import { Navigation } from '@/components/Navigation';
 import { CanLoader } from '@/components/CanLoader';
 import { Notification } from '@/types';
@@ -27,6 +27,9 @@ const TYPE_META: Record<string, { icon: React.ReactNode; color: string; label: s
   reply:                { icon: <CornerDownRight size={16} />,color: 'var(--cyan-400)', label: 'Reply to You'      },
   follow:               { icon: <UserPlus size={16} />,     color: 'var(--violet-400)', label: 'New Follower'      },
   tried_it:             { icon: <Droplets size={16} />,     color: 'var(--cyan-400)',   label: 'Someone Tried It'  },
+  tier_list_invite:           { icon: <ListPlus size={16} />,color: 'var(--amber-400)',  label: 'Tier List Invite' },
+  tier_list_invite_accepted:  { icon: <Check size={16} />,   color: '#34d399',           label: 'Invite Accepted'  },
+  tier_list_invite_declined:  { icon: <X size={16} />,       color: 'var(--coral-400)',  label: 'Invite Declined'  },
 };
 
 export default function InboxPage() {

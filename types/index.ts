@@ -83,12 +83,15 @@ export interface AuthUser {
   email: string;
 }
 
+export type SharedTierListStatus = 'pending_invite' | 'active' | 'declined';
+
 export interface SharedTierList {
   id: string;
   name: string;
   owner_id: string;
   partner_id: string;
   is_public: boolean;
+  status: SharedTierListStatus;
   created_at: string;
   updated_at: string;
   owner?: User;
@@ -103,6 +106,8 @@ export interface SharedTierListItem {
   seltzer_name: string;
   brand: string | null;
   rating: number;
+  /** Per-user contribution map (`{ userId: rating }`) used to compute the average. */
+  rating_contributions?: Record<string, number>;
   tier: string;
   note: string | null;
   review_id: string | null;
@@ -159,7 +164,10 @@ export type NotificationType =
   | 'comment'
   | 'follow'
   | 'tried_it'
-  | 'reply';
+  | 'reply'
+  | 'tier_list_invite'
+  | 'tier_list_invite_accepted'
+  | 'tier_list_invite_declined';
 
 export interface Notification {
   id: string;

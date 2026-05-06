@@ -9,7 +9,8 @@ import { Navigation } from '@/components/Navigation';
 import { Avatar } from '@/components/Avatar';
 import { showToast } from '@/components/Toast';
 import { ensureUserProfile, supabase, uploadAvatar, updateUserProfile } from '@/lib/supabase';
-import { ArrowLeft, LogOut, Bell, Shield, HelpCircle, Info, ChevronRight, Droplets, Camera, Check, X, Upload } from 'lucide-react';
+import { ArrowLeft, LogOut, Bell, Shield, HelpCircle, Info, ChevronRight, Droplets, Camera, Check, X, Upload, Sparkles } from 'lucide-react';
+import { CURRENT_VERSION, hasUnseenRelease } from '@/lib/changelog';
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -26,6 +27,9 @@ export default function SettingsPage() {
   // staged avatar preview before commit
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [pendingPreview, setPendingPreview] = useState<string>('');
+  const [hasUnseen, setHasUnseen] = useState(false);
+
+  useEffect(() => { setHasUnseen(hasUnseenRelease()); }, []);
 
   useEffect(() => { checkAuth(); }, []);
 
@@ -243,6 +247,12 @@ export default function SettingsPage() {
         <div className="mb-5">
           <p className="text-xs uppercase tracking-wider mb-3 px-1" style={{ color: 'var(--text-muted)' }}>Support</p>
           <div className="rounded-2xl overflow-hidden" style={{ background: 'rgba(15, 20, 36, 0.6)', border: '1px solid rgba(255,255,255,0.06)' }}>
+            <SettingItem
+              icon={<Sparkles size={18} />}
+              label="What's New"
+              href="/whats-new"
+              badge={hasUnseen ? `v${CURRENT_VERSION}` : undefined}
+            />
             <SettingItem icon={<HelpCircle size={18} />} label="Help & FAQ" disabled />
             <SettingItem icon={<Info size={18} />} label="About" disabled />
           </div>
@@ -262,7 +272,7 @@ export default function SettingsPage() {
   );
 }
 
-function SettingItem({ icon, label, href, disabled }: any) {
+function SettingItem({ icon, label, href, disabled, badge }: { icon: React.ReactNode; label: string; href?: string; disabled?: boolean; badge?: string }) {
   const content = (
     <div className="flex items-center gap-3 px-4 py-3.5 transition-colors" style={{
       borderBottom: '1px solid rgba(255,255,255,0.04)',
@@ -274,6 +284,14 @@ function SettingItem({ icon, label, href, disabled }: any) {
         {icon}
       </div>
       <span className="flex-1 text-sm font-medium">{label}</span>
+      {badge && (
+        <span
+          className="text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-full"
+          style={{ background: 'rgba(34,211,238,0.15)', color: 'var(--cyan-400)', border: '1px solid rgba(34,211,238,0.25)' }}
+        >
+          {badge}
+        </span>
+      )}
       {disabled ? (
         <span className="text-[10px] uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Soon</span>
       ) : (

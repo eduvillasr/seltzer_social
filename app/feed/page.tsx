@@ -10,7 +10,7 @@ import { TierAddCard } from '@/components/TierAddCard';
 import { Navigation } from '@/components/Navigation';
 import { Review, AuthUser, SharedTierListItem } from '@/types';
 import { getSmartFeed, getFollowingCount, getSubscribedSharedTierActivities, supabase } from '@/lib/supabase';
-import { Plus, Droplets, Search, Sparkles, ListPlus, RotateCcw } from 'lucide-react';
+import { Plus, Droplets, Search, Sparkles, ListPlus, RotateCcw, Flame, UserPlus } from 'lucide-react';
 import { FeedSkeleton } from '@/components/Skeletons';
 import { usePullToRefresh } from '@/hooks/usePullToRefresh';
 
@@ -173,18 +173,16 @@ export default function FeedPage() {
           <div className="flex items-center gap-2">
             <Sparkles size={14} className="text-cyan-400" />
             <h1 className="text-sm font-bold uppercase tracking-wider" style={{ color: 'var(--text-secondary)' }}>
-              {followingCount > 0 ? 'Your Feed' : 'Discover'}
+              Your Feed
             </h1>
           </div>
-          {followingCount === 0 && (
-            <Link
-              href="/search"
-              className="text-xs font-semibold flex items-center gap-1 hover:opacity-80 transition-opacity"
-              style={{ color: 'var(--cyan-400)' }}
-            >
-              <Search size={12} /> Find people
-            </Link>
-          )}
+          <Link
+            href="/discover"
+            className="text-xs font-semibold flex items-center gap-1 hover:opacity-80 transition-opacity"
+            style={{ color: 'var(--cyan-400)' }}
+          >
+            <Flame size={12} /> Discover
+          </Link>
         </div>
 
         {/* Promo: start a shared list */}
@@ -207,18 +205,51 @@ export default function FeedPage() {
         {loading ? (
           <FeedSkeleton count={3} />
         ) : isEmpty ? (
-          <div className="glass-card text-center py-12 animate-fade-in-up">
-            <Droplets size={32} className="mx-auto mb-3" style={{ color: 'var(--text-muted)' }} />
-            <h3 className="text-lg font-bold mb-2" style={{ fontFamily: 'var(--font-display)' }}>
-              Nothing here yet
-            </h3>
-            <p className="text-sm mb-5" style={{ color: 'var(--text-secondary)' }}>
-              Be the first to share your seltzer experience!
-            </p>
-            <Link href="/create" className="btn-primary inline-flex">
-              <Plus size={14} /> Write a Review
-            </Link>
-          </div>
+          followingCount === 0 ? (
+            // No follows yet — point them to Discover, not "write your own."
+            <div className="glass-card text-center py-12 animate-fade-in-up">
+              <div
+                className="w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-4"
+                style={{ background: 'linear-gradient(135deg, rgba(34,211,238,0.18), rgba(167,139,250,0.18))' }}
+              >
+                <Flame size={22} className="text-cyan-400" />
+              </div>
+              <h3 className="text-lg font-bold mb-2" style={{ fontFamily: 'var(--font-display)' }}>
+                Your feed is empty
+              </h3>
+              <p className="text-sm mb-5 leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
+                Follow some people and your feed fills up with their reviews + tier list updates.
+                <br />Find them on Discover or via Search.
+              </p>
+              <div className="flex gap-2 justify-center flex-wrap">
+                <Link href="/discover" className="btn-primary inline-flex">
+                  <Flame size={14} /> Browse Discover
+                </Link>
+                <Link href="/search" className="btn-secondary inline-flex">
+                  <UserPlus size={14} /> Find people
+                </Link>
+              </div>
+            </div>
+          ) : (
+            // They follow people but those people haven't posted lately.
+            <div className="glass-card text-center py-12 animate-fade-in-up">
+              <Droplets size={32} className="mx-auto mb-3" style={{ color: 'var(--text-muted)' }} />
+              <h3 className="text-lg font-bold mb-2" style={{ fontFamily: 'var(--font-display)' }}>
+                Quiet on this end
+              </h3>
+              <p className="text-sm mb-5" style={{ color: 'var(--text-secondary)' }}>
+                Nobody you follow has posted lately. Drop a review — they'll see it.
+              </p>
+              <div className="flex gap-2 justify-center flex-wrap">
+                <Link href="/create" className="btn-primary inline-flex">
+                  <Plus size={14} /> Write a Review
+                </Link>
+                <Link href="/discover" className="btn-secondary inline-flex">
+                  <Flame size={14} /> Discover
+                </Link>
+              </div>
+            </div>
+          )
         ) : (
           <div className="space-y-6">
             {sections.map((section, sIdx) => (

@@ -468,12 +468,13 @@ export async function getTopRatedDrinks(minReviews: number = 2, limit: number = 
   return { data: drinks, error: null };
 }
 
-/** Public tier lists ordered by recent activity. */
+/** Public tier lists ordered by recent activity. Pending/declined invites filtered out. */
 export async function getTrendingTierLists(limit: number = 6) {
   const { data, error } = await supabase
     .from('shared_tier_lists')
     .select('*, owner:users!shared_tier_lists_owner_id_fkey(*), partner:users!shared_tier_lists_partner_id_fkey(*)')
     .eq('is_public', true)
+    .eq('status', 'active')
     .order('updated_at', { ascending: false })
     .limit(limit);
   return { data: data || [], error };
@@ -499,20 +500,17 @@ export async function getActiveReviewers(daysWindow: number = 30, limit: number 
   return { data: sorted, error: null };
 }
 
-// SMART FEED — following + own posts (fallback to all if not following anyone)
+// SMART FEED — strictly follows + own posts. No global fallback.
+// Discovery (finding new people / drinks) lives on /discover; the feed is
+// "your network only" so it stays relevant.
 export async function getSmartFeed(userId: string, limit: number = 50) {
   const { data: follows } = await supabase
     .from('follows')
     .select('following_id')
     .eq('follower_id', userId);
 
-  const followedIds = follows?.map(f => f.following_id) || [];
-  const allIds = [...followedIds, userId]; // Include own posts
-
-  // If not following anyone, fall back to all reviews
-  if (followedIds.length === 0) {
-    return await getReviews(limit);
-  }
+  const followedIds = follows?.map((f) => f.following_id) || [];
+  const allIds = [...followedIds, userId]; // include own posts
 
   const { data, error } = await supabase
     .from('reviews')
@@ -521,7 +519,7 @@ export async function getSmartFeed(userId: string, limit: number = 50) {
     .order('created_at', { ascending: false })
     .limit(limit);
 
-  return { data, error };
+  return { data: data || [], error };
 }
 
 export async function getUserReviews(userId: string) {
@@ -840,12 +838,94 @@ export async function getMutualFollows(userId: string) {
 }
 
 export async function createSharedTierList(ownerId: string, partnerId: string, name: string) {
+  // Self-only lists go straight to 'active'. Partner lists wait for the
+  // partner to accept the invite.
+  const status = ownerId === partnerId ? 'active' : 'pending_invite';
+
   const { data, error } = await supabase
     .from('shared_tier_lists')
-    .insert([{ owner_id: ownerId, partner_id: partnerId, name, is_public: true }])
+    .insert([{ owner_id: ownerId, partner_id: partnerId, name, is_public: true, status }])
     .select('*')
     .single();
+
+  if (!error && data && status === 'pending_invite') {
+    notifyTierListInvite(ownerId, partnerId, data.id, name);
+  }
   return { data, error };
+}
+
+async function notifyTierListInvite(actorId: string, recipientId: string, listId: string, listName: string) {
+  if (actorId === recipientId) return;
+  const { data: actor } = await supabase
+    .from('users').select('username').eq('id', actorId).maybeSingle();
+  const actorName = actor?.username ? `@${actor.username}` : 'Someone';
+  supabase.from('notifications').insert([{
+    user_id: recipientId,
+    type: 'tier_list_invite',
+    title: `${actorName} invited you to a tier list`,
+    body: `"${listName}" — accept to start ranking together.`,
+    link: `/shared/${listId}`,
+  }]).then(() => {});
+}
+
+/** Accept a pending tier list invite. Only the partner can accept. */
+export async function acceptTierListInvite(listId: string, userId: string) {
+  // Atomic update gated by RLS — only flips when the row is still pending.
+  const { data, error } = await supabase
+    .from('shared_tier_lists')
+    .update({ status: 'active' })
+    .eq('id', listId)
+    .eq('partner_id', userId)
+    .eq('status', 'pending_invite')
+    .select('*, owner:users!shared_tier_lists_owner_id_fkey(username), partner:users!shared_tier_lists_partner_id_fkey(username)')
+    .maybeSingle();
+
+  if (error) return { data: null, error };
+  if (!data) return { data: null, error: new Error('Invite already resolved or you are not the invitee.') };
+
+  // Notify the inviter their list is now live.
+  const partnerUsername = (data.partner as any)?.username;
+  supabase.from('notifications').insert([{
+    user_id: data.owner_id,
+    type: 'tier_list_invite_accepted',
+    title: `@${partnerUsername} accepted your tier list invite`,
+    body: `"${data.name}" is now live — start adding drinks.`,
+    link: `/shared/${listId}`,
+  }]).then(() => {});
+
+  return { data, error: null };
+}
+
+/** Decline a pending tier list invite. Only the partner can decline. */
+export async function declineTierListInvite(listId: string, userId: string) {
+  const { data: list } = await supabase
+    .from('shared_tier_lists')
+    .select('name, owner_id, partner:users!shared_tier_lists_partner_id_fkey(username)')
+    .eq('id', listId)
+    .maybeSingle();
+
+  // Mark declined (so the inviter has visibility) — we choose not to delete
+  // the row outright, in case they want to see the history. Cascading
+  // deletes if you want a different policy.
+  const { error } = await supabase
+    .from('shared_tier_lists')
+    .update({ status: 'declined' })
+    .eq('id', listId)
+    .eq('partner_id', userId)
+    .eq('status', 'pending_invite');
+  if (error) return { error };
+
+  if (list) {
+    const partnerUsername = (list.partner as any)?.username;
+    supabase.from('notifications').insert([{
+      user_id: list.owner_id,
+      type: 'tier_list_invite_declined',
+      title: `@${partnerUsername} declined your tier list invite`,
+      body: `"${list.name}" wasn't started.`,
+      link: null,
+    }]).then(() => {});
+  }
+  return { error: null };
 }
 
 export async function getSharedTierLists(userId: string) {
@@ -912,6 +992,29 @@ export async function getSharedTierListItems(listId: string) {
   return { data: data || [], error };
 }
 
+/**
+ * Helper: average a contributions map. The map is `{ user_id: rating }`.
+ * Falls back to a fresh map keyed on `added_by` when empty.
+ */
+function avgContributions(map: Record<string, number>): { rating: number; tier: string } {
+  const values = Object.values(map).filter((v) => Number.isFinite(v));
+  const avg = values.length === 0 ? 0 : values.reduce((s, v) => s + v, 0) / values.length;
+  const rating = Math.round(avg * 10) / 10;
+  const tier =
+    rating >= 4.5 ? 'S' :
+    rating >= 4   ? 'A' :
+    rating >= 3   ? 'B' :
+    rating >= 2   ? 'C' :
+    rating >= 1   ? 'D' : 'F';
+  return { rating, tier };
+}
+
+/**
+ * Add a drink to a shared tier list. If the same canonical drink is already
+ * present, this *merges* the new contributor's rating into the existing
+ * row (running average across all contributors) instead of inserting a
+ * duplicate row.
+ */
 export async function addSharedTierListItem(item: {
   list_id: string;
   added_by: string;
@@ -923,9 +1026,60 @@ export async function addSharedTierListItem(item: {
   note?: string;
   review_id?: string;
 }) {
+  // Look for an existing row for this canonical drink in the list.
+  // We dedupe on seltzer_id when available; legacy rows without one fall
+  // back to a case-insensitive (brand, name) match.
+  let existing: any = null;
+  if (item.seltzer_id) {
+    const { data } = await supabase
+      .from('shared_tier_list_items')
+      .select('*')
+      .eq('list_id', item.list_id)
+      .eq('seltzer_id', item.seltzer_id)
+      .maybeSingle();
+    existing = data;
+  } else {
+    const { data } = await supabase
+      .from('shared_tier_list_items')
+      .select('*')
+      .eq('list_id', item.list_id)
+      .ilike('seltzer_name', item.seltzer_name)
+      .ilike('brand', item.brand ?? '')
+      .maybeSingle();
+    existing = data;
+  }
+
+  if (existing) {
+    // Merge: bump the contributor's rating into the map, recompute avg.
+    const contributions: Record<string, number> = { ...(existing.rating_contributions || {}) };
+    contributions[item.added_by] = item.rating;
+    const { rating, tier } = avgContributions(contributions);
+
+    const { data, error } = await supabase
+      .from('shared_tier_list_items')
+      .update({
+        rating_contributions: contributions,
+        rating,
+        tier,
+      })
+      .eq('id', existing.id)
+      .select('*')
+      .single();
+
+    if (!error) {
+      await supabase.from('shared_tier_lists').update({ updated_at: new Date().toISOString() }).eq('id', item.list_id);
+    }
+    return { data, error };
+  }
+
+  // Fresh row — seed the contributions with the adder's rating.
+  const insertRow: any = {
+    ...item,
+    rating_contributions: { [item.added_by]: item.rating },
+  };
   const { data, error } = await supabase
     .from('shared_tier_list_items')
-    .insert([item])
+    .insert([insertRow])
     .select('*')
     .single();
 
@@ -936,14 +1090,49 @@ export async function addSharedTierListItem(item: {
   return { data, error };
 }
 
+/**
+ * Update a tier list item. When the rating changes, we update only the
+ * *editing user's* contribution and recompute the displayed rating as the
+ * new average across all contributors.
+ *
+ * `editorUserId` defaults to the current session user — pass it explicitly
+ * for any path where the session might be missing.
+ */
 export async function updateSharedTierListItem(
   itemId: string,
   listId: string,
-  updates: { rating?: number; tier?: string; note?: string | null }
+  updates: { rating?: number; tier?: string; note?: string | null },
+  editorUserId?: string,
 ) {
+  let payload: any = { ...updates };
+
+  // If the caller is changing the rating, fetch the existing contributions,
+  // splice in the editor's new value, recompute, and persist both.
+  if (typeof updates.rating === 'number') {
+    const editorId =
+      editorUserId ||
+      (await supabase.auth.getSession()).data.session?.user?.id;
+    if (editorId) {
+      const { data: existing } = await supabase
+        .from('shared_tier_list_items')
+        .select('rating_contributions')
+        .eq('id', itemId)
+        .maybeSingle();
+      const contributions: Record<string, number> = { ...(existing?.rating_contributions || {}) };
+      contributions[editorId] = updates.rating;
+      const { rating: avgRating, tier: avgTier } = avgContributions(contributions);
+      payload = {
+        ...payload,
+        rating: avgRating,
+        tier: updates.tier ?? avgTier,
+        rating_contributions: contributions,
+      };
+    }
+  }
+
   const { data, error } = await supabase
     .from('shared_tier_list_items')
-    .update(updates)
+    .update(payload)
     .eq('id', itemId)
     .select('*');
   if (error) return { data: null, error };
@@ -959,6 +1148,10 @@ export async function updateSharedTierListItem(
   return { data: data[0], error: null };
 }
 
+/**
+ * Bulk add — runs each item through `addSharedTierListItem` so the merge /
+ * dedupe logic applies. Slower than a single insert but correct.
+ */
 export async function bulkAddSharedTierListItems(
   items: {
     list_id: string;
@@ -973,14 +1166,13 @@ export async function bulkAddSharedTierListItems(
   }[]
 ) {
   if (items.length === 0) return { data: [], error: null };
-  const { data, error } = await supabase
-    .from('shared_tier_list_items')
-    .insert(items)
-    .select('*');
-  if (!error && items[0]?.list_id) {
-    await supabase.from('shared_tier_lists').update({ updated_at: new Date().toISOString() }).eq('id', items[0].list_id);
+  const results: any[] = [];
+  for (const item of items) {
+    const { data, error } = await addSharedTierListItem(item);
+    if (error) return { data: results, error };
+    if (data) results.push(data);
   }
-  return { data: data || [], error };
+  return { data: results, error: null };
 }
 
 export async function deleteSharedTierListItem(itemId: string, listId: string) {
@@ -1176,21 +1368,25 @@ export async function getSharedSuggestionActivities(userId: string, limit: numbe
 }
 
 export async function getSubscribedSharedTierActivities(userId: string, limit: number = 10) {
-  const { data: subscriptions } = await supabase
-    .from('shared_tier_list_subscriptions')
-    .select('list_id')
-    .eq('user_id', userId);
+  // Activities the user opted into (via subscriptions) PLUS lists they're a
+  // member of (since you obviously care about your own lists).
+  const [{ data: subs }, { data: ownLists }] = await Promise.all([
+    supabase.from('shared_tier_list_subscriptions').select('list_id').eq('user_id', userId),
+    supabase.from('shared_tier_lists').select('id').or(`owner_id.eq.${userId},partner_id.eq.${userId}`),
+  ]);
 
-  const subscribedIds = (subscriptions || []).map((row: any) => row.list_id);
+  const listIds = Array.from(new Set([
+    ...((subs || []).map((row: any) => row.list_id)),
+    ...((ownLists || []).map((row: any) => row.id)),
+  ]));
 
-  if (subscribedIds.length === 0) {
-    return getSharedTierActivities(limit);
-  }
+  // No fallback to global activity — feed is "your network only".
+  if (listIds.length === 0) return { data: [], error: null };
 
   const { data, error } = await supabase
     .from('shared_tier_list_items')
     .select('*, added_by_user:users!shared_tier_list_items_added_by_fkey(*), review:reviews(id, image_url), list:shared_tier_lists!shared_tier_list_items_list_id_fkey(*, owner:users!shared_tier_lists_owner_id_fkey(*), partner:users!shared_tier_lists_partner_id_fkey(*))')
-    .in('list_id', subscribedIds)
+    .in('list_id', listIds)
     .order('created_at', { ascending: false })
     .limit(limit);
   return { data: data || [], error };
@@ -1199,7 +1395,7 @@ export async function getSubscribedSharedTierActivities(userId: string, limit: n
 // NOTIFICATIONS / INBOX
 export async function createNotification(notification: {
   user_id: string;
-  type: 'suggestion' | 'suggestion_approved' | 'suggestion_rejected' | 'mention' | 'like' | 'comment' | 'follow' | 'tried_it' | 'reply';
+  type: 'suggestion' | 'suggestion_approved' | 'suggestion_rejected' | 'mention' | 'like' | 'comment' | 'follow' | 'tried_it' | 'reply' | 'tier_list_invite' | 'tier_list_invite_accepted' | 'tier_list_invite_declined';
   title: string;
   body?: string;
   link?: string;
@@ -1282,6 +1478,7 @@ export async function searchSharedTierLists(query: string) {
     .from('shared_tier_lists')
     .select('*, owner:users!shared_tier_lists_owner_id_fkey(*), partner:users!shared_tier_lists_partner_id_fkey(*)')
     .eq('is_public', true)
+    .eq('status', 'active')
     .order('updated_at', { ascending: false })
     .limit(25);
 

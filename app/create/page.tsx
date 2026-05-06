@@ -14,6 +14,7 @@ import { showToast } from '@/components/Toast';
 import {
   createReview, supabase, searchSeltzers, uploadReviewImage,
   getSharedTierLists, createSharedTierListSuggestion, findOrCreateSeltzer,
+  addSharedTierListItem,
 } from '@/lib/supabase';
 import { AuthUser, SharedTierList, Seltzer } from '@/types';
 
@@ -235,18 +236,47 @@ export default function CreateReview() {
       if (r >= 4.5) return 'S'; if (r >= 4) return 'A'; if (r >= 3) return 'B';
       if (r >= 2) return 'C'; if (r >= 1) return 'D'; return 'F';
     }
-    await createSharedTierListSuggestion({
-      list_id: listId,
-      created_by: user.id,
-      seltzer_id:   createdReview.seltzer_id,
-      seltzer_name: createdReview.seltzer_name,
-      brand:        createdReview.brand || undefined,
-      proposed_rating: createdReview.rating,
-      proposed_tier:   ratingToTier(createdReview.rating),
-      review_id: createdReview.id,
-    });
-    setSuggestingListId(null);
-    showToast('Suggestion sent', 'success', "Your partner will see it in their inbox.");
+
+    // The lists offered here come from `getSharedTierLists(user.id)` —
+    // every entry is a list the user is a member of. Members can write
+    // directly; suggestions are only for non-member subscribers, so just
+    // add the drink straight in.
+    const target = myTierLists.find((l) => l.id === listId);
+    const isMember = !!target && (target.owner_id === user.id || target.partner_id === user.id);
+
+    if (isMember) {
+      const { error } = await addSharedTierListItem({
+        list_id:      listId,
+        added_by:     user.id,
+        seltzer_id:   createdReview.seltzer_id,
+        seltzer_name: createdReview.seltzer_name,
+        brand:        createdReview.brand || undefined,
+        rating:       createdReview.rating,
+        tier:         ratingToTier(createdReview.rating),
+        review_id:    createdReview.id,
+      });
+      setSuggestingListId(null);
+      if (error) {
+        showToast('Could not add to list', 'error', error.message);
+        return;
+      }
+      showToast(`Added to ${target?.name ?? 'list'} 🥂`, 'success');
+    } else {
+      // Non-member fallback — preserves the suggestion path for subscriber-style flow
+      await createSharedTierListSuggestion({
+        list_id: listId,
+        created_by: user.id,
+        seltzer_id:   createdReview.seltzer_id,
+        seltzer_name: createdReview.seltzer_name,
+        brand:        createdReview.brand || undefined,
+        proposed_rating: createdReview.rating,
+        proposed_tier:   ratingToTier(createdReview.rating),
+        review_id: createdReview.id,
+      });
+      setSuggestingListId(null);
+      showToast('Suggestion sent', 'success', 'The list owners will see it in their inbox.');
+    }
+
     router.push(`/review/${createdReview.id}`);
   }
 

@@ -13,9 +13,11 @@ import { RatingInput } from '@/components/RatingInput';
 import { CanLoader } from '@/components/CanLoader';
 import { showToast } from '@/components/Toast';
 import {
+  acceptTierListInvite,
   addSharedTierListItem,
   bulkAddSharedTierListItems,
   createSharedTierListSuggestion,
+  declineTierListInvite,
   deleteSharedTierList,
   deleteSharedTierListItem,
   getSharedTierList,
@@ -165,6 +167,9 @@ export default function SharedListPage({ params }: { params: { id: string } }) {
   }
 
   const isMember = userId === list.owner_id || userId === list.partner_id;
+  const isPendingInvite = list.status === 'pending_invite';
+  const isInvitee = isPendingInvite && userId === list.partner_id;
+  const isInviter = isPendingInvite && userId === list.owner_id;
 
   // ─── handlers ────────────────────────────────────────────────
   async function toggleSubscription() {
@@ -311,6 +316,22 @@ export default function SharedListPage({ params }: { params: { id: string } }) {
     }
   }
 
+  async function handleAcceptInvite() {
+    if (!list || !userId) return;
+    const { error } = await acceptTierListInvite(params.id, userId);
+    if (error) { showToast('Could not accept', 'error', error.message); return; }
+    showToast('Invite accepted 🥂', 'success', `You're in "${list.name}"`);
+    load();
+  }
+
+  async function handleDeclineInvite() {
+    if (!list || !userId) return;
+    const { error } = await declineTierListInvite(params.id, userId);
+    if (error) { showToast('Could not decline', 'error', error.message); return; }
+    showToast('Invite declined', 'info');
+    router.push('/feed');
+  }
+
   async function handleDeleteList() {
     if (!list) return;
     setDeletingList(true);
@@ -359,6 +380,55 @@ export default function SharedListPage({ params }: { params: { id: string } }) {
         <Link href="/feed" className="inline-flex items-center gap-2 text-sm hover:opacity-80" style={{ color: 'var(--text-tertiary)' }}>
           <ArrowLeft size={16} /> Back
         </Link>
+
+        {/* ── Pending invite banner ── */}
+        {isInvitee && (
+          <div
+            className="rounded-2xl p-4 animate-fade-in-up"
+            style={{
+              background: 'linear-gradient(135deg, rgba(34,211,238,0.10), rgba(167,139,250,0.10))',
+              border: '1px solid rgba(34,211,238,0.3)',
+            }}
+          >
+            <p className="text-[10px] font-bold uppercase tracking-[0.18em]" style={{ color: 'var(--cyan-400)' }}>
+              You've been invited
+            </p>
+            <p className="text-sm font-bold mt-1" style={{ color: 'var(--text-primary)' }}>
+              @{list.owner?.username} wants to start "{list.name}" with you
+            </p>
+            <p className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>
+              Accept to start ranking together. You can leave any time.
+            </p>
+            <div className="flex gap-2 mt-3">
+              <button onClick={handleDeclineInvite} className="btn-secondary flex-1 justify-center" style={{ padding: '10px', fontSize: '13px' }}>
+                Decline
+              </button>
+              <button onClick={handleAcceptInvite} className="btn-primary flex-1 justify-center" style={{ padding: '10px', fontSize: '13px' }}>
+                <Check size={13} /> Accept invite
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ── Inviter waiting state ── */}
+        {isInviter && (
+          <div
+            className="rounded-2xl p-3 flex items-center gap-3 animate-fade-in-up"
+            style={{ background: 'rgba(251,191,36,0.06)', border: '1px solid rgba(251,191,36,0.18)' }}
+          >
+            <div className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: 'rgba(251,191,36,0.12)' }}>
+              <Inbox size={15} style={{ color: 'var(--amber-400)' }} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>
+                Waiting for @{list.partner?.username}
+              </p>
+              <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                List goes live once they accept the invite.
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* Header */}
         <div className="flex items-start justify-between gap-3">
@@ -846,6 +916,9 @@ export default function SharedListPage({ params }: { params: { id: string } }) {
                             </p>
                             <p className="text-xs truncate" style={{ color: 'var(--text-muted)' }}>
                               {item.brand && <>{item.brand} · </>}⭐ {item.rating.toFixed(1)}
+                              {item.rating_contributions && Object.keys(item.rating_contributions).length > 1 && (
+                                <span style={{ color: 'var(--cyan-400)' }}> · avg of {Object.keys(item.rating_contributions).length}</span>
+                              )}
                               {item.note && <> · {item.note}</>}
                             </p>
                           </div>
