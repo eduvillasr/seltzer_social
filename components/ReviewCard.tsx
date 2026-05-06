@@ -2,15 +2,16 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { Heart, MessageCircle, Star, Trash2, Droplets, ChevronRight } from 'lucide-react';
 import { Review } from '@/types';
 import { Avatar } from './Avatar';
 import { FounderBadge, FOUNDERS } from './FounderBadge';
+import { StarRating } from './StarRating';
 import { reviewHeadline, reviewDrinkLabel, hasCustomTitle } from '@/lib/reviewDisplay';
 import { showToast } from './Toast';
-import { createLike, deleteLike, getUserLike, getLikes, createTriedIt, getUserTriedIt, getTriedItStats, deleteReview } from '@/lib/supabase';
+import { createLike, deleteLike, getUserLike, getLikes, createTriedIt, getUserTriedIt, getTriedItStats, deleteReview, getCommentCount } from '@/lib/supabase';
 
 interface ReviewCardProps {
   review: Review;
@@ -33,6 +34,11 @@ export function ReviewCard({ review, currentUserId, onDelete }: ReviewCardProps)
   const [pendingRating, setPendingRating] = useState(3);
   const [submittingTried, setSubmittingTried] = useState(false);
 
+  const [commentCount, setCommentCount] = useState(0);
+
+  // Read-more / show-less toggle for long review bodies
+  const [expanded, setExpanded] = useState(false);
+
   const isOwnReview = currentUserId === review.user?.id;
 
   useEffect(() => {
@@ -42,7 +48,13 @@ export function ReviewCard({ review, currentUserId, onDelete }: ReviewCardProps)
       if (!isOwnReview) loadTriedIt();
     }
     loadTriedItCount();
+    loadCommentCount();
   }, [currentUserId, review.id]);
+
+  async function loadCommentCount() {
+    const { count } = await getCommentCount(review.id);
+    setCommentCount(count);
+  }
 
   async function loadLikeCount() {
     const { data } = await getLikes(review.id);
@@ -105,9 +117,6 @@ export function ReviewCard({ review, currentUserId, onDelete }: ReviewCardProps)
   if (deleted) return null;
 
   const timeAgo = getTimeAgo(review.created_at);
-  const stars = Array(5).fill(0).map((_, i) => (
-    <Star key={i} size={14} className={i < Math.floor(review.rating) ? 'star-filled' : 'star-empty'} />
-  ));
 
   return (
     <div className="glass-card group">
@@ -152,9 +161,13 @@ export function ReviewCard({ review, currentUserId, onDelete }: ReviewCardProps)
           ) : (
             review.brand && <p className="text-xs mb-2" style={{ color: 'var(--text-tertiary)' }}>{review.brand}</p>
           )}
-          <div className="flex items-center gap-1.5 mb-2"><div className="flex gap-0.5">{stars}</div></div>
+          <div className="flex items-center gap-1.5 mb-2"><StarRating value={review.rating} size={14} /></div>
           {review.content ? (
-            <p className="text-sm leading-relaxed line-clamp-5" style={{ color: 'var(--text-secondary)' }}>{review.content}</p>
+            <ReviewBody
+              content={review.content}
+              expanded={expanded}
+              onToggle={() => setExpanded((v) => !v)}
+            />
           ) : (
             <p className="text-sm italic" style={{ color: 'var(--text-muted)' }}>No written review.</p>
           )}
@@ -173,7 +186,10 @@ export function ReviewCard({ review, currentUserId, onDelete }: ReviewCardProps)
           <Heart size={15} className={isLiked ? 'fill-current' : ''} />{likeCount > 0 && <span>{likeCount}</span>}
         </button>
 
-        <Link href={`/review/${review.id}`} className="action-btn"><MessageCircle size={15} /><span>Comment</span></Link>
+        <Link href={`/review/${review.id}`} className="action-btn">
+          <MessageCircle size={15} />
+          <span>{commentCount > 0 ? commentCount : 'Comment'}</span>
+        </Link>
 
         {/* Tried It — hidden for own reviews */}
         {!isOwnReview && currentUserId && (
@@ -226,6 +242,59 @@ export function ReviewCard({ review, currentUserId, onDelete }: ReviewCardProps)
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * Review body with a "Read more" toggle. Detects whether the text actually
+ * needs truncating by measuring scrollHeight vs clientHeight in the clamped
+ * state — that way short reviews never get a useless "Read more" button.
+ */
+function ReviewBody({ content, expanded, onToggle }: { content: string; expanded: boolean; onToggle: () => void }) {
+  const ref = useRef<HTMLParagraphElement>(null);
+  const [overflowing, setOverflowing] = useState(false);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const measure = () => {
+      // We measure the clamped element. If its real height is taller than
+      // the rendered (clamped) height, it's truncated → show toggle.
+      // Re-running when expanded changes lets us re-detect on viewport resize.
+      const wasExpanded = expanded;
+      // Force temporarily-clamped state for measurement
+      if (wasExpanded) {
+        setOverflowing(true);
+        return;
+      }
+      setOverflowing(el.scrollHeight - el.clientHeight > 1);
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [content, expanded]);
+
+  return (
+    <>
+      <p
+        ref={ref}
+        className={`text-sm leading-relaxed whitespace-pre-wrap ${expanded ? '' : 'line-clamp-5'}`}
+        style={{ color: 'var(--text-secondary)' }}
+      >
+        {content}
+      </p>
+      {overflowing && (
+        <button
+          type="button"
+          onClick={onToggle}
+          className="text-xs font-semibold mt-1.5 hover:underline transition-opacity"
+          style={{ color: 'var(--cyan-400)' }}
+        >
+          {expanded ? 'Show less' : 'Read more'}
+        </button>
+      )}
+    </>
   );
 }
 

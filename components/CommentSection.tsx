@@ -17,6 +17,8 @@ interface CommentSectionProps {
   currentUsername?: string;
   currentUserId?: string;
   reviewOwnerId?: string;
+  /** Called whenever the comment count changes (after adds/deletes). */
+  onCountChange?: (count: number) => void;
 }
 
 function extractMentions(text: string): string[] {
@@ -42,7 +44,7 @@ interface ReactionMap {
   [commentId: string]: { [emoji: string]: string[] }; // emoji -> userIds
 }
 
-export function CommentSection({ reviewId, reviewSlug, currentUsername, currentUserId, reviewOwnerId }: CommentSectionProps) {
+export function CommentSection({ reviewId, reviewSlug, currentUsername, currentUserId, reviewOwnerId, onCountChange }: CommentSectionProps) {
   const [comments, setComments] = useState<Comment[]>([]);
   const [newComment, setNewComment] = useState('');
   const [loading, setLoading] = useState(false);
@@ -52,6 +54,12 @@ export function CommentSection({ reviewId, reviewSlug, currentUsername, currentU
   useEffect(() => {
     loadComments();
   }, [reviewId]);
+
+  // Notify the parent whenever the comment list size changes
+  useEffect(() => {
+    onCountChange?.(comments.length);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [comments.length]);
 
   async function loadComments() {
     const { data } = await getComments(reviewId);

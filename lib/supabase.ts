@@ -312,6 +312,36 @@ export async function deleteReview(id: string) {
   return { error };
 }
 
+export async function updateReview(
+  reviewId: string,
+  updates: {
+    title?: string | null;
+    content?: string | null;
+    rating?: number;
+    image_url?: string;
+  }
+) {
+  const payload: Record<string, any> = { ...updates };
+  // Title trimmed-or-null normalization to match the create flow
+  if ('title' in payload) {
+    const t = payload.title;
+    payload.title = typeof t === 'string' && t.trim() ? t.trim() : null;
+  }
+  const { data, error } = await supabase
+    .from('reviews')
+    .update(payload)
+    .eq('id', reviewId)
+    .select('*, user:users(*), seltzer:seltzers(*)');
+  if (error) return { data: null, error };
+  if (!data || data.length === 0) {
+    return {
+      data: null,
+      error: new Error('Update blocked. Run supabase_review_policies.sql to add the missing RLS policy.'),
+    };
+  }
+  return { data: data[0], error: null };
+}
+
 export async function uploadReviewImage(userId: string, file: File): Promise<{ url: string | null; error: any }> {
   let smallFile: File;
   try {
@@ -398,6 +428,14 @@ async function notifyOnComment(actorId: string, reviewId: string, content: strin
 export async function getComments(reviewId: string) {
   const { data, error } = await supabase.from('comments').select('*, user:users(*)').eq('review_id', reviewId).order('created_at', { ascending: true });
   return { data, error };
+}
+
+export async function getCommentCount(reviewId: string) {
+  const { count, error } = await supabase
+    .from('comments')
+    .select('id', { count: 'exact', head: true })
+    .eq('review_id', reviewId);
+  return { count: count ?? 0, error };
 }
 export async function deleteComment(id: string) {
   const { error } = await supabase.from('comments').delete().eq('id', id);

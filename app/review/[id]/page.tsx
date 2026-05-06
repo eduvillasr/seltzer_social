@@ -4,7 +4,8 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Heart, MessageCircle, Star, ArrowLeft, Droplets, Check, X, ExternalLink } from 'lucide-react';
+import { Heart, MessageCircle, Star, ArrowLeft, Droplets, Check, X, ExternalLink, Pencil, Users } from 'lucide-react';
+import { StarRating } from '@/components/StarRating';
 import { Review, SharedTierListSuggestion } from '@/types';
 import { Navigation } from '@/components/Navigation';
 import { CommentSection } from '@/components/CommentSection';
@@ -15,7 +16,7 @@ import {
   getReview, supabase, createLike, deleteLike, getUserLike,
   createTriedIt, getTriedItStats, getUserTriedIt,
   getSuggestionsByReviewId, voteOnSharedSuggestion, markSharedSuggestionTried,
-  getSharedTierList,
+  getSharedTierList, getCommentCount,
 } from '@/lib/supabase';
 
 interface ReviewPageProps {
@@ -31,6 +32,7 @@ export default function ReviewPage({ params }: ReviewPageProps) {
   const [triedItStats, setTriedItStats] = useState({ count: 0, avgRating: 0 });
   const [existingTriedIt, setExistingTriedIt] = useState<{ rating: number } | null>(null);
   const [triedItSubmitted, setTriedItSubmitted] = useState(false);
+  const [commentCount, setCommentCount] = useState(0);
   const [loading, setLoading] = useState(true);
 
   // Pending tier list suggestion linked to this review
@@ -62,8 +64,14 @@ export default function ReviewPage({ params }: ReviewPageProps) {
       setReview(data);
       loadTriedItStats();
       loadSuggestions();
+      loadCommentCount();
     }
     setLoading(false);
+  }
+
+  async function loadCommentCount() {
+    const { count } = await getCommentCount(params.id);
+    setCommentCount(count);
   }
 
   async function loadSuggestions() {
@@ -146,9 +154,6 @@ export default function ReviewPage({ params }: ReviewPageProps) {
   }
 
   const isOwnReview = currentUserId === review.user_id;
-  const stars = Array(5).fill(0).map((_, i) => (
-    <Star key={i} size={22} className={i < Math.floor(review.rating) ? 'star-filled' : 'star-empty'} />
-  ));
 
   // Only show suggestions for list members (owner or partner)
   const visibleSuggestions = suggestions.filter((s) => {
@@ -181,7 +186,19 @@ export default function ReviewPage({ params }: ReviewPageProps) {
             <div className="badge-amber ml-auto"><Star size={11} className="star-filled" />{review.rating.toFixed(1)}</div>
           </div>
 
-          <h1 className="text-3xl font-bold mb-1" style={{ fontFamily: 'var(--font-display)', color: 'var(--text-primary)' }}>{reviewHeadline(review)}</h1>
+          <div className="flex items-start justify-between gap-3 mb-1">
+            <h1 className="text-3xl font-bold flex-1 min-w-0" style={{ fontFamily: 'var(--font-display)', color: 'var(--text-primary)' }}>{reviewHeadline(review)}</h1>
+            {isOwnReview && (
+              <Link
+                href={`/review/${review.id}/edit`}
+                className="flex-shrink-0 mt-1 w-9 h-9 rounded-full flex items-center justify-center hover:bg-white/5 transition-colors"
+                style={{ border: '1px solid var(--border-subtle)', color: 'var(--text-tertiary)' }}
+                title="Edit review"
+              >
+                <Pencil size={14} />
+              </Link>
+            )}
+          </div>
           {hasCustomTitle(review) ? (
             <p className="text-base mb-4" style={{ color: 'var(--text-tertiary)' }}>{reviewDrinkLabel(review)}</p>
           ) : (
@@ -189,7 +206,7 @@ export default function ReviewPage({ params }: ReviewPageProps) {
           )}
 
           <div className="flex items-center gap-3 mb-5">
-            <div className="flex gap-1">{stars}</div>
+            <StarRating value={review.rating} size={22} />
           </div>
 
           {review.content && (
@@ -209,7 +226,7 @@ export default function ReviewPage({ params }: ReviewPageProps) {
               <Heart size={17} className={isLiked ? 'fill-current' : ''} /> Like
             </button>
             <span className="action-btn" style={{ cursor: 'default' }}>
-              <MessageCircle size={17} /> Comments
+              <MessageCircle size={17} /> {commentCount > 0 ? commentCount : 'Comments'}
             </span>
             {triedItStats.count > 0 && (
               <span className="badge-cyan ml-auto" style={{ fontSize: '11px' }}>
@@ -218,6 +235,46 @@ export default function ReviewPage({ params }: ReviewPageProps) {
             )}
           </div>
         </div>
+
+        {/* ── Community Score callout — shown when 1+ person has tried it ── */}
+        {triedItStats.count > 0 && (
+          <div
+            className="rounded-2xl p-4 animate-fade-in-up"
+            style={{
+              background: 'linear-gradient(135deg, rgba(34,211,238,0.08), rgba(167,139,250,0.06))',
+              border: '1px solid rgba(34,211,238,0.18)',
+            }}
+          >
+            <div className="flex items-center gap-3">
+              <div
+                className="w-12 h-12 rounded-xl flex flex-col items-center justify-center flex-shrink-0"
+                style={{ background: 'rgba(34,211,238,0.15)' }}
+              >
+                <span className="text-base font-extrabold leading-none" style={{ color: 'var(--cyan-400)' }}>
+                  {triedItStats.avgRating.toFixed(1)}
+                </span>
+                <span className="text-[8px] uppercase tracking-wider mt-0.5" style={{ color: 'var(--text-muted)' }}>avg</span>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-[10px] font-bold uppercase tracking-[0.18em]" style={{ color: 'var(--cyan-400)' }}>
+                  Community Score
+                </p>
+                <p className="text-sm font-semibold mt-0.5" style={{ color: 'var(--text-primary)' }}>
+                  <Users size={11} className="inline mr-1 mb-0.5" />
+                  {triedItStats.count} {triedItStats.count === 1 ? 'person' : 'people'} {triedItStats.count === 1 ? 'has' : 'have'} tried this
+                </p>
+                <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                  Reviewer's score: ⭐ {review.rating.toFixed(1)}
+                  {Math.abs(triedItStats.avgRating - review.rating) >= 0.5 && (
+                    <span style={{ color: triedItStats.avgRating > review.rating ? '#34d399' : '#fb7185' }}>
+                      {' '}· community {triedItStats.avgRating > review.rating ? '+' : ''}{(triedItStats.avgRating - review.rating).toFixed(1)}
+                    </span>
+                  )}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Pending tier list vote cards — only visible to list members */}
         {visibleSuggestions.map((suggestion) => {
@@ -351,6 +408,7 @@ export default function ReviewPage({ params }: ReviewPageProps) {
             currentUserId={currentUserId || undefined}
             currentUsername={currentUsername || undefined}
             reviewOwnerId={review.user_id}
+            onCountChange={setCommentCount}
           />
         </div>
       </main>
