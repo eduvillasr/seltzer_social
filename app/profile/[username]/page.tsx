@@ -15,6 +15,7 @@ import {
   getUserByUsername, getUserReviews, supabase,
   followUser, unfollowUser, isFollowing as checkIsFollowing,
   getFollowerCount, getFollowingCount, getSharedTierLists, getUserSubscribedSharedTierLists,
+  getUserTriedIts,
 } from '@/lib/supabase';
 import {
   ArrowLeft, Calendar, Droplets, UserPlus, UserMinus, List, Settings, ListPlus,
@@ -40,6 +41,7 @@ function ratingToTier(v: number) {
 export default function ProfilePage({ params }: ProfilePageProps) {
   const [user, setUser] = useState<User | null>(null);
   const [reviews, setReviews] = useState<Review[]>([]);
+  const [triedIts, setTriedIts] = useState<Array<{ rating: number; brand: string | null; seltzer_name: string }>>([]);
   const [activeLists, setActiveLists] = useState<SharedTierList[]>([]);
   const [subscribedLists, setSubscribedLists] = useState<SharedTierList[]>([]);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
@@ -62,12 +64,21 @@ export default function ProfilePage({ params }: ProfilePageProps) {
     const { data: userData, error: userError } = await getUserByUsername(params.username);
     if (!userError && userData) {
       setUser(userData);
-      const { data: reviewsData } = await getUserReviews(userData.id);
-      const [{ data: activeListData }, { data: subscribedListData }] = await Promise.all([
+      const [{ data: reviewsData }, { data: triedItsData }, { data: activeListData }, { data: subscribedListData }] = await Promise.all([
+        getUserReviews(userData.id),
+        getUserTriedIts(userData.id),
         getSharedTierLists(userData.id),
         getUserSubscribedSharedTierLists(userData.id),
       ]);
       setReviews(reviewsData || []);
+      // Project to a flat shape that's easy to merge with reviews for taste analysis.
+      setTriedIts(
+        (triedItsData || []).map((t: any) => ({
+          rating: t.rating,
+          brand: t.review?.brand ?? null,
+          seltzer_name: t.review?.seltzer_name ?? '',
+        })),
+      );
       setActiveLists(activeListData || []);
       setSubscribedLists(subscribedListData || []);
       const { count: fc } = await getFollowerCount(userData.id);
@@ -124,20 +135,28 @@ export default function ProfilePage({ params }: ProfilePageProps) {
   }, [reviews]);
 
   // ─── advanced taste metrics ──────────────────────────────────
+  // We merge full reviews + "tried it" quick-rates so the profile reflects
+  // every drink the user has expressed an opinion on, not just ones they
+  // wrote a paragraph about.
   const taste = useMemo(() => {
-    if (reviews.length === 0) return null;
+    type Datum = { rating: number; brand: string | null; seltzer_name: string };
+    const all: Datum[] = [
+      ...reviews.map((r) => ({ rating: r.rating, brand: r.brand, seltzer_name: r.seltzer_name })),
+      ...triedIts,
+    ];
+    if (all.length === 0) return null;
 
     // Tier distribution
     const tierCounts: Record<string, number> = { S: 0, A: 0, B: 0, C: 0, D: 0, F: 0 };
-    for (const r of reviews) tierCounts[ratingToTier(r.rating)]++;
+    for (const d of all) tierCounts[ratingToTier(d.rating)]++;
 
     // Brand stats
     const byBrand: Record<string, { count: number; sum: number }> = {};
-    for (const r of reviews) {
-      const b = (r.brand?.trim() || 'Unknown');
+    for (const d of all) {
+      const b = (d.brand?.trim() || 'Unknown');
       if (!byBrand[b]) byBrand[b] = { count: 0, sum: 0 };
       byBrand[b].count++;
-      byBrand[b].sum += r.rating;
+      byBrand[b].sum += d.rating;
     }
     const brandEntries = Object.entries(byBrand);
     const topBrandByCount = brandEntries.sort((a, b) => b[1].count - a[1].count)[0];
@@ -150,24 +169,24 @@ export default function ProfilePage({ params }: ProfilePageProps) {
       : null;
 
     // Generosity vs. critic — variance from neutral 3.0
-    const harshCount    = reviews.filter((r) => r.rating < 3).length;
-    const generousCount = reviews.filter((r) => r.rating >= 4).length;
-    const generosityScore = generousCount / reviews.length; // 0..1
+    const harshCount    = all.filter((d) => d.rating < 3).length;
+    const generousCount = all.filter((d) => d.rating >= 4).length;
+    const generosityScore = generousCount / all.length; // 0..1
 
     // Pickiness — std deviation of ratings (high = wide spread, low = consistent)
-    const mean = reviews.reduce((s, r) => s + r.rating, 0) / reviews.length;
-    const variance = reviews.reduce((s, r) => s + (r.rating - mean) ** 2, 0) / reviews.length;
+    const mean = all.reduce((s, d) => s + d.rating, 0) / all.length;
+    const variance = all.reduce((s, d) => s + (d.rating - mean) ** 2, 0) / all.length;
     const stdDev = Math.sqrt(variance);
 
-    // Brand loyalty — % of reviews from top brand
+    // Brand loyalty — % of opinions from top brand
     const loyaltyPct = topBrandByCount
-      ? Math.round((topBrandByCount[1].count / reviews.length) * 100)
+      ? Math.round((topBrandByCount[1].count / all.length) * 100)
       : 0;
 
     // Sweet spot — most-rated tier
     const sweetTier = (Object.entries(tierCounts).sort((a, b) => b[1] - a[1])[0])[0];
 
-    // Variety — unique brands rated
+    // Variety — unique brands across reviews + tried-its
     const uniqueBrands = brandEntries.length;
 
     // Generosity label
@@ -185,6 +204,9 @@ export default function ProfilePage({ params }: ProfilePageProps) {
                       'Lockstep';
 
     return {
+      total: all.length,
+      reviewCount: reviews.length,
+      triedItCount: triedIts.length,
       tierCounts,
       topBrandByCount,
       bestBrand,
@@ -200,7 +222,7 @@ export default function ProfilePage({ params }: ProfilePageProps) {
       generousCount,
       mean,
     };
-  }, [reviews]);
+  }, [reviews, triedIts]);
 
   if (loading) {
     return (<><Navigation /><main className="max-w-md mx-auto px-4 pt-20 pb-32"><CanLoader /></main></>);
@@ -376,7 +398,7 @@ export default function ProfilePage({ params }: ProfilePageProps) {
         )}
 
         {/* ─── Taste profile (advanced metrics) ─── */}
-        {taste && reviews.length >= 2 && (
+        {taste && taste.total >= 2 && (
           <div
             className="rounded-3xl overflow-hidden animate-fade-in-up"
             style={{
@@ -385,12 +407,14 @@ export default function ProfilePage({ params }: ProfilePageProps) {
               padding: '16px',
             }}
           >
-            <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center justify-between mb-3 gap-2">
               <span className="text-[10px] font-bold uppercase tracking-[0.18em]" style={{ color: 'var(--cyan-400)' }}>
                 Taste Profile
               </span>
-              <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
-                {reviews.length} reviews · avg {taste.mean.toFixed(1)}
+              <span className="text-[10px] text-right" style={{ color: 'var(--text-muted)' }}>
+                {taste.reviewCount} review{taste.reviewCount === 1 ? '' : 's'}
+                {taste.triedItCount > 0 && <> · {taste.triedItCount} tried</>}
+                {' · avg '}{taste.mean.toFixed(1)}
               </span>
             </div>
 

@@ -759,6 +759,26 @@ export async function getUserTriedIt(userId: string, reviewId: string) {
   const { data, error } = await supabase.from('tried_it').select('*').eq('user_id', userId).eq('review_id', reviewId).maybeSingle();
   return { data, error };
 }
+
+/**
+ * All "I've tried this" ratings the user has logged — joined with the
+ * source review so we get the canonical drink + brand. Used by the taste
+ * profile so quick ratings count alongside full reviews.
+ *
+ * Excludes tried-its on the user's *own* reviews (those are already
+ * captured by the review itself; double-counting would inflate variance).
+ */
+export async function getUserTriedIts(userId: string) {
+  const { data, error } = await supabase
+    .from('tried_it')
+    .select('rating, created_at, review:reviews(id, user_id, seltzer_name, brand, image_url)')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false });
+  if (error) return { data: [], error };
+  // Drop tried-its on your own reviews — your own opinion is already counted.
+  const filtered = (data || []).filter((row: any) => row.review && row.review.user_id !== userId);
+  return { data: filtered, error: null };
+}
 export async function getTriedItStats(reviewId: string) {
   const { data, error } = await supabase.from('tried_it').select('rating').eq('review_id', reviewId);
   if (error || !data || data.length === 0) return { count: 0, avgRating: 0, error };
