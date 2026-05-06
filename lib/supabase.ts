@@ -273,6 +273,232 @@ export async function getReviews(limit: number = 20, offset: number = 0) {
   return { data, error };
 }
 
+// ─── ACHIEVEMENTS — stats fetch + showcase save ───────────────────
+import type { AchievementStats } from './achievements';
+
+/**
+ * Pull every metric the achievement engine cares about for a user.
+ * Single profile load — runs all the count queries in parallel.
+ */
+export async function getAchievementStats(userId: string, isFounder: boolean, isBetaTester: boolean = false): Promise<AchievementStats> {
+  const since7d = new Date(Date.now() - 7 * 86_400_000).toISOString();
+
+  const [reviews, follows] = await Promise.all([
+    supabase.from('reviews')
+      .select('id, rating, brand, created_at')
+      .eq('user_id', userId),
+    supabase.from('follows')
+      .select('follower_id, following_id', { count: 'exact' })
+      .or(`follower_id.eq.${userId},following_id.eq.${userId}`),
+  ]);
+
+  const reviewRows = (reviews.data || []) as { id: string; rating: number; brand: string | null; created_at: string }[];
+  const reviewIds = reviewRows.map((r) => r.id);
+
+  // Aggregate stats from review list
+  const reviewCount = reviewRows.length;
+  const uniqueBrands = new Set(reviewRows.map((r) => (r.brand ?? '').trim().toLowerCase()).filter(Boolean)).size;
+  const avgRating = reviewCount === 0 ? 0 : reviewRows.reduce((s, r) => s + r.rating, 0) / reviewCount;
+  const hasFiveStarReview = reviewRows.some((r) => r.rating >= 5);
+  const hasFreshReview = reviewRows.some((r) => r.created_at >= since7d);
+
+  // Engagement totals on the user's reviews
+  let totalLikesReceived = 0;
+  let totalCommentsReceived = 0;
+  let totalTriedItReceived = 0;
+  if (reviewIds.length > 0) {
+    const [likes, comments, triedIts] = await Promise.all([
+      supabase.from('likes').select('id', { count: 'exact', head: true }).in('review_id', reviewIds),
+      supabase.from('comments').select('id', { count: 'exact', head: true }).in('review_id', reviewIds),
+      supabase.from('tried_it').select('id', { count: 'exact', head: true }).in('review_id', reviewIds),
+    ]);
+    totalLikesReceived = likes.count ?? 0;
+    totalCommentsReceived = comments.count ?? 0;
+    totalTriedItReceived = triedIts.count ?? 0;
+  }
+
+  // Followers / following counts
+  let followers = 0, following = 0;
+  for (const row of (follows.data || [])) {
+    if ((row as any).following_id === userId) followers++;
+    if ((row as any).follower_id === userId) following++;
+  }
+
+  // Tier lists (member of)
+  const { count: tierListsAsMember } = await supabase
+    .from('shared_tier_lists')
+    .select('id', { count: 'exact', head: true })
+    .or(`owner_id.eq.${userId},partner_id.eq.${userId}`);
+
+  return {
+    reviewCount,
+    uniqueBrands,
+    avgRating,
+    totalLikesReceived,
+    totalCommentsReceived,
+    totalTriedItReceived,
+    followers,
+    following,
+    tierListsAsMember: tierListsAsMember ?? 0,
+    hasFiveStarReview,
+    hasFreshReview,
+    isFounder,
+    isBetaTester,
+  };
+}
+
+/** Save the user's pinned achievement IDs. Caps at 3 entries. */
+export async function setShowcaseAchievements(userId: string, ids: string[]) {
+  const trimmed = ids.slice(0, 3);
+  const { data, error } = await supabase
+    .from('users')
+    .update({ showcase_achievements: trimmed })
+    .eq('id', userId)
+    .select('*')
+    .single();
+  return { data, error };
+}
+
+// ─── DISCOVER / TRENDING ─────────────────────────────────────────
+// All client-side aggregation — small dataset for beta, no need for a view yet.
+
+export interface TrendingDrink {
+  seltzer_id: string;
+  seltzer_name: string;
+  brand: string | null;
+  reviewCount: number;
+  avgRating: number;
+  latestImage: string | null;
+}
+
+/**
+ * Most-reviewed canonical drinks within the time window. Uses client-side
+ * aggregation — fine until we hit ~thousands of reviews; then we'd
+ * materialize a view.
+ */
+export async function getTrendingDrinks(daysWindow: number = 30, limit: number = 8) {
+  const since = new Date(Date.now() - daysWindow * 86_400_000).toISOString();
+  const { data, error } = await supabase
+    .from('reviews')
+    .select('seltzer_id, seltzer_name, brand, rating, image_url, created_at')
+    .gte('created_at', since)
+    .order('created_at', { ascending: false })
+    .limit(500); // cap the scan
+
+  if (error) return { data: [] as TrendingDrink[], error };
+
+  // Group by seltzer_id (or fallback "brand|name" for legacy reviews without seltzer_id)
+  const groups = new Map<string, {
+    seltzer_id: string; seltzer_name: string; brand: string | null;
+    sum: number; count: number; latestImage: string | null;
+  }>();
+  for (const r of data || []) {
+    const key = (r as any).seltzer_id || `legacy:${(r.brand ?? '').toLowerCase()}|${r.seltzer_name.toLowerCase()}`;
+    const g = groups.get(key);
+    if (g) {
+      g.sum += r.rating;
+      g.count++;
+      if (!g.latestImage && r.image_url) g.latestImage = r.image_url;
+    } else {
+      groups.set(key, {
+        seltzer_id: (r as any).seltzer_id || key,
+        seltzer_name: r.seltzer_name,
+        brand: r.brand,
+        sum: r.rating,
+        count: 1,
+        latestImage: r.image_url,
+      });
+    }
+  }
+
+  const drinks: TrendingDrink[] = Array.from(groups.values())
+    .filter((g) => g.count >= 1)
+    .map((g) => ({
+      seltzer_id: g.seltzer_id,
+      seltzer_name: g.seltzer_name,
+      brand: g.brand,
+      reviewCount: g.count,
+      avgRating: g.sum / g.count,
+      latestImage: g.latestImage,
+    }))
+    .sort((a, b) => b.reviewCount - a.reviewCount || b.avgRating - a.avgRating)
+    .slice(0, limit);
+
+  return { data: drinks, error: null };
+}
+
+/** Highest-rated canonical drinks with at least N reviews. */
+export async function getTopRatedDrinks(minReviews: number = 2, limit: number = 6) {
+  const { data, error } = await supabase
+    .from('reviews')
+    .select('seltzer_id, seltzer_name, brand, rating, image_url')
+    .order('created_at', { ascending: false })
+    .limit(500);
+  if (error) return { data: [] as TrendingDrink[], error };
+
+  const groups = new Map<string, {
+    seltzer_id: string; seltzer_name: string; brand: string | null;
+    sum: number; count: number; latestImage: string | null;
+  }>();
+  for (const r of data || []) {
+    const key = (r as any).seltzer_id || `legacy:${(r.brand ?? '').toLowerCase()}|${r.seltzer_name.toLowerCase()}`;
+    const g = groups.get(key);
+    if (g) { g.sum += r.rating; g.count++; if (!g.latestImage && r.image_url) g.latestImage = r.image_url; }
+    else groups.set(key, {
+      seltzer_id: (r as any).seltzer_id || key,
+      seltzer_name: r.seltzer_name,
+      brand: r.brand,
+      sum: r.rating,
+      count: 1,
+      latestImage: r.image_url,
+    });
+  }
+  const drinks: TrendingDrink[] = Array.from(groups.values())
+    .filter((g) => g.count >= minReviews)
+    .map((g) => ({
+      seltzer_id: g.seltzer_id,
+      seltzer_name: g.seltzer_name,
+      brand: g.brand,
+      reviewCount: g.count,
+      avgRating: g.sum / g.count,
+      latestImage: g.latestImage,
+    }))
+    .sort((a, b) => b.avgRating - a.avgRating || b.reviewCount - a.reviewCount)
+    .slice(0, limit);
+  return { data: drinks, error: null };
+}
+
+/** Public tier lists ordered by recent activity. */
+export async function getTrendingTierLists(limit: number = 6) {
+  const { data, error } = await supabase
+    .from('shared_tier_lists')
+    .select('*, owner:users!shared_tier_lists_owner_id_fkey(*), partner:users!shared_tier_lists_partner_id_fkey(*)')
+    .eq('is_public', true)
+    .order('updated_at', { ascending: false })
+    .limit(limit);
+  return { data: data || [], error };
+}
+
+/** Users with the most reviews in the recent window. */
+export async function getActiveReviewers(daysWindow: number = 30, limit: number = 8) {
+  const since = new Date(Date.now() - daysWindow * 86_400_000).toISOString();
+  const { data, error } = await supabase
+    .from('reviews')
+    .select('user_id, user:users(*)')
+    .gte('created_at', since)
+    .limit(500);
+  if (error) return { data: [], error };
+  const counts = new Map<string, { user: any; count: number }>();
+  for (const r of data || []) {
+    if (!r.user) continue;
+    const existing = counts.get(r.user_id);
+    if (existing) existing.count++;
+    else counts.set(r.user_id, { user: r.user, count: 1 });
+  }
+  const sorted = Array.from(counts.values()).sort((a, b) => b.count - a.count).slice(0, limit);
+  return { data: sorted, error: null };
+}
+
 // SMART FEED — following + own posts (fallback to all if not following anyone)
 export async function getSmartFeed(userId: string, limit: number = 50) {
   const { data: follows } = await supabase
@@ -399,9 +625,23 @@ export async function getUserLike(userId: string, reviewId: string) {
 }
 
 // COMMENTS
-export async function createComment(userId: string, reviewId: string, content: string) {
-  const { data, error } = await supabase.from('comments').insert([{ user_id: userId, review_id: reviewId, content }]).select('*, user:users(*)').single();
-  if (!error) notifyOnComment(userId, reviewId, content);
+export async function createComment(
+  userId: string,
+  reviewId: string,
+  content: string,
+  parentId?: string,
+) {
+  const payload: any = { user_id: userId, review_id: reviewId, content };
+  if (parentId) payload.parent_id = parentId;
+  const { data, error } = await supabase
+    .from('comments')
+    .insert([payload])
+    .select('*, user:users(*)')
+    .single();
+  if (!error) {
+    if (parentId) notifyOnReply(userId, reviewId, parentId, content);
+    else notifyOnComment(userId, reviewId, content);
+  }
   return { data, error };
 }
 
@@ -421,6 +661,27 @@ async function notifyOnComment(actorId: string, reviewId: string, content: strin
     user_id: review.user_id,
     type: 'comment',
     title: `${actorName} commented on ${drink}`,
+    body: `"${snippet}"`,
+    link: `/review/${reviewId}`,
+  }]).then(() => {});
+}
+
+async function notifyOnReply(actorId: string, reviewId: string, parentId: string, content: string) {
+  // Find the comment being replied to so we can notify its author.
+  const { data: parent } = await supabase
+    .from('comments')
+    .select('user_id')
+    .eq('id', parentId)
+    .maybeSingle();
+  if (!parent || parent.user_id === actorId) return; // don't notify yourself
+  const { data: actor } = await supabase
+    .from('users').select('username').eq('id', actorId).maybeSingle();
+  const actorName = actor?.username ? `@${actor.username}` : 'Someone';
+  const snippet = content.length > 60 ? content.slice(0, 60) + '…' : content;
+  supabase.from('notifications').insert([{
+    user_id: parent.user_id,
+    type: 'reply',
+    title: `${actorName} replied to your comment`,
     body: `"${snippet}"`,
     link: `/review/${reviewId}`,
   }]).then(() => {});
@@ -928,7 +1189,7 @@ export async function getSubscribedSharedTierActivities(userId: string, limit: n
 // NOTIFICATIONS / INBOX
 export async function createNotification(notification: {
   user_id: string;
-  type: 'suggestion' | 'suggestion_approved' | 'suggestion_rejected' | 'mention' | 'like' | 'comment' | 'follow' | 'tried_it';
+  type: 'suggestion' | 'suggestion_approved' | 'suggestion_rejected' | 'mention' | 'like' | 'comment' | 'follow' | 'tried_it' | 'reply';
   title: string;
   body?: string;
   link?: string;

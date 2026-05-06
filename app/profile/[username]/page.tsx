@@ -18,8 +18,10 @@ import {
 } from '@/lib/supabase';
 import {
   ArrowLeft, Calendar, Droplets, UserPlus, UserMinus, List, Settings, ListPlus,
-  Star, Trophy, GitCompare,
+  Star, Trophy, GitCompare, Award,
 } from 'lucide-react';
+import { AchievementBadge } from '@/components/AchievementBadge';
+import { ACHIEVEMENTS } from '@/lib/achievements';
 
 interface ProfilePageProps {
   params: { username: string };
@@ -251,6 +253,45 @@ export default function ProfilePage({ params }: ProfilePageProps) {
               </p>
             </div>
           </div>
+
+          {/* Pinned achievements (Battlefield-style dog tags) */}
+          {(() => {
+            const pins = (user.showcase_achievements ?? [])
+              .map((id) => ACHIEVEMENTS.find((a) => a.id === id))
+              .filter((a): a is NonNullable<typeof a> => !!a);
+            if (pins.length === 0) {
+              return (
+                <Link
+                  href={`/profile/${user.username}/achievements`}
+                  className="relative mt-4 inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold transition-colors hover:bg-white/5"
+                  style={{ background: 'rgba(34,211,238,0.06)', border: '1px solid rgba(34,211,238,0.18)', color: 'var(--cyan-400)' }}
+                >
+                  <Award size={12} />
+                  {isOwnProfile ? 'Earn achievements' : 'No badges yet'} →
+                </Link>
+              );
+            }
+            return (
+              <Link
+                href={`/profile/${user.username}/achievements`}
+                className="relative mt-4 flex items-center gap-3 rounded-2xl p-2.5 transition-colors hover:bg-white/5"
+                style={{ background: 'rgba(15,20,36,0.4)', border: '1px solid var(--border-subtle)' }}
+              >
+                <div className="flex gap-3 items-center">
+                  {pins.map((a) => <AchievementBadge key={a.id} achievement={a} size="sm" />)}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.18em]" style={{ color: 'var(--text-muted)' }}>
+                    Honors
+                  </p>
+                  <p className="text-xs truncate" style={{ color: 'var(--text-primary)' }}>
+                    {pins.map((a) => a.name).join(' · ')}
+                  </p>
+                </div>
+                <Award size={14} style={{ color: 'var(--text-muted)' }} />
+              </Link>
+            );
+          })()}
 
           {/* Action row */}
           <div className="relative flex gap-2 mt-4">

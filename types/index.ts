@@ -3,6 +3,8 @@ export interface User {
   username: string;
   avatar_url: string | null;
   bio: string | null;
+  /** IDs of pinned achievements (Battlefield-style dog tags). Up to 3. */
+  showcase_achievements?: string[] | null;
   created_at: string;
 }
 
@@ -56,6 +58,7 @@ export interface Comment {
   user_id: string;
   review_id: string;
   content: string;
+  parent_id: string | null;
   created_at: string;
   user?: User;
 }
@@ -155,7 +158,8 @@ export type NotificationType =
   | 'like'
   | 'comment'
   | 'follow'
-  | 'tried_it';
+  | 'tried_it'
+  | 'reply';
 
 export interface Notification {
   id: string;

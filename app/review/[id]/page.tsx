@@ -4,8 +4,9 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Heart, MessageCircle, Star, ArrowLeft, Droplets, Check, X, ExternalLink, Pencil, Users } from 'lucide-react';
+import { Heart, MessageCircle, Star, ArrowLeft, Droplets, Check, X, ExternalLink, Pencil, Users, Share2 } from 'lucide-react';
 import { StarRating } from '@/components/StarRating';
+import { showToast } from '@/components/Toast';
 import { Review, SharedTierListSuggestion } from '@/types';
 import { Navigation } from '@/components/Navigation';
 import { CommentSection } from '@/components/CommentSection';
@@ -131,6 +132,22 @@ export default function ReviewPage({ params }: ReviewPageProps) {
     loadSuggestions();
   }
 
+  async function handleShare() {
+    if (!review) return;
+    const url = `${window.location.origin}/review/${review.id}`;
+    const headline = review.title?.trim() || review.seltzer_name;
+    const text = `${headline} — rated ${review.rating.toFixed(1)}/5 by @${review.user?.username} on Seltzer Social`;
+    if (typeof navigator !== 'undefined' && (navigator as any).share) {
+      try { await (navigator as any).share({ title: headline, text, url }); return; } catch { /* fallthrough */ }
+    }
+    try {
+      await navigator.clipboard.writeText(url);
+      showToast('Review link copied 🔗', 'success', 'Paste it anywhere to share.');
+    } catch {
+      showToast('Could not copy', 'error', url);
+    }
+  }
+
   if (loading) {
     return (
       <>
@@ -188,16 +205,26 @@ export default function ReviewPage({ params }: ReviewPageProps) {
 
           <div className="flex items-start justify-between gap-3 mb-1">
             <h1 className="text-3xl font-bold flex-1 min-w-0" style={{ fontFamily: 'var(--font-display)', color: 'var(--text-primary)' }}>{reviewHeadline(review)}</h1>
-            {isOwnReview && (
-              <Link
-                href={`/review/${review.id}/edit`}
-                className="flex-shrink-0 mt-1 w-9 h-9 rounded-full flex items-center justify-center hover:bg-white/5 transition-colors"
+            <div className="flex items-center gap-1.5 flex-shrink-0 mt-1">
+              <button
+                onClick={handleShare}
+                className="w-9 h-9 rounded-full flex items-center justify-center hover:bg-white/5 transition-colors"
                 style={{ border: '1px solid var(--border-subtle)', color: 'var(--text-tertiary)' }}
-                title="Edit review"
+                title="Share review"
               >
-                <Pencil size={14} />
-              </Link>
-            )}
+                <Share2 size={14} />
+              </button>
+              {isOwnReview && (
+                <Link
+                  href={`/review/${review.id}/edit`}
+                  className="w-9 h-9 rounded-full flex items-center justify-center hover:bg-white/5 transition-colors"
+                  style={{ border: '1px solid var(--border-subtle)', color: 'var(--text-tertiary)' }}
+                  title="Edit review"
+                >
+                  <Pencil size={14} />
+                </Link>
+              )}
+            </div>
           </div>
           {hasCustomTitle(review) ? (
             <p className="text-base mb-4" style={{ color: 'var(--text-tertiary)' }}>{reviewDrinkLabel(review)}</p>

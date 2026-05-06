@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import {
   ArrowLeft, Bell, BellOff, Check, ChevronDown, ChevronUp,
   ExternalLink, Inbox, LayoutGrid, List as ListIcon, MoreHorizontal, Pencil, Plus,
-  Search, Star, Trash2, X, AlertTriangle,
+  Search, Share2, Star, Trash2, X, AlertTriangle,
 } from 'lucide-react';
 import { Navigation } from '@/components/Navigation';
 import { RatingInput } from '@/components/RatingInput';
@@ -289,6 +289,28 @@ export default function SharedListPage({ params }: { params: { id: string } }) {
     load();
   }
 
+  async function handleShare() {
+    if (!list) return;
+    const url = `${window.location.origin}/shared/${params.id}`;
+    const text = `Check out "${list.name}" — a seltzer tier list by @${list.owner?.username} + @${list.partner?.username}`;
+
+    // Native share on mobile, copy-to-clipboard everywhere else
+    if (typeof navigator !== 'undefined' && (navigator as any).share) {
+      try {
+        await (navigator as any).share({ title: list.name, text, url });
+        return;
+      } catch {
+        // user cancelled — fall through to copy
+      }
+    }
+    try {
+      await navigator.clipboard.writeText(url);
+      showToast('Invite link copied 🔗', 'success', 'Paste it anywhere to share.');
+    } catch {
+      showToast('Could not copy', 'error', url);
+    }
+  }
+
   async function handleDeleteList() {
     if (!list) return;
     setDeletingList(true);
@@ -347,6 +369,17 @@ export default function SharedListPage({ params }: { params: { id: string } }) {
               <span style={{ color: 'var(--text-muted)' }}> · {items.length} {items.length === 1 ? 'drink' : 'drinks'}</span>
             </p>
           </div>
+          {/* Share button — anyone can copy/share the invite link */}
+          <button
+            onClick={handleShare}
+            className="flex-shrink-0 w-9 h-9 rounded-full flex items-center justify-center hover:bg-white/5 transition-colors"
+            style={{ border: '1px solid var(--border-subtle)', color: 'var(--text-tertiary)' }}
+            title="Share this list"
+            aria-label="Share"
+          >
+            <Share2 size={14} />
+          </button>
+
           {userId && !isMember && (
             <button onClick={toggleSubscription} className={subscribed ? 'btn-secondary flex-shrink-0' : 'btn-primary flex-shrink-0'} style={{ padding: '8px 12px', fontSize: '12px' }}>
               {subscribed ? <><BellOff size={13} /> Subscribed</> : <><Bell size={13} /> Subscribe</>}

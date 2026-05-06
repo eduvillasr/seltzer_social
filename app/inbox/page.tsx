@@ -5,7 +5,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Bell, Check, CheckCheck, Trash2, Vote, AtSign, Heart, MessageCircle, UserPlus, Droplets } from 'lucide-react';
+import { Bell, Check, CheckCheck, Trash2, Vote, AtSign, Heart, MessageCircle, UserPlus, Droplets, CornerDownRight } from 'lucide-react';
 import { Navigation } from '@/components/Navigation';
 import { CanLoader } from '@/components/CanLoader';
 import { Notification } from '@/types';
@@ -24,6 +24,7 @@ const TYPE_META: Record<string, { icon: React.ReactNode; color: string; label: s
   mention:              { icon: <AtSign size={16} />,       color: 'var(--violet-400)', label: 'Mention'           },
   like:                 { icon: <Heart size={16} />,        color: '#fb7185',           label: 'New Like'          },
   comment:              { icon: <MessageCircle size={16} />,color: 'var(--cyan-400)',   label: 'New Comment'       },
+  reply:                { icon: <CornerDownRight size={16} />,color: 'var(--cyan-400)', label: 'Reply to You'      },
   follow:               { icon: <UserPlus size={16} />,     color: 'var(--violet-400)', label: 'New Follower'      },
   tried_it:             { icon: <Droplets size={16} />,     color: 'var(--cyan-400)',   label: 'Someone Tried It'  },
 };

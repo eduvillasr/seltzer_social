@@ -7,6 +7,14 @@ const FOUNDER_USERNAMES_LOWER = new Set([
   'nicepantsuit',
 ]);
 
+// Beta tester usernames — same pattern. Drop in beta testers' lowercase
+// usernames as you onboard them; the Beta Tester achievement unlocks
+// automatically the next time they load the app.
+export const BETA_TESTER_USERNAMES_LOWER = new Set<string>([
+  'eduvillasr',
+  'nicepantsuit',
+]);
+
 /**
  * Case-insensitive founder check. Use this everywhere instead of FOUNDERS.has(...).
  */
@@ -15,12 +23,22 @@ export function isFounder(username: string | null | undefined): boolean {
   return FOUNDER_USERNAMES_LOWER.has(username.toLowerCase());
 }
 
+/** Case-insensitive beta-tester check, mirrors `isFounder`. */
+export function isBetaTester(username: string | null | undefined): boolean {
+  if (!username) return false;
+  return BETA_TESTER_USERNAMES_LOWER.has(username.toLowerCase());
+}
+
 /**
  * Backwards-compatible Set so existing `FOUNDERS.has(username)` call sites
  * keep working. The `has` method is overridden to do a case-insensitive lookup.
  */
 export const FOUNDERS: { has: (username: string | null | undefined) => boolean } = {
   has: isFounder,
+};
+
+export const BETA_TESTERS: { has: (username: string | null | undefined) => boolean } = {
+  has: isBetaTester,
 };
 
 export function FounderBadge() {

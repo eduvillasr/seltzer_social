@@ -8,7 +8,7 @@ import { Navigation } from '@/components/Navigation';
 import { Avatar } from '@/components/Avatar';
 import { CanLoader } from '@/components/CanLoader';
 import { showToast } from '@/components/Toast';
-import { Search, UserPlus, UserMinus, Users, X, List } from 'lucide-react';
+import { Search, UserPlus, UserMinus, Users, X, List, Flame } from 'lucide-react';
 import {
   searchUsers, searchSharedTierLists,
   supabase, followUser, unfollowUser,
@@ -115,13 +115,22 @@ export default function SearchPage() {
       <main className="max-w-md mx-auto px-4 pt-20 pb-32">
 
         {/* Header */}
-        <div className="mb-5">
-          <h1 className="text-2xl font-extrabold mb-1" style={{ fontFamily: 'var(--font-display)' }}>
-            Discover
-          </h1>
-          <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-            Search updates as you type.
-          </p>
+        <div className="mb-5 flex items-start justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-extrabold mb-1" style={{ fontFamily: 'var(--font-display)' }}>
+              Discover
+            </h1>
+            <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+              Search updates as you type.
+            </p>
+          </div>
+          <Link
+            href="/discover"
+            className="flex-shrink-0 inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full hover:bg-white/5 transition-colors"
+            style={{ background: 'rgba(34,211,238,0.08)', border: '1px solid rgba(34,211,238,0.2)', color: 'var(--cyan-400)' }}
+          >
+            <Flame size={11} /> Trending
+          </Link>
         </div>
 
         {/* Search bar */}
