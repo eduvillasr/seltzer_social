@@ -3,6 +3,8 @@
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import { ToastHost } from '@/components/Toast';
+import { PWARegistrar } from '@/components/PWARegistrar';
+import { InstallPrompt } from '@/components/InstallPrompt';
 
 export const metadata: Metadata = {
   title: 'Seltzer Social — Rate. Review. Discover.',
@@ -13,8 +15,7 @@ export const metadata: Metadata = {
     statusBarStyle: 'black-translucent',
     title: 'Seltzer Social',
   },
-  // Theme color for browser UI bars (Chrome on Android, etc.)
-  themeColor: '#0a0e1a',
+  // (themeColor lives in `viewport` now per Next 14 conventions — see below)
   // Prevent phone-number / address auto-detection on iOS Safari
   formatDetection: {
     telephone: false,
@@ -43,6 +44,8 @@ export default function RootLayout({
       <body>
         {children}
         <ToastHost />
+        <InstallPrompt />
+        <PWARegistrar />
       </body>
     </html>
   );
