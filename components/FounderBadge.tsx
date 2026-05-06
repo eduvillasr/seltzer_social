@@ -1,6 +1,27 @@
 // components/FounderBadge.tsx
 
-export const FOUNDERS = new Set(['eduvillasr']);
+// Founder usernames — stored lowercase, matched case-insensitively.
+// To add a founder: lowercase their username and append it here, then redeploy.
+const FOUNDER_USERNAMES_LOWER = new Set([
+  'eduvillasr',
+  'nicepantsuit',
+]);
+
+/**
+ * Case-insensitive founder check. Use this everywhere instead of FOUNDERS.has(...).
+ */
+export function isFounder(username: string | null | undefined): boolean {
+  if (!username) return false;
+  return FOUNDER_USERNAMES_LOWER.has(username.toLowerCase());
+}
+
+/**
+ * Backwards-compatible Set so existing `FOUNDERS.has(username)` call sites
+ * keep working. The `has` method is overridden to do a case-insensitive lookup.
+ */
+export const FOUNDERS: { has: (username: string | null | undefined) => boolean } = {
+  has: isFounder,
+};
 
 export function FounderBadge() {
   return (
