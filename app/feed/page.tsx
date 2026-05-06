@@ -184,11 +184,11 @@ export default function FeedPage() {
         title="Feed"
         right={
           <Link
-            href="/discover"
+            href="/trending"
             className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full hover:bg-white/5 transition-colors"
             style={{ background: 'rgba(34,211,238,0.08)', border: '1px solid rgba(34,211,238,0.2)', color: 'var(--cyan-400)' }}
           >
-            <Flame size={11} /> Discover
+            <Flame size={11} /> Trending
           </Link>
         }
       />
@@ -236,11 +236,11 @@ export default function FeedPage() {
               </h3>
               <p className="text-sm mb-5 leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
                 Follow some people and your feed fills up with their reviews + tier list updates.
-                <br />Find them on Discover or via Search.
+                <br />Browse what's hot or search for friends to follow.
               </p>
               <div className="flex gap-2 justify-center flex-wrap">
-                <Link href="/discover" className="btn-primary inline-flex">
-                  <Flame size={14} /> Browse Discover
+                <Link href="/trending" className="btn-primary inline-flex">
+                  <Flame size={14} /> See Trending
                 </Link>
                 <Link href="/discover" className="btn-secondary inline-flex">
                   <UserPlus size={14} /> Find people
@@ -261,8 +261,8 @@ export default function FeedPage() {
                 <Link href="/create" className="btn-primary inline-flex">
                   <Plus size={14} /> Write a Review
                 </Link>
-                <Link href="/discover" className="btn-secondary inline-flex">
-                  <Flame size={14} /> Discover
+                <Link href="/trending" className="btn-secondary inline-flex">
+                  <Flame size={14} /> Trending
                 </Link>
               </div>
             </div>

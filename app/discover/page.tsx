@@ -1,13 +1,13 @@
 // app/discover/page.tsx
-// Combined discovery surface — trending content when idle, search mode
-// (people + tier lists) when the user types into the search bar at top.
+// Search for people + tier lists. Reached from the bottom-nav Discover tab.
+// (Trending content lives at /trending — surfaced from the Feed page header.)
 
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import {
-  Sparkles, Flame, Trophy, Users, ListPlus, ArrowRight, Droplets, Search, X,
+  Search, X, Users, ArrowRight, Flame,
   UserPlus, UserMinus, List as ListIcon,
 } from 'lucide-react';
 import { Navigation } from '@/components/Navigation';
@@ -17,97 +17,44 @@ import { FounderBadge, FOUNDERS } from '@/components/FounderBadge';
 import { FeedSkeleton } from '@/components/Skeletons';
 import { showToast } from '@/components/Toast';
 import {
-  getTrendingDrinks, getTopRatedDrinks, getTrendingTierLists, getActiveReviewers,
   searchUsers, searchSharedTierLists, supabase,
   followUser, unfollowUser, isFollowing as checkIsFollowing, getFollowerCount,
-  TrendingDrink,
 } from '@/lib/supabase';
 import { SharedTierList, User } from '@/types';
 
-const TIER_COLORS: Record<string, string> = {
-  S: '#f59e0b', A: '#10b981', B: '#22d3ee',
-  C: '#a3e635', D: '#f97316', F: '#fb7185',
-};
-function ratingToTier(v: number) {
-  if (v >= 4.5) return 'S'; if (v >= 4) return 'A'; if (v >= 3) return 'B';
-  if (v >= 2)   return 'C'; if (v >= 1) return 'D'; return 'F';
-}
-
 export default function DiscoverPage() {
-  // Trending lanes
-  const [trending, setTrending] = useState<TrendingDrink[]>([]);
-  const [topRated, setTopRated] = useState<TrendingDrink[]>([]);
-  const [lists, setLists] = useState<SharedTierList[]>([]);
-  const [reviewers, setReviewers] = useState<{ user: any; count: number }[]>([]);
-  const [loadingTrending, setLoadingTrending] = useState(true);
-
-  // Search mode
   const [query, setQuery] = useState('');
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [people, setPeople] = useState<(User & { isFollowing?: boolean; followers?: number })[]>([]);
   const [matchingLists, setMatchingLists] = useState<SharedTierList[]>([]);
-  const [searchLoading, setSearchLoading] = useState(false);
+  const [searching, setSearching] = useState(false);
+  const [hasSearched, setHasSearched] = useState(false);
 
-  // ── boot ──
-  useEffect(() => { loadTrending(); checkUser(); /* eslint-disable-line */ }, []);
+  useEffect(() => { checkUser(); }, []);
 
   async function checkUser() {
     const { data } = await supabase.auth.getSession();
     if (data.session?.user) setCurrentUserId(data.session.user.id);
   }
 
-  async function loadTrending() {
-    // Trending data changes on the order of minutes, not seconds.
-    // 2-minute SWR window is plenty.
-    const cache = await import('@/lib/cache');
-    const cacheKey = 'discover:trending';
-    const cached = cache.peekCache<any>(cacheKey);
-    if (cached) {
-      setTrending(cached.trending);
-      setTopRated(cached.topRated);
-      setLists(cached.lists);
-      setReviewers(cached.reviewers);
-      setLoadingTrending(false);
-    } else {
-      setLoadingTrending(true);
-    }
-
-    const [a, b, c, d] = await Promise.all([
-      getTrendingDrinks(30, 8),
-      getTopRatedDrinks(2, 6),
-      getTrendingTierLists(6),
-      getActiveReviewers(30, 6),
-    ]);
-    const next = {
-      trending: a.data,
-      topRated: b.data,
-      lists: c.data as SharedTierList[],
-      reviewers: d.data,
-    };
-    setTrending(next.trending);
-    setTopRated(next.topRated);
-    setLists(next.lists);
-    setReviewers(next.reviewers);
-    cache.setCache(cacheKey, next);
-    setLoadingTrending(false);
-  }
-
-  // ── search debouncing ──
+  // Debounced search — fires 200ms after the user stops typing.
   useEffect(() => {
     const q = query.trim();
     if (!q) {
       setPeople([]);
       setMatchingLists([]);
+      setHasSearched(false);
       return;
     }
-    setSearchLoading(true);
+    setSearching(true);
+    setHasSearched(true);
     const handle = setTimeout(async () => {
       const [{ data: peopleData }, { data: listsData }] = await Promise.all([
         searchUsers(q),
         searchSharedTierLists(q),
       ]);
 
-      // Enrich people with follow state + follower count
+      // Enrich people with follow state + follower counts in parallel.
       const enriched = await Promise.all(
         (peopleData || []).map(async (u: any) => {
           let isFollowingThem = false;
@@ -120,11 +67,11 @@ export default function DiscoverPage() {
         }),
       );
 
-      // Confirm the query hasn't changed in the meantime before updating state
+      // Confirm the query hasn't changed in the meantime before updating state.
       if (q === query.trim()) {
         setPeople(enriched);
         setMatchingLists((listsData || []) as SharedTierList[]);
-        setSearchLoading(false);
+        setSearching(false);
       }
     }, 200);
     return () => clearTimeout(handle);
@@ -149,18 +96,27 @@ export default function DiscoverPage() {
     );
   }
 
-  const inSearch = query.trim().length > 0;
-  const hasResults = people.length > 0 || matchingLists.length > 0;
-  const trendingEmpty = !loadingTrending && trending.length === 0 && lists.length === 0 && reviewers.length === 0;
+  const noResults = hasSearched && !searching && people.length === 0 && matchingLists.length === 0;
 
   return (
     <>
       <Navigation />
-      <TopHeader title="Discover" />
-      <main className="max-w-md mx-auto px-4 with-top-header pb-32 space-y-6">
-        <div className="h-1" />{/* breathing room below the fixed header */}
+      <TopHeader
+        title="Discover"
+        right={
+          <Link
+            href="/trending"
+            className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full hover:bg-white/5 transition-colors"
+            style={{ background: 'rgba(34,211,238,0.08)', border: '1px solid rgba(34,211,238,0.2)', color: 'var(--cyan-400)' }}
+          >
+            <Flame size={11} /> Trending
+          </Link>
+        }
+      />
+      <main className="max-w-md mx-auto px-4 with-top-header pb-32 space-y-5">
+        <div className="h-1" />
 
-        {/* Search bar — always-on, switches the page into search mode when filled */}
+        {/* Search bar */}
         <div className="relative">
           <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2" style={{ color: 'var(--text-muted)' }} />
           <input
@@ -170,6 +126,7 @@ export default function DiscoverPage() {
             placeholder="Search people or tier lists…"
             className="input-field pl-11 pr-11"
             style={{ borderRadius: '999px', height: '44px' }}
+            autoFocus
           />
           {query && (
             <button
@@ -183,282 +140,128 @@ export default function DiscoverPage() {
           )}
         </div>
 
-        {/* ═══════ SEARCH MODE ═══════ */}
-        {inSearch ? (
-          searchLoading ? (
-            <FeedSkeleton count={2} />
-          ) : !hasResults ? (
-            <div className="glass-card text-center py-10">
-              <Search size={28} className="mx-auto mb-3" style={{ color: 'var(--text-muted)' }} />
-              <p className="font-bold text-sm mb-1" style={{ color: 'var(--text-primary)' }}>No matches</p>
-              <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>Try a different name or username.</p>
-            </div>
-          ) : (
-            <>
-              {/* People */}
-              {people.length > 0 && (
-                <section className="space-y-3 stagger-children">
-                  <SectionHeader icon={<Users size={12} />} label="People" sub={`${people.length} match${people.length === 1 ? '' : 'es'}`} tone="violet" />
-                  <div className="space-y-2">
-                    {people.map((user) => {
-                      const isSelf = user.id === currentUserId;
-                      return (
-                        <div key={user.id} className="glass-card flex items-center gap-3" style={{ padding: '12px' }}>
-                          <Link href={`/profile/${user.username}`} className="flex-shrink-0">
-                            <div className="cursor-pointer hover:scale-105 transition-transform">
-                              <Avatar username={user.username} avatarUrl={user.avatar_url} size={40} />
-                            </div>
-                          </Link>
-                          <div className="flex-1 min-w-0">
-                            <Link href={`/profile/${user.username}`}>
-                              <p className="font-bold text-sm hover:text-cyan-400 transition-colors cursor-pointer inline-flex items-center gap-1.5" style={{ color: 'var(--text-primary)' }}>
-                                @{user.username}{isSelf ? ' (you)' : ''}
-                                {FOUNDERS.has(user.username) && <FounderBadge />}
-                              </p>
-                            </Link>
-                            <p className="text-xs flex items-center gap-1" style={{ color: 'var(--text-muted)' }}>
-                              <Users size={10} /> {user.followers} {user.followers === 1 ? 'follower' : 'followers'}
-                            </p>
-                          </div>
-                          {isSelf ? (
-                            <Link href={`/profile/${user.username}`} className="btn-secondary flex-shrink-0" style={{ padding: '6px 12px', fontSize: '11px' }}>
-                              View
-                            </Link>
-                          ) : currentUserId && (
-                            <button
-                              onClick={() => toggleFollow(user.id, !!user.isFollowing)}
-                              className={user.isFollowing ? 'btn-secondary flex-shrink-0' : 'btn-primary flex-shrink-0'}
-                              style={{ padding: '6px 12px', fontSize: '11px' }}
-                            >
-                              {user.isFollowing ? <><UserMinus size={11} /> Unfollow</> : <><UserPlus size={11} /> Follow</>}
-                            </button>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </section>
-              )}
-
-              {/* Tier lists */}
-              {matchingLists.length > 0 && (
-                <section className="space-y-3 stagger-children">
-                  <SectionHeader icon={<ListIcon size={12} />} label="Tier Lists" sub={`${matchingLists.length} match${matchingLists.length === 1 ? '' : 'es'}`} tone="cyan" />
-                  <div className="space-y-2">
-                    {matchingLists.map((list) => (
-                      <Link
-                        key={list.id}
-                        href={`/shared/${list.id}`}
-                        className="glass-card block hover:bg-white/5 transition-colors"
-                        style={{ padding: '12px' }}
-                      >
-                        <div className="flex items-start gap-3">
-                          <div
-                            className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
-                            style={{ background: 'rgba(6,182,212,0.12)', color: 'var(--cyan-400)' }}
-                          >
-                            <ListIcon size={18} />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="font-bold text-sm truncate" style={{ color: 'var(--text-primary)' }}>{list.name}</p>
-                            <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
-                              @{list.owner?.username}
-                              <span style={{ color: 'var(--border-strong)' }}> × </span>
-                              @{list.partner?.username}
-                            </p>
-                          </div>
-                          <ArrowRight size={14} className="flex-shrink-0 mt-2" style={{ color: 'var(--text-muted)' }} />
-                        </div>
-                      </Link>
-                    ))}
-                  </div>
-                </section>
-              )}
-            </>
-          )
+        {/* Results */}
+        {!hasSearched ? (
+          <div className="glass-card text-center py-10">
+            <Search size={26} className="mx-auto mb-3" style={{ color: 'var(--text-muted)' }} />
+            <p className="text-sm font-bold mb-1" style={{ color: 'var(--text-primary)' }}>Find people and lists</p>
+            <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+              Start typing a username or tier list name above.
+            </p>
+            <Link
+              href="/trending"
+              className="inline-flex items-center gap-1.5 mt-5 text-xs font-semibold px-3 py-1.5 rounded-full transition-colors hover:bg-white/5"
+              style={{ background: 'rgba(34,211,238,0.08)', border: '1px solid rgba(34,211,238,0.2)', color: 'var(--cyan-400)' }}
+            >
+              <Flame size={11} /> See what's trending →
+            </Link>
+          </div>
+        ) : searching ? (
+          <FeedSkeleton count={2} />
+        ) : noResults ? (
+          <div className="glass-card text-center py-10">
+            <Search size={28} className="mx-auto mb-3" style={{ color: 'var(--text-muted)' }} />
+            <p className="font-bold text-sm mb-1" style={{ color: 'var(--text-primary)' }}>No matches</p>
+            <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>Try a different name or username.</p>
+          </div>
         ) : (
-          /* ═══════ TRENDING MODE ═══════ */
-          loadingTrending ? (
-            <FeedSkeleton count={2} />
-          ) : trendingEmpty ? (
-            <div className="glass-card text-center py-12">
-              <Sparkles size={28} className="mx-auto mb-3" style={{ color: 'var(--text-muted)' }} />
-              <p className="font-bold mb-1" style={{ fontFamily: 'var(--font-display)' }}>Quiet week</p>
-              <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-                No trending content yet — be the first to drop a review.
-              </p>
-              <Link href="/create" className="btn-primary inline-flex mt-5" style={{ fontSize: '12px', padding: '8px 16px' }}>
-                Write a Review <ArrowRight size={12} />
-              </Link>
-            </div>
-          ) : (
-            <>
-              {trending.length > 0 && (
-                <section className="space-y-3 stagger-children">
-                  <SectionHeader icon={<Flame size={12} />} label="Trending drinks" sub="Most reviewed this month" tone="amber" />
-                  <div className="grid grid-cols-2 gap-2.5">
-                    {trending.map((d) => <DrinkCard key={d.seltzer_id} drink={d} />)}
-                  </div>
-                </section>
-              )}
+          <>
+            {/* People */}
+            {people.length > 0 && (
+              <section className="space-y-3 stagger-children">
+                <div className="flex items-baseline justify-between gap-2 px-1">
+                  <h2 className="text-xs font-bold uppercase tracking-[0.18em] flex items-center gap-2" style={{ color: 'var(--violet-400)' }}>
+                    <Users size={12} /> People
+                  </h2>
+                  <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                    {people.length} match{people.length === 1 ? '' : 'es'}
+                  </span>
+                </div>
+                <div className="space-y-2">
+                  {people.map((user) => {
+                    const isSelf = user.id === currentUserId;
+                    return (
+                      <div key={user.id} className="glass-card flex items-center gap-3" style={{ padding: '12px' }}>
+                        <Link href={`/profile/${user.username}`} className="flex-shrink-0">
+                          <div className="cursor-pointer hover:scale-105 transition-transform">
+                            <Avatar username={user.username} avatarUrl={user.avatar_url} size={40} />
+                          </div>
+                        </Link>
+                        <div className="flex-1 min-w-0">
+                          <Link href={`/profile/${user.username}`}>
+                            <p className="font-bold text-sm hover:text-cyan-400 transition-colors cursor-pointer inline-flex items-center gap-1.5" style={{ color: 'var(--text-primary)' }}>
+                              @{user.username}{isSelf ? ' (you)' : ''}
+                              {FOUNDERS.has(user.username) && <FounderBadge />}
+                            </p>
+                          </Link>
+                          <p className="text-xs flex items-center gap-1" style={{ color: 'var(--text-muted)' }}>
+                            <Users size={10} /> {user.followers} {user.followers === 1 ? 'follower' : 'followers'}
+                          </p>
+                        </div>
+                        {isSelf ? (
+                          <Link href={`/profile/${user.username}`} className="btn-secondary flex-shrink-0" style={{ padding: '6px 12px', fontSize: '11px' }}>
+                            View
+                          </Link>
+                        ) : currentUserId && (
+                          <button
+                            onClick={() => toggleFollow(user.id, !!user.isFollowing)}
+                            className={user.isFollowing ? 'btn-secondary flex-shrink-0' : 'btn-primary flex-shrink-0'}
+                            style={{ padding: '6px 12px', fontSize: '11px' }}
+                          >
+                            {user.isFollowing ? <><UserMinus size={11} /> Unfollow</> : <><UserPlus size={11} /> Follow</>}
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+            )}
 
-              {topRated.length > 0 && (
-                <section className="space-y-3 stagger-children">
-                  <SectionHeader icon={<Trophy size={12} />} label="Highest rated" sub="2+ community reviews" tone="emerald" />
-                  <div className="space-y-2">
-                    {topRated.map((d, idx) => <TopRatedRow key={d.seltzer_id} drink={d} rank={idx + 1} />)}
-                  </div>
-                </section>
-              )}
-
-              {lists.length > 0 && (
-                <section className="space-y-3 stagger-children">
-                  <SectionHeader icon={<ListPlus size={12} />} label="Active tier lists" sub="Recently updated public lists" tone="cyan" />
-                  <div className="space-y-2">
-                    {lists.map((list) => <ListRow key={list.id} list={list} />)}
-                  </div>
-                </section>
-              )}
-
-              {reviewers.length > 0 && (
-                <section className="space-y-3 stagger-children">
-                  <SectionHeader icon={<Users size={12} />} label="Active reviewers" sub="Most reviews this month" tone="violet" />
-                  <div className="grid grid-cols-3 gap-2">
-                    {reviewers.map((r) => (
-                      <Link
-                        key={r.user.id}
-                        href={`/profile/${r.user.username}`}
-                        className="rounded-2xl p-3 flex flex-col items-center text-center transition-colors hover:bg-white/5"
-                        style={{ background: 'rgba(15,20,36,0.5)', border: '1px solid var(--border-subtle)' }}
-                      >
-                        <Avatar username={r.user.username} avatarUrl={r.user.avatar_url} size={44} />
-                        <p className="text-xs font-bold mt-2 truncate w-full inline-flex items-center justify-center gap-1" style={{ color: 'var(--text-primary)' }}>
-                          @{r.user.username}
-                          {FOUNDERS.has(r.user.username) && <FounderBadge />}
-                        </p>
-                        <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
-                          {r.count} {r.count === 1 ? 'review' : 'reviews'}
-                        </p>
-                      </Link>
-                    ))}
-                  </div>
-                </section>
-              )}
-            </>
-          )
+            {/* Tier lists */}
+            {matchingLists.length > 0 && (
+              <section className="space-y-3 stagger-children">
+                <div className="flex items-baseline justify-between gap-2 px-1">
+                  <h2 className="text-xs font-bold uppercase tracking-[0.18em] flex items-center gap-2" style={{ color: 'var(--cyan-400)' }}>
+                    <ListIcon size={12} /> Tier Lists
+                  </h2>
+                  <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                    {matchingLists.length} match{matchingLists.length === 1 ? '' : 'es'}
+                  </span>
+                </div>
+                <div className="space-y-2">
+                  {matchingLists.map((list) => (
+                    <Link
+                      key={list.id}
+                      href={`/shared/${list.id}`}
+                      className="glass-card block hover:bg-white/5 transition-colors"
+                      style={{ padding: '12px' }}
+                    >
+                      <div className="flex items-start gap-3">
+                        <div
+                          className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+                          style={{ background: 'rgba(6,182,212,0.12)', color: 'var(--cyan-400)' }}
+                        >
+                          <ListIcon size={18} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-bold text-sm truncate" style={{ color: 'var(--text-primary)' }}>{list.name}</p>
+                          <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                            @{list.owner?.username}
+                            <span style={{ color: 'var(--border-strong)' }}> × </span>
+                            @{list.partner?.username}
+                          </p>
+                        </div>
+                        <ArrowRight size={14} className="flex-shrink-0 mt-2" style={{ color: 'var(--text-muted)' }} />
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              </section>
+            )}
+          </>
         )}
       </main>
     </>
-  );
-}
-
-function SectionHeader({
-  icon, label, sub, tone,
-}: { icon: React.ReactNode; label: string; sub: string; tone: 'cyan' | 'amber' | 'emerald' | 'violet' }) {
-  const colors: Record<string, string> = {
-    cyan: 'var(--cyan-400)',
-    amber: 'var(--amber-400)',
-    emerald: '#34d399',
-    violet: 'var(--violet-400)',
-  };
-  return (
-    <div className="flex items-baseline justify-between gap-2 px-1">
-      <div className="flex items-center gap-2">
-        <span style={{ color: colors[tone] }}>{icon}</span>
-        <h2 className="text-xs font-bold uppercase tracking-[0.18em]" style={{ color: colors[tone] }}>
-          {label}
-        </h2>
-      </div>
-      <span className="text-[10px] truncate" style={{ color: 'var(--text-muted)' }}>{sub}</span>
-    </div>
-  );
-}
-
-function DrinkCard({ drink }: { drink: TrendingDrink }) {
-  const tier = ratingToTier(drink.avgRating);
-  const color = TIER_COLORS[tier];
-  return (
-    <Link
-      href={`/drink/${drink.seltzer_id}`}
-      className="rounded-2xl overflow-hidden block transition-all hover:scale-[1.01]"
-      style={{ background: 'rgba(15,20,36,0.5)', border: '1px solid var(--border-subtle)' }}
-    >
-      <div className="relative aspect-square overflow-hidden">
-        {drink.latestImage ? (
-          <img src={drink.latestImage} alt={drink.seltzer_name} className="w-full h-full object-cover" />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center" style={{ background: `${color}1a` }}>
-            <Droplets size={26} style={{ color }} />
-          </div>
-        )}
-        <span
-          className="absolute top-2 right-2 w-7 h-7 rounded-full flex items-center justify-center text-xs font-extrabold"
-          style={{ background: color, color: '#0a0e1a', boxShadow: `0 0 12px ${color}66` }}
-        >
-          {tier}
-        </span>
-      </div>
-      <div className="p-2.5">
-        <p className="text-sm font-bold truncate" style={{ color: 'var(--text-primary)' }}>{drink.seltzer_name}</p>
-        <p className="text-[11px] truncate" style={{ color: 'var(--text-muted)' }}>{drink.brand ?? 'No brand'}</p>
-        <p className="text-[11px] mt-1" style={{ color: 'var(--text-secondary)' }}>
-          ⭐ {drink.avgRating.toFixed(1)} · {drink.reviewCount} {drink.reviewCount === 1 ? 'review' : 'reviews'}
-        </p>
-      </div>
-    </Link>
-  );
-}
-
-function TopRatedRow({ drink, rank }: { drink: TrendingDrink; rank: number }) {
-  const tier = ratingToTier(drink.avgRating);
-  const color = TIER_COLORS[tier];
-  return (
-    <Link
-      href={`/drink/${drink.seltzer_id}`}
-      className="flex items-center gap-3 rounded-2xl p-3 transition-colors hover:bg-white/5"
-      style={{ background: 'rgba(15,20,36,0.5)', border: '1px solid var(--border-subtle)' }}
-    >
-      <span
-        className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-extrabold flex-shrink-0"
-        style={{ background: rank <= 3 ? `${color}25` : 'rgba(148,163,184,0.08)', color: rank <= 3 ? color : 'var(--text-muted)' }}
-      >
-        {rank}
-      </span>
-      {drink.latestImage ? (
-        <img src={drink.latestImage} alt={drink.seltzer_name} className="w-12 h-12 rounded-xl object-cover flex-shrink-0" />
-      ) : (
-        <div className="w-12 h-12 rounded-xl flex-shrink-0 flex items-center justify-center" style={{ background: `${color}1a` }}>
-          <Droplets size={16} style={{ color }} />
-        </div>
-      )}
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-bold truncate" style={{ color: 'var(--text-primary)' }}>{drink.seltzer_name}</p>
-        <p className="text-[11px] truncate" style={{ color: 'var(--text-muted)' }}>{drink.brand ?? 'No brand'}</p>
-      </div>
-      <div className="flex flex-col items-end">
-        <span className="text-sm font-extrabold" style={{ color }}>{drink.avgRating.toFixed(1)}</span>
-        <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{drink.reviewCount}× rated</span>
-      </div>
-    </Link>
-  );
-}
-
-function ListRow({ list }: { list: SharedTierList }) {
-  return (
-    <Link
-      href={`/shared/${list.id}`}
-      className="block rounded-2xl p-3 transition-colors hover:bg-white/5"
-      style={{ background: 'rgba(15,20,36,0.5)', border: '1px solid var(--border-subtle)' }}
-    >
-      <div className="flex items-center justify-between gap-3">
-        <div className="min-w-0 flex-1">
-          <p className="text-sm font-bold truncate" style={{ color: 'var(--text-primary)' }}>{list.name}</p>
-          <p className="text-[11px] truncate" style={{ color: 'var(--text-muted)' }}>
-            @{list.owner?.username} <span style={{ color: 'var(--border-strong)' }}>×</span> @{list.partner?.username}
-          </p>
-        </div>
-        <ArrowRight size={14} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
-      </div>
-    </Link>
   );
 }

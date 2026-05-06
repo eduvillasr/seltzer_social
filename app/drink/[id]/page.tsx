@@ -75,7 +75,7 @@ export default function DrinkPage({ params }: { params: { id: string } }) {
     <>
       <Navigation />
       <main className="max-w-md mx-auto px-4 pt-12 pb-32 space-y-5">
-        <Link href="/discover" className="inline-flex items-center gap-2 text-sm hover:opacity-80" style={{ color: 'var(--text-tertiary)' }}>
+        <Link href="/trending" className="inline-flex items-center gap-2 text-sm hover:opacity-80" style={{ color: 'var(--text-tertiary)' }}>
           <ArrowLeft size={16} /> Back
         </Link>
 
