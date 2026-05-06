@@ -5,7 +5,10 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Droplets, Star, Heart, ArrowRight, Sparkles, ListOrdered, Users, Check } from 'lucide-react';
+import {
+  Droplets, Star, Heart, ArrowRight, Sparkles, ListOrdered, Users, Check,
+  PenSquare, GitCompare, Award, Trophy,
+} from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 
 const TIER_PREVIEW = [
@@ -40,19 +43,22 @@ export default function LandingPage() {
   return (
     <div className="min-h-screen overflow-hidden">
 
-      {/* Nav */}
-      <nav className="fixed top-0 left-0 right-0 z-50 glass">
+      {/* Nav — sits under the iOS status bar, so we pad-top by the inset */}
+      <nav
+        className="fixed top-0 left-0 right-0 z-50 glass"
+        style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}
+      >
         <div className="max-w-5xl mx-auto px-4 sm:px-6 flex items-center justify-between h-14 sm:h-16">
-          <div className="flex items-center gap-2 sm:gap-2.5 min-w-0">
+          <Link href="/" className="flex items-center gap-2 sm:gap-2.5 min-w-0 flex-shrink">
             <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-gradient-to-br from-cyan-400 to-cyan-600 flex items-center justify-center animate-glow flex-shrink-0">
               <Droplets size={16} className="text-white sm:w-[18px] sm:h-[18px]" />
             </div>
             <span className="text-base sm:text-lg font-bold truncate" style={{ fontFamily: 'var(--font-display)', color: 'var(--text-primary)' }}>Seltzer Social</span>
-          </div>
-          <div className="flex items-center gap-2 flex-shrink-0">
-            {/* Hide "Sign In" label on tiny screens — signup page has a login link */}
+          </Link>
+          <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
+            {/* On phones the Sign In label is a thin ghost link to save room next to Join */}
             <Link href="/auth/login" className="btn-secondary hidden sm:inline-flex">Sign In</Link>
-            <Link href="/auth/login" className="btn-ghost sm:hidden" style={{ fontSize: '13px', padding: '6px 10px' }}>Sign In</Link>
+            <Link href="/auth/login" className="btn-ghost sm:hidden" style={{ fontSize: '12px', padding: '6px 10px' }}>Sign in</Link>
             <Link href="/auth/signup" className="btn-primary" style={{ padding: '8px 14px', fontSize: '13px' }}>
               <span className="hidden sm:inline">Get Started</span>
               <span className="sm:hidden">Join</span>
@@ -62,8 +68,9 @@ export default function LandingPage() {
         </div>
       </nav>
 
-      {/* Hero */}
-      <section className="relative pt-24 pb-14 sm:pt-36 sm:pb-20 px-4 hero-gradient overflow-hidden">
+      {/* Hero — `.hero-top-pad` handles the responsive top padding and adds
+          safe-area-inset-top on mobile so iPhone notches don't crush the title. */}
+      <section className="relative hero-top-pad pb-14 sm:pb-20 px-4 hero-gradient overflow-hidden">
         <div className="absolute top-32 left-[5%] w-96 h-96 rounded-full bg-cyan-500/5 blur-[120px]" />
         <div className="absolute top-48 right-[10%] w-72 h-72 rounded-full bg-violet-500/5 blur-[100px]" />
 
@@ -106,9 +113,10 @@ export default function LandingPage() {
               {/* Social proof pills */}
               <div className="flex flex-wrap gap-2 mt-8 animate-fade-in-up" style={{ animationDelay: '0.35s' }}>
                 {[
-                  { icon: <Check size={11} />, text: 'Collaborative ranking' },
-                  { icon: <Check size={11} />, text: 'Try & vote on picks' },
-                  { icon: <Check size={11} />, text: 'Individual reviews' },
+                  { icon: <Check size={11} />, text: 'Collaborative tier lists' },
+                  { icon: <Check size={11} />, text: 'Detailed reviews' },
+                  { icon: <Check size={11} />, text: 'Compare your taste' },
+                  { icon: <Check size={11} />, text: 'Earn achievements' },
                 ].map((p) => (
                   <span key={p.text} className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full" style={{ background: 'rgba(6,182,212,0.08)', border: '1px solid rgba(6,182,212,0.15)', color: 'var(--cyan-400)' }}>
                     {p.icon} {p.text}
@@ -145,18 +153,31 @@ export default function LandingPage() {
                   ))}
                 </div>
 
-                {/* Pending suggestion */}
-                <div className="rounded-xl p-3 mt-3" style={{ background: 'rgba(251,191,36,0.07)', border: '1px solid rgba(251,191,36,0.15)' }}>
-                  <p className="text-xs font-semibold mb-1.5" style={{ color: 'var(--amber-400)' }}>Pending suggestion from @alex_dev</p>
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>Blood Orange · Sanzo</p>
-                      <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Proposed: S tier · 4.8</p>
-                    </div>
-                    <div className="flex gap-1.5">
-                      <span className="text-xs px-2.5 py-1 rounded-full font-semibold" style={{ background: 'rgba(52,211,153,0.15)', color: '#34d399' }}>✓ Approve</span>
-                      <span className="text-xs px-2.5 py-1 rounded-full font-semibold" style={{ background: 'rgba(148,163,184,0.08)', color: 'var(--text-muted)' }}>✕</span>
-                    </div>
+                {/* Compare-tastes teaser — shows the kind of insight the app surfaces */}
+                <div
+                  className="rounded-xl p-3 mt-3"
+                  style={{
+                    background: 'linear-gradient(135deg, rgba(34,211,238,0.10), rgba(167,139,250,0.10))',
+                    border: '1px solid rgba(34,211,238,0.22)',
+                  }}
+                >
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <GitCompare size={12} className="text-cyan-400" />
+                    <p className="text-xs font-semibold" style={{ color: 'var(--cyan-400)' }}>You vs @alex_dev</p>
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <p
+                      className="text-2xl font-extrabold"
+                      style={{
+                        background: 'linear-gradient(135deg, var(--cyan-400), var(--violet-400))',
+                        WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
+                      }}
+                    >
+                      82% taste agreement
+                    </p>
+                    <span className="text-[10px] flex-shrink-0" style={{ color: 'var(--text-muted)' }}>
+                      14 drinks in common
+                    </span>
                   </div>
                 </div>
               </div>
@@ -172,32 +193,32 @@ export default function LandingPage() {
         <div className="max-w-4xl mx-auto">
           <div className="text-center mb-12">
             <h2 className="text-3xl sm:text-4xl font-bold mb-3" style={{ fontFamily: 'var(--font-display)' }}>
-              How the <span className="gradient-text">list works</span>
+              How it <span className="gradient-text">works</span>
             </h2>
-            <p style={{ color: 'var(--text-secondary)' }}>Collaborative, opinionated, and weirdly fun.</p>
+            <p style={{ color: 'var(--text-secondary)' }}>Three things you'll do on day one.</p>
           </div>
 
           <div className="grid sm:grid-cols-3 gap-6">
             {[
               {
                 step: '01',
-                icon: <Users size={22} />,
-                title: 'Start a list with someone',
-                desc: 'Pick anyone you follow. Together you own the list — everyone else can subscribe and follow along.',
+                icon: <PenSquare size={22} />,
+                title: 'Rate seltzers',
+                desc: 'Drop a quick review with a photo, rating, and optional title. Or tap "Tried It" on someone else\'s review for a one-tap rating.',
                 gradient: 'from-cyan-400 to-cyan-600',
               },
               {
                 step: '02',
-                icon: <Droplets size={22} />,
-                title: 'Suggest seltzers',
-                desc: 'Propose a drink for any tier. Your partner has to actually try it first, then votes approve or reject.',
+                icon: <Users size={22} />,
+                title: 'Build tier lists with friends',
+                desc: 'Start a shared list with a friend. Both of you add drinks freely — when you both rate the same one, the score averages automatically.',
                 gradient: 'from-violet-400 to-violet-600',
               },
               {
                 step: '03',
                 icon: <ListOrdered size={22} />,
                 title: 'Watch the rankings evolve',
-                desc: 'Subscribers follow along, leave their own reviews, and rate drinks they\'ve tried. The list grows over time.',
+                desc: 'Subscribers follow along and rate drinks they\'ve tried. The list grows organically — and your taste profile sharpens with every entry.',
                 gradient: 'from-amber-400 to-orange-500',
               },
             ].map((s) => (
@@ -224,14 +245,15 @@ export default function LandingPage() {
                 <span className="gradient-text">then compare</span>
               </h2>
               <p className="mb-6 leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
-                Beyond the tier list — write full reviews for any seltzer, see what the people you follow are drinking, and quietly discover you have the same taste as someone you never expected.
+                Write full reviews with photos, give a one-tap "Tried It" rating, then see who has the same palate. Compare with anyone — agreement %, biggest disagreements, the works.
               </p>
               <div className="space-y-3">
                 {[
-                  'Like and comment on reviews',
-                  '"Tried It" rates without a full review',
-                  'Emoji reactions on comments',
-                  'Follow colleagues to see their feed',
+                  'Reviews with photos, ratings, optional titles',
+                  '"Tried It" for one-tap quick rates',
+                  'Compare tastes with anyone you follow',
+                  'Earn dog-tag achievements as you rate',
+                  'A taste profile that gets sharper over time',
                 ].map((item) => (
                   <div key={item} className="flex items-center gap-3">
                     <div className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: 'rgba(6,182,212,0.15)' }}>
@@ -269,6 +291,84 @@ export default function LandingPage() {
                   <Droplets size={11} />6 tried this
                 </span>
               </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Achievements showcase */}
+      <section className="py-20 px-4 section-alt">
+        <div className="max-w-4xl mx-auto">
+          <div className="grid lg:grid-cols-2 gap-10 items-center">
+            {/* Left — copy */}
+            <div>
+              <div className="flex items-center gap-2 mb-3">
+                <Award size={14} style={{ color: 'var(--violet-400)' }} />
+                <span className="text-xs font-semibold uppercase tracking-[0.18em]" style={{ color: 'var(--violet-400)' }}>Honors</span>
+              </div>
+              <h2 className="text-3xl sm:text-4xl font-bold mb-4" style={{ fontFamily: 'var(--font-display)' }}>
+                Earn dog tags{' '}
+                <span className="gradient-text">as you go</span>
+              </h2>
+              <p className="mb-6 leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
+                Every milestone unlocks a badge — bronze for getting started, all the way to legendary for the originals. Pin your favorites to your profile like military insignia.
+              </p>
+              <div className="space-y-3">
+                {[
+                  '20 badges across 5 tiers',
+                  'Earn by reviewing, exploring brands, getting likes',
+                  'Pin up to 3 to flex on your profile',
+                  'Founder + Beta Tester legendary tiers',
+                ].map((item) => (
+                  <div key={item} className="flex items-center gap-3">
+                    <div className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: 'rgba(167,139,250,0.15)' }}>
+                      <Check size={11} style={{ color: 'var(--violet-400)' }} />
+                    </div>
+                    <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>{item}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Right — sample dog tag wall */}
+            <div className="grid grid-cols-3 gap-3">
+              {[
+                { name: 'Connoisseur',  Icon: Trophy,    color: '#f4c430', tier: 'Gold'      },
+                { name: 'Founder',      Icon: Sparkles,  color: '#a78bfa', tier: 'Legendary' },
+                { name: 'Local Legend', Icon: Heart,     color: '#f4c430', tier: 'Gold'      },
+                { name: 'Brand Hopper', Icon: Star,      color: '#f4c430', tier: 'Gold'      },
+                { name: 'Curator',      Icon: ListOrdered, color: '#c0c4cc', tier: 'Silver'  },
+                { name: 'Crowd Pleaser', Icon: Users,    color: '#c0c4cc', tier: 'Silver'    },
+              ].map(({ name, Icon, color, tier }) => (
+                <div
+                  key={name}
+                  className="rounded-2xl p-3 flex flex-col items-center text-center"
+                  style={{ background: 'rgba(15,20,36,0.5)', border: '1px solid var(--border-subtle)' }}
+                >
+                  <div
+                    className="relative flex items-center justify-center mb-2"
+                    style={{
+                      width: 52, height: 52, borderRadius: '50%',
+                      background: `linear-gradient(135deg, ${color}33, ${color}10)`,
+                      border: `1.5px solid ${color}`,
+                      boxShadow: `0 0 24px ${color}55, inset 0 0 12px ${color}1f`,
+                    }}
+                  >
+                    <Icon size={22} style={{ color }} strokeWidth={2.2} />
+                    <span
+                      className="absolute"
+                      style={{
+                        bottom: -2, right: -2,
+                        width: 10, height: 10, borderRadius: '50%',
+                        background: color, boxShadow: `0 0 8px ${color}`,
+                        border: '2px solid var(--bg-primary)',
+                      }}
+                    />
+                  </div>
+                  <p className="text-[11px] font-bold leading-tight" style={{ color: 'var(--text-primary)' }}>{name}</p>
+                  <p className="text-[9px] uppercase tracking-wider mt-0.5" style={{ color }}>{tier}</p>
+                </div>
+              ))}
             </div>
           </div>
         </div>
