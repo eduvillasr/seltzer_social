@@ -225,7 +225,7 @@ export default function FeedPage() {
                 <Link href="/discover" className="btn-primary inline-flex">
                   <Flame size={14} /> Browse Discover
                 </Link>
-                <Link href="/search" className="btn-secondary inline-flex">
+                <Link href="/discover" className="btn-secondary inline-flex">
                   <UserPlus size={14} /> Find people
                 </Link>
               </div>

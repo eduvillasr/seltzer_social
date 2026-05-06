@@ -5,7 +5,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { Plus, Home, Search, Bell, User } from 'lucide-react';
+import { Plus, Home, Flame, Bell, User } from 'lucide-react';
 import { ensureUserProfile, getUnreadNotificationCount, supabase } from '@/lib/supabase';
 import { AuthUser } from '@/types';
 
@@ -126,15 +126,16 @@ export function Navigation() {
             </Link>
 
             <Link
-              href="/search"
+              href="/discover"
               className="flex flex-col items-center gap-0.5 py-2 px-4 rounded-full transition-all"
               style={{
-                background: isActive('/search') ? 'rgba(6, 182, 212, 0.15)' : 'transparent',
-                color: isActive('/search') ? 'var(--cyan-400)' : 'var(--text-tertiary)',
+                // Treat /search as part of the Discover tab so both routes feel "active" — keeps old bookmarks ergonomic
+                background: isActive('/discover') || isActive('/search') ? 'rgba(6, 182, 212, 0.15)' : 'transparent',
+                color: isActive('/discover') || isActive('/search') ? 'var(--cyan-400)' : 'var(--text-tertiary)',
               }}
             >
-              <Search size={20} strokeWidth={isActive('/search') ? 2.5 : 2} />
-              <span style={{ fontSize: '10px', fontWeight: 600 }}>Search</span>
+              <Flame size={20} strokeWidth={isActive('/discover') || isActive('/search') ? 2.5 : 2} />
+              <span style={{ fontSize: '10px', fontWeight: 600 }}>Discover</span>
             </Link>
 
             <Link

@@ -24,13 +24,24 @@ export default function AppleIcon() {
         }}
       >
         <svg width="106" height="128" viewBox="0 0 38 46" fill="none" xmlns="http://www.w3.org/2000/svg">
+          {/* Droplet body */}
           <path
             d="M19 4 C 9 16, 4 25, 4 31 C 4 39, 11 44, 19 44 C 27 44, 34 39, 34 31 C 34 25, 29 16, 19 4 Z"
             fill="white"
             opacity="0.97"
           />
-          {/* Subtle highlight bubble inside the droplet */}
-          <ellipse cx="14" cy="22" rx="3" ry="5" fill="white" opacity="0.4" />
+          {/* Carbonation bubbles. Identical positions to /icon so the
+              brand reads consistently at every size. */}
+          <circle cx="13"   cy="22"   r="2.4" fill="#0891b2" />
+          <circle cx="12.3" cy="21.3" r="0.7" fill="white" opacity="0.75" />
+
+          <circle cx="24"   cy="28"   r="1.8" fill="#0891b2" />
+          <circle cx="23.5" cy="27.5" r="0.5" fill="white" opacity="0.7" />
+
+          <circle cx="17"   cy="35"   r="1.4" fill="#0891b2" />
+          <circle cx="16.6" cy="34.6" r="0.4" fill="white" opacity="0.7" />
+
+          <circle cx="22"   cy="18"   r="0.9" fill="#0891b2" />
         </svg>
       </div>
     ),
