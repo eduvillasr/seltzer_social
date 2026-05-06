@@ -12,7 +12,9 @@ import { Review, AuthUser, SharedTierListItem } from '@/types';
 import { getSmartFeed, getFollowingCount, getSubscribedSharedTierActivities, supabase } from '@/lib/supabase';
 import { Plus, Droplets, Search, Sparkles, ListPlus, RotateCcw, Flame, UserPlus } from 'lucide-react';
 import { FeedSkeleton } from '@/components/Skeletons';
+import { TopHeader } from '@/components/TopHeader';
 import { usePullToRefresh } from '@/hooks/usePullToRefresh';
+import { invalidate } from '@/lib/cache';
 
 type FeedItem =
   | { kind: 'review';  at: number; review: Review }
@@ -54,21 +56,40 @@ export default function FeedPage() {
     loadFeed(uid);
   }
 
-  async function loadFeed(uid: string, withSpinner = true) {
+  async function loadFeed(uid: string, withSpinner = true, opts?: { force?: boolean }) {
     if (withSpinner) setLoading(true);
-    const { count: fc } = await getFollowingCount(uid);
-    setFollowingCount(fc);
-    const [{ data }, { data: acts }] = await Promise.all([
+
+    // SWR pattern: paint cached values instantly, then revalidate in the
+    // background. `force` bypasses the cache (used by pull-to-refresh).
+    const cache = await import('@/lib/cache');
+    if (opts?.force) {
+      cache.invalidate(`feed:${uid}`);
+    }
+    const cached = !opts?.force ? cache.peekCache<{ reviews: Review[]; activities: SharedTierListItem[]; followingCount: number }>(`feed:${uid}`) : undefined;
+    if (cached) {
+      setReviews(cached.reviews);
+      setActivities(cached.activities);
+      setFollowingCount(cached.followingCount);
+      if (withSpinner) setLoading(false);
+    }
+
+    const [{ count: fc }, { data }, { data: acts }] = await Promise.all([
+      getFollowingCount(uid),
       getSmartFeed(uid, 50),
       getSubscribedSharedTierActivities(uid, 24),
     ]);
-    setReviews((data as Review[]) || []);
-    setActivities((acts as SharedTierListItem[]) || []);
+    const reviews = (data as Review[]) || [];
+    const activities = (acts as SharedTierListItem[]) || [];
+    setFollowingCount(fc);
+    setReviews(reviews);
+    setActivities(activities);
+    cache.setCache(`feed:${uid}`, { reviews, activities, followingCount: fc });
     if (withSpinner) setLoading(false);
   }
 
   const { pull, progress, isRefreshing, triggered, bind } = usePullToRefresh(async () => {
-    if (currentUser) await loadFeed(currentUser.id, false);
+    // Pull-to-refresh always bypasses the cache for guaranteed-fresh data.
+    if (currentUser) await loadFeed(currentUser.id, false, { force: true });
   });
 
   // Silently refresh when the user comes back to the tab.
@@ -159,36 +180,32 @@ export default function FeedPage() {
         />
       </div>
 
+      <TopHeader
+        title="Feed"
+        right={
+          <Link
+            href="/discover"
+            className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full hover:bg-white/5 transition-colors"
+            style={{ background: 'rgba(34,211,238,0.08)', border: '1px solid rgba(34,211,238,0.2)', color: 'var(--cyan-400)' }}
+          >
+            <Flame size={11} /> Discover
+          </Link>
+        }
+      />
+
       <main
         {...bind}
-        className="max-w-md mx-auto px-4 pt-10 pb-32"
+        className="max-w-md mx-auto px-4 with-top-header pb-32"
         style={{
           transform: pull > 0 ? `translateY(${pull * 0.4}px)` : undefined,
           transition: pull === 0 ? 'transform 280ms cubic-bezier(0.18, 0.89, 0.32, 1.28)' : 'none',
         }}
       >
 
-        {/* Header */}
-        <div className="flex items-center justify-between mb-5 animate-fade-in-up">
-          <div className="flex items-center gap-2">
-            <Sparkles size={14} className="text-cyan-400" />
-            <h1 className="text-sm font-bold uppercase tracking-wider" style={{ color: 'var(--text-secondary)' }}>
-              Your Feed
-            </h1>
-          </div>
-          <Link
-            href="/discover"
-            className="text-xs font-semibold flex items-center gap-1 hover:opacity-80 transition-opacity"
-            style={{ color: 'var(--cyan-400)' }}
-          >
-            <Flame size={12} /> Discover
-          </Link>
-        </div>
-
         {/* Promo: start a shared list */}
         <Link
           href="/shared/create"
-          className="mb-5 flex items-center justify-between rounded-2xl px-4 py-3 transition-colors hover:bg-white/5"
+          className="mt-4 mb-5 flex items-center justify-between rounded-2xl px-4 py-3 transition-colors hover:bg-white/5"
           style={{
             background: 'linear-gradient(135deg, rgba(6,182,212,0.10), rgba(245,158,11,0.06))',
             border: '1px solid rgba(6,182,212,0.18)',

@@ -9,6 +9,7 @@ import { StarRating } from '@/components/StarRating';
 import { showToast } from '@/components/Toast';
 import { Review, SharedTierListSuggestion } from '@/types';
 import { Navigation } from '@/components/Navigation';
+import { TopHeader } from '@/components/TopHeader';
 import { CommentSection } from '@/components/CommentSection';
 import { RatingInput } from '@/components/RatingInput';
 import { CanLoader } from '@/components/CanLoader';
@@ -181,10 +182,9 @@ export default function ReviewPage({ params }: ReviewPageProps) {
   return (
     <>
       <Navigation />
-      <main className="max-w-2xl mx-auto px-4 pt-24 pb-24 space-y-6">
-        <Link href="/feed" className="inline-flex items-center gap-2 text-sm hover:opacity-80 transition-opacity" style={{ color: 'var(--text-tertiary)' }}>
-          <ArrowLeft size={16} /> Back to feed
-        </Link>
+      <TopHeader title="Review" back="/feed" />
+      <main className="max-w-2xl mx-auto px-4 with-top-header pb-24 space-y-6">
+        <div className="h-1" />{/* breathing room below the fixed header */}
 
         {/* Review card */}
         <div className="glass-card animate-fade-in-up">

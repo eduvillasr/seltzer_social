@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { Review, SharedTierList, User } from '@/types';
 import { Navigation } from '@/components/Navigation';
+import { TopHeader } from '@/components/TopHeader';
 import { ReviewCard } from '@/components/ReviewCard';
 import { Avatar } from '@/components/Avatar';
 import { FounderBadge, FOUNDERS } from '@/components/FounderBadge';
@@ -60,41 +61,74 @@ export default function ProfilePage({ params }: ProfilePageProps) {
   }
 
   async function loadProfile() {
-    setLoading(true);
-    const { data: userData, error: userError } = await getUserByUsername(params.username);
-    if (!userError && userData) {
-      setUser(userData);
-      const [{ data: reviewsData }, { data: triedItsData }, { data: activeListData }, { data: subscribedListData }] = await Promise.all([
-        getUserReviews(userData.id),
-        getUserTriedIts(userData.id),
-        getSharedTierLists(userData.id),
-        getUserSubscribedSharedTierLists(userData.id),
-      ]);
-      setReviews(reviewsData || []);
-      // Project to a flat shape that's easy to merge with reviews for taste analysis.
-      setTriedIts(
-        (triedItsData || []).map((t: any) => ({
-          rating: t.rating,
-          brand: t.review?.brand ?? null,
-          seltzer_name: t.review?.seltzer_name ?? '',
-        })),
-      );
-      setActiveLists(activeListData || []);
-      setSubscribedLists(subscribedListData || []);
-      const { count: fc } = await getFollowerCount(userData.id);
-      const { count: fgc } = await getFollowingCount(userData.id);
-      setFollowerCount(fc);
-      setFollowingCount(fgc);
-      if (currentUserId) {
-        const { isFollowing: following } = await checkIsFollowing(currentUserId, userData.id);
-        setIsFollowing(following);
-      }
+    // Try cache first — paint immediately if we have a snapshot.
+    const cache = await import('@/lib/cache');
+    const cacheKey = `profile:${params.username}:${currentUserId ?? 'anon'}`;
+    const cached = cache.peekCache<any>(cacheKey);
+    if (cached) {
+      setUser(cached.user);
+      setReviews(cached.reviews);
+      setTriedIts(cached.triedIts);
+      setActiveLists(cached.activeLists);
+      setSubscribedLists(cached.subscribedLists);
+      setFollowerCount(cached.followerCount);
+      setFollowingCount(cached.followingCount);
+      setIsFollowing(cached.isFollowing);
+      setLoading(false);
+    } else {
+      setLoading(true);
     }
+
+    const { data: userData, error: userError } = await getUserByUsername(params.username);
+    if (userError || !userData) { setLoading(false); return; }
+
+    // All independent reads in one round trip — was 8 sequential, now 1 batch.
+    const [
+      { data: reviewsData },
+      { data: triedItsData },
+      { data: activeListData },
+      { data: subscribedListData },
+      { count: fc },
+      { count: fgc },
+      followStatus,
+    ] = await Promise.all([
+      getUserReviews(userData.id),
+      getUserTriedIts(userData.id),
+      getSharedTierLists(userData.id),
+      getUserSubscribedSharedTierLists(userData.id),
+      getFollowerCount(userData.id),
+      getFollowingCount(userData.id),
+      currentUserId ? checkIsFollowing(currentUserId, userData.id) : Promise.resolve({ isFollowing: false }),
+    ]);
+
+    const reviews = reviewsData || [];
+    const triedIts = (triedItsData || []).map((t: any) => ({
+      rating: t.rating,
+      brand: t.review?.brand ?? null,
+      seltzer_name: t.review?.seltzer_name ?? '',
+    }));
+    const activeLists = activeListData || [];
+    const subscribedLists = subscribedListData || [];
+    const isFollowing = (followStatus as any).isFollowing;
+
+    setUser(userData);
+    setReviews(reviews);
+    setTriedIts(triedIts);
+    setActiveLists(activeLists);
+    setSubscribedLists(subscribedLists);
+    setFollowerCount(fc);
+    setFollowingCount(fgc);
+    setIsFollowing(isFollowing);
+    cache.setCache(cacheKey, {
+      user: userData, reviews, triedIts, activeLists, subscribedLists,
+      followerCount: fc, followingCount: fgc, isFollowing,
+    });
     setLoading(false);
   }
 
   async function handleFollowToggle() {
     if (!currentUserId || !user) return;
+    const cache = await import('@/lib/cache');
     if (isFollowing) {
       await unfollowUser(currentUserId, user.id);
       setIsFollowing(false);
@@ -106,6 +140,9 @@ export default function ProfilePage({ params }: ProfilePageProps) {
       setFollowerCount((c) => c + 1);
       showToast('Following', 'success', `@${user.username}`);
     }
+    // Invalidate any cached snapshots that depend on this relationship.
+    cache.invalidate(`profile:${user.username}`);
+    cache.invalidate(`feed:${currentUserId}`);
   }
 
   // ── derived ─────────────────────────────────────────────────
@@ -240,10 +277,9 @@ export default function ProfilePage({ params }: ProfilePageProps) {
   return (
     <>
       <Navigation />
-      <main className="max-w-md mx-auto px-4 pt-12 pb-32 space-y-5">
-        <Link href="/feed" className="inline-flex items-center gap-2 text-sm transition-colors hover:opacity-80" style={{ color: 'var(--text-tertiary)' }}>
-          <ArrowLeft size={16} /> Back
-        </Link>
+      <TopHeader title={`@${user.username}`} back="/feed" />
+      <main className="max-w-md mx-auto px-4 with-top-header pb-32 space-y-5">
+        <div className="h-1" />{/* breathing room below the fixed header */}
 
         {/* ─── Profile hero — bigger, more confident ─── */}
         <div

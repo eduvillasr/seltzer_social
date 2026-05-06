@@ -11,6 +11,7 @@ import {
   UserPlus, UserMinus, List as ListIcon,
 } from 'lucide-react';
 import { Navigation } from '@/components/Navigation';
+import { TopHeader } from '@/components/TopHeader';
 import { Avatar } from '@/components/Avatar';
 import { FounderBadge, FOUNDERS } from '@/components/FounderBadge';
 import { FeedSkeleton } from '@/components/Skeletons';
@@ -56,17 +57,38 @@ export default function DiscoverPage() {
   }
 
   async function loadTrending() {
-    setLoadingTrending(true);
+    // Trending data changes on the order of minutes, not seconds.
+    // 2-minute SWR window is plenty.
+    const cache = await import('@/lib/cache');
+    const cacheKey = 'discover:trending';
+    const cached = cache.peekCache<any>(cacheKey);
+    if (cached) {
+      setTrending(cached.trending);
+      setTopRated(cached.topRated);
+      setLists(cached.lists);
+      setReviewers(cached.reviewers);
+      setLoadingTrending(false);
+    } else {
+      setLoadingTrending(true);
+    }
+
     const [a, b, c, d] = await Promise.all([
       getTrendingDrinks(30, 8),
       getTopRatedDrinks(2, 6),
       getTrendingTierLists(6),
       getActiveReviewers(30, 6),
     ]);
-    setTrending(a.data);
-    setTopRated(b.data);
-    setLists(c.data as SharedTierList[]);
-    setReviewers(d.data);
+    const next = {
+      trending: a.data,
+      topRated: b.data,
+      lists: c.data as SharedTierList[],
+      reviewers: d.data,
+    };
+    setTrending(next.trending);
+    setTopRated(next.topRated);
+    setLists(next.lists);
+    setReviewers(next.reviewers);
+    cache.setCache(cacheKey, next);
     setLoadingTrending(false);
   }
 
@@ -134,24 +156,9 @@ export default function DiscoverPage() {
   return (
     <>
       <Navigation />
-      <main className="max-w-md mx-auto px-4 pt-10 pb-32 space-y-6">
-        {/* Header */}
-        <div className="flex items-center gap-2 animate-fade-in-up">
-          <div
-            className="w-9 h-9 rounded-2xl flex items-center justify-center"
-            style={{ background: 'linear-gradient(135deg, rgba(34,211,238,0.18), rgba(167,139,250,0.18))' }}
-          >
-            <Flame size={17} style={{ color: 'var(--cyan-400)' }} />
-          </div>
-          <div className="flex-1">
-            <h1 className="text-xl font-extrabold leading-tight" style={{ fontFamily: 'var(--font-display)' }}>
-              Discover
-            </h1>
-            <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-              Trending drinks · find people · explore tier lists
-            </p>
-          </div>
-        </div>
+      <TopHeader title="Discover" />
+      <main className="max-w-md mx-auto px-4 with-top-header pb-32 space-y-6">
+        <div className="h-1" />{/* breathing room below the fixed header */}
 
         {/* Search bar — always-on, switches the page into search mode when filled */}
         <div className="relative">

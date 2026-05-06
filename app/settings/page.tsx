@@ -6,6 +6,7 @@ import { useEffect, useState, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Navigation } from '@/components/Navigation';
+import { TopHeader } from '@/components/TopHeader';
 import { Avatar } from '@/components/Avatar';
 import { showToast } from '@/components/Toast';
 import { ensureUserProfile, supabase, uploadAvatar, updateUserProfile } from '@/lib/supabase';
@@ -96,6 +97,9 @@ export default function SettingsPage() {
 
   async function handleLogout() {
     await supabase.auth.signOut();
+    // Don't leak the previous user's profile/feed data into the next session.
+    const cache = await import('@/lib/cache');
+    cache.clearCache();
     router.push('/');
   }
 
@@ -115,14 +119,9 @@ export default function SettingsPage() {
   return (
     <>
       <Navigation />
-      <main className="max-w-md mx-auto px-4 pt-20 pb-32">
-        <Link href="/feed" className="inline-flex items-center gap-2 text-sm mb-5 transition-colors hover:opacity-80" style={{ color: 'var(--text-tertiary)' }}>
-          <ArrowLeft size={16} /> Back
-        </Link>
-
-        <h1 className="text-3xl font-extrabold mb-6" style={{ fontFamily: 'var(--font-display)' }}>
-          Settings
-        </h1>
+      <TopHeader title="Settings" back="/feed" />
+      <main className="max-w-md mx-auto px-4 with-top-header pb-32">
+        <div className="h-4" />{/* breathing room below the fixed header */}
 
         {/* Profile Card with editable avatar */}
         <div className="glass-card mb-5 animate-fade-in-up">

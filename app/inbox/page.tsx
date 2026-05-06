@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Bell, Check, CheckCheck, Trash2, Vote, AtSign, Heart, MessageCircle, UserPlus, Droplets, CornerDownRight, ListPlus, X } from 'lucide-react';
 import { Navigation } from '@/components/Navigation';
+import { TopHeader } from '@/components/TopHeader';
 import { CanLoader } from '@/components/CanLoader';
 import { Notification } from '@/types';
 import {
@@ -74,32 +75,31 @@ export default function InboxPage() {
   return (
     <>
       <Navigation />
-      <main className="max-w-md mx-auto px-4 pt-10 pb-32">
-        <div className="flex items-center justify-between mb-5">
-          <div className="flex items-center gap-2">
-            <Bell size={18} style={{ color: 'var(--cyan-400)' }} />
-            <h1 className="text-xl font-extrabold" style={{ fontFamily: 'var(--font-display)' }}>
-              Inbox
-              {unreadCount > 0 && (
-                <span
-                  className="ml-2 text-xs font-bold px-2 py-0.5 rounded-full"
-                  style={{ background: 'rgba(251,191,36,0.15)', color: 'var(--amber-400)', border: '1px solid rgba(251,191,36,0.25)' }}
-                >
-                  {unreadCount} new
-                </span>
-              )}
-            </h1>
-          </div>
-          {unreadCount > 0 && (
+      <TopHeader
+        title="Inbox"
+        right={
+          unreadCount > 0 ? (
             <button
               onClick={handleMarkAllRead}
-              className="text-xs flex items-center gap-1 hover:opacity-80 transition-opacity"
+              className="text-xs font-semibold flex items-center gap-1 px-2.5 py-1.5 rounded-full hover:bg-white/5 transition-colors"
               style={{ color: 'var(--cyan-400)' }}
             >
-              <CheckCheck size={13} /> Mark all read
+              <CheckCheck size={13} /> Mark all
             </button>
-          )}
-        </div>
+          ) : null
+        }
+      />
+      <main className="max-w-md mx-auto px-4 with-top-header pb-32">
+        {unreadCount > 0 && (
+          <div className="mt-4 mb-3">
+            <span
+              className="text-xs font-bold px-2 py-0.5 rounded-full"
+              style={{ background: 'rgba(251,191,36,0.15)', color: 'var(--amber-400)', border: '1px solid rgba(251,191,36,0.25)' }}
+            >
+              {unreadCount} new
+            </span>
+          </div>
+        )}
 
         {loading ? (
           <CanLoader />
