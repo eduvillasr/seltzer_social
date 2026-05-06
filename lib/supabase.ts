@@ -545,6 +545,10 @@ export async function updateReview(
     content?: string | null;
     rating?: number;
     image_url?: string;
+    /** Switch the canonical drink this review is about. */
+    seltzer_id?: string | null;
+    seltzer_name?: string;
+    brand?: string | null;
   }
 ) {
   const payload: Record<string, any> = { ...updates };
@@ -552,6 +556,12 @@ export async function updateReview(
   if ('title' in payload) {
     const t = payload.title;
     payload.title = typeof t === 'string' && t.trim() ? t.trim() : null;
+  }
+  if ('brand' in payload && typeof payload.brand === 'string') {
+    payload.brand = payload.brand.trim() || null;
+  }
+  if ('seltzer_name' in payload && typeof payload.seltzer_name === 'string') {
+    payload.seltzer_name = payload.seltzer_name.trim();
   }
   const { data, error } = await supabase
     .from('reviews')
