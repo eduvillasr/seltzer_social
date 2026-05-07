@@ -67,11 +67,15 @@ export default function CreateReview() {
   useEffect(() => { checkAuth(); loadSeltzers(); }, []);
 
   useEffect(() => {
-    if (!reviewImage) { setImagePreviewUrl(''); return; }
+    if (!reviewImage) {
+      // fall back to the canonical seltzer's image (if any) instead of clearing.
+      setImagePreviewUrl(pickedSeltzer?.image_url || '');
+      return;
+    }
     const url = URL.createObjectURL(reviewImage);
     setImagePreviewUrl(url);
     return () => URL.revokeObjectURL(url);
-  }, [reviewImage]);
+  }, [reviewImage, pickedSeltzer]);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -112,6 +116,9 @@ export default function CreateReview() {
     setDrinkQuery('');
     setPickerOpen(false);
     setShowNewForm(false);
+    // if the user hasn't uploaded their own image, autopopulate the preview
+    // from the canonical seltzer's image_url
+    if (!reviewImage && s.image_url) setImagePreviewUrl(s.image_url);
   }
 
   function startAddNew() {
@@ -178,13 +185,23 @@ export default function CreateReview() {
       }
     }
 
-    if (!reviewImage) { setError('Please upload a can image.'); return; }
+    // Determine the image URL: prefer a user-uploaded file, otherwise fall back
+    // to the canonical seltzer's image_url.
     setLoading(true);
     setError('');
-
-    const { url: imageUrl, error: uploadError } = await uploadReviewImage(user.id, reviewImage);
-    if (uploadError || !imageUrl) {
-      setError(uploadError?.message || 'Could not upload the can image.');
+    let imageUrl: string;
+    if (reviewImage) {
+      const { url, error: uploadError } = await uploadReviewImage(user.id, reviewImage);
+      if (uploadError || !url) {
+        setError(uploadError?.message || 'Could not upload the can image.');
+        setLoading(false);
+        return;
+      }
+      imageUrl = url;
+    } else if (seltzer.image_url) {
+      imageUrl = seltzer.image_url;
+    } else {
+      setError('Please upload a can image — this drink doesn’t have one yet.');
       setLoading(false);
       return;
     }
