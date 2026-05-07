@@ -40,7 +40,25 @@ export default function AchievementsPage({ params }: { params: { username: strin
     if (!target) { setLoading(false); return; }
 
     setUser(target as User);
-    setShowcase((target as User).showcase_achievements ?? []);
+
+    // Filter out IDs that don't exist in the current achievements catalog
+    // (e.g. legacy 'founder' / 'beta_tester' pins after we converted those
+    // into identity badges). Otherwise the "3 pinned" count includes ghosts.
+    const validIds = new Set(ACHIEVEMENTS.map(a => a.id));
+    const rawShowcase = (target as User).showcase_achievements ?? [];
+    const cleanShowcase = rawShowcase.filter(id => validIds.has(id));
+    setShowcase(cleanShowcase);
+
+    // If we trimmed any stale IDs and this is the user's own profile,
+    // persist the cleaned list back so the count stays correct everywhere.
+    if (cleanShowcase.length !== rawShowcase.length) {
+      const sess = await supabase.auth.getSession();
+      if (sess.data.session?.user?.id === target.id) {
+        await setShowcaseAchievements(target.id, cleanShowcase);
+        // also reflect locally so dirty-check works correctly
+        (target as User).showcase_achievements = cleanShowcase;
+      }
+    }
 
     const isFounder = FOUNDERS.has(target.username);
     const isBetaTester = BETA_TESTERS.has(target.username);
