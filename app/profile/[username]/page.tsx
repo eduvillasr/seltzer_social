@@ -9,7 +9,7 @@ import { Navigation } from '@/components/Navigation';
 import { TopHeader } from '@/components/TopHeader';
 import { ReviewCard } from '@/components/ReviewCard';
 import { Avatar } from '@/components/Avatar';
-import { FounderBadge, FOUNDERS } from '@/components/FounderBadge';
+import { FounderBadge, FOUNDERS, BetaTesterBadge, BETA_TESTERS } from '@/components/FounderBadge';
 import { CanLoader } from '@/components/CanLoader';
 import { showToast } from '@/components/Toast';
 import {
@@ -304,6 +304,7 @@ export default function ProfilePage({ params }: ProfilePageProps) {
               <h1 className="text-xl font-extrabold flex items-center gap-2 flex-wrap leading-tight" style={{ fontFamily: 'var(--font-display)', color: 'var(--text-primary)' }}>
                 @{user.username}
                 {FOUNDERS.has(user.username) && <FounderBadge />}
+                {BETA_TESTERS.has(user.username) && !FOUNDERS.has(user.username) && <BetaTesterBadge />}
               </h1>
               {user.bio && <p className="text-sm mt-1.5 leading-snug" style={{ color: 'var(--text-secondary)' }}>{user.bio}</p>}
               <p className="text-[11px] mt-2 flex items-center gap-1" style={{ color: 'var(--text-muted)' }}>

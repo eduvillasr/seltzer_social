@@ -14,7 +14,7 @@ import {
 import { Navigation } from '@/components/Navigation';
 import { TopHeader } from '@/components/TopHeader';
 import { Avatar } from '@/components/Avatar';
-import { FounderBadge, FOUNDERS } from '@/components/FounderBadge';
+import { FounderBadge, FOUNDERS, BetaTesterBadge, BETA_TESTERS } from '@/components/FounderBadge';
 import { FeedSkeleton } from '@/components/Skeletons';
 import {
   getTrendingDrinks, getTopRatedDrinks, getTrendingTierLists, getActiveReviewers,
@@ -142,6 +142,7 @@ export default function TrendingPage() {
                       <p className="text-xs font-bold mt-2 truncate w-full inline-flex items-center justify-center gap-1" style={{ color: 'var(--text-primary)' }}>
                         @{r.user.username}
                         {FOUNDERS.has(r.user.username) && <FounderBadge />}
+                        {BETA_TESTERS.has(r.user.username) && !FOUNDERS.has(r.user.username) && <BetaTesterBadge />}
                       </p>
                       <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
                         {r.count} {r.count === 1 ? 'review' : 'reviews'}

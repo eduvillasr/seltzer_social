@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import {
   ArrowLeft, Bell, BellOff, Check, ChevronDown, ChevronUp,
   ExternalLink, Inbox, LayoutGrid, List as ListIcon, MoreHorizontal, Pencil, Plus,
-  Search, Share2, Star, Trash2, X, AlertTriangle,
+  Search, Share2, Star, Trash2, UserPlus, X, AlertTriangle,
 } from 'lucide-react';
 import { Navigation } from '@/components/Navigation';
 import { RatingInput } from '@/components/RatingInput';
@@ -20,11 +20,13 @@ import {
   declineTierListInvite,
   deleteSharedTierList,
   deleteSharedTierListItem,
+  getMutualFollows,
   getSharedTierList,
   getSharedTierListItems,
   getSharedTierListSuggestions,
   getSharedTierListSubscription,
   getUserReviews,
+  inviteTierListPartner,
   markSharedSuggestionTried,
   subscribeToSharedTierList,
   supabase,
@@ -64,6 +66,11 @@ export default function SharedListPage({ params }: { params: { id: string } }) {
   const [suggestions, setSuggestions] = useState<SharedTierListSuggestion[]>([]);
   const [subscribed, setSubscribed]   = useState(false);
   const [trialRatings, setTrialRatings] = useState<Record<string, number>>({});
+
+  // Invite-a-partner modal (only relevant on solo lists owned by you)
+  const [showInviteModal, setShowInviteModal] = useState(false);
+  const [mutualFollows, setMutualFollows] = useState<Array<{ id: string; username: string; display_name?: string | null }>>([]);
+  const [invitingId, setInvitingId] = useState<string | null>(null);
 
   // top-level UI
   const [searchQuery, setSearchQuery] = useState('');
@@ -176,6 +183,32 @@ export default function SharedListPage({ params }: { params: { id: string } }) {
     if (!userId) return;
     if (subscribed) { await unsubscribeFromSharedTierList(userId, params.id); setSubscribed(false); }
     else            { await subscribeToSharedTierList(userId, params.id);     setSubscribed(true);  }
+  }
+
+  async function openInviteModal() {
+    if (!userId) return;
+    setMenuOpen(false);
+    setShowInviteModal(true);
+    if (mutualFollows.length === 0) {
+      const { data } = await getMutualFollows(userId);
+      setMutualFollows((data as any) || []);
+    }
+  }
+
+  async function handleInvitePartner(partnerUserId: string) {
+    if (!userId || !list) return;
+    setInvitingId(partnerUserId);
+    const { data, error } = await inviteTierListPartner(list.id, userId, partnerUserId);
+    setInvitingId(null);
+    if (error) {
+      showToast('Could not send invite', 'error', error.message);
+      return;
+    }
+    if (data) {
+      setList(data as SharedTierList);
+      showToast('Invite sent ✉️', 'success', 'Once they accept, they can edit this list.');
+      setShowInviteModal(false);
+    }
   }
 
   function toggleTier(t: Tier) {
@@ -480,6 +513,16 @@ export default function SharedListPage({ params }: { params: { id: string } }) {
                       boxShadow: '0 16px 40px rgba(0,0,0,0.5)',
                     }}
                   >
+                    {/* Invite a partner: only the owner of a SOLO list can do this. */}
+                    {userId === list.owner_id && list.partner_id === list.owner_id && (
+                      <button
+                        onClick={openInviteModal}
+                        className="w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-white/5 transition-colors"
+                        style={{ color: 'var(--text-primary)' }}
+                      >
+                        <UserPlus size={13} /> Invite a partner
+                      </button>
+                    )}
                     <button
                       onClick={() => { setMenuOpen(false); setShowDeleteList(true); setDeleteListConfirm(''); }}
                       className="w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-white/5 transition-colors"
@@ -1032,6 +1075,86 @@ export default function SharedListPage({ params }: { params: { id: string } }) {
                   </button>
                 </>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ══════════════════════════════════════
+          INVITE PARTNER MODAL
+      ══════════════════════════════════════ */}
+      {showInviteModal && list && (
+        <div
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4"
+          style={{ background: 'rgba(5,8,16,0.7)', backdropFilter: 'blur(8px)' }}
+          onClick={() => !invitingId && setShowInviteModal(false)}
+        >
+          <div
+            className="w-full max-w-sm rounded-3xl space-y-4"
+            style={{
+              padding: '22px',
+              background: 'linear-gradient(135deg, rgba(6,182,212,0.06), rgba(15,20,36,0.95))',
+              border: '1px solid var(--border-medium)',
+              boxShadow: '0 30px 80px rgba(6,182,212,0.18)',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start gap-3">
+              <div
+                className="w-10 h-10 rounded-full flex-shrink-0 flex items-center justify-center"
+                style={{ background: 'rgba(6,182,212,0.12)' }}
+              >
+                <UserPlus size={18} className="text-cyan-400" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-bold text-base" style={{ color: 'var(--text-primary)' }}>Invite a partner</p>
+                <p className="text-xs mt-1 leading-snug" style={{ color: 'var(--text-secondary)' }}>
+                  Pick a mutual follower. Once they accept, they can add and edit drinks on this list.
+                </p>
+              </div>
+            </div>
+
+            <div className="max-h-72 overflow-y-auto -mx-1 px-1">
+              {mutualFollows.length === 0 ? (
+                <p className="text-xs text-center py-4" style={{ color: 'var(--text-muted)' }}>
+                  No mutual followers yet. Follow people back so they show up here.
+                </p>
+              ) : (
+                <div className="space-y-1.5">
+                  {mutualFollows.map((u) => (
+                    <button
+                      key={u.id}
+                      onClick={() => handleInvitePartner(u.id)}
+                      disabled={invitingId !== null}
+                      className="w-full text-left px-3 py-2 rounded-xl transition-colors hover:bg-white/5 flex items-center gap-2 disabled:opacity-50"
+                      style={{ border: '1px solid var(--border-subtle)', background: 'rgba(15,20,36,0.5)' }}
+                    >
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold truncate" style={{ color: 'var(--text-primary)' }}>
+                          {u.display_name || u.username}
+                        </p>
+                        <p className="text-xs truncate" style={{ color: 'var(--text-muted)' }}>@{u.username}</p>
+                      </div>
+                      {invitingId === u.id ? (
+                        <span className="text-xs" style={{ color: 'var(--text-muted)' }}>Sending…</span>
+                      ) : (
+                        <UserPlus size={14} className="text-cyan-400" />
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end">
+              <button
+                onClick={() => setShowInviteModal(false)}
+                disabled={invitingId !== null}
+                className="btn-ghost"
+                style={{ fontSize: '13px' }}
+              >
+                Cancel
+              </button>
             </div>
           </div>
         </div>

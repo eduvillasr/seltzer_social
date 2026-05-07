@@ -7,7 +7,7 @@ import Link from 'next/link';
 import { Heart, MessageCircle, Star, Trash2, Droplets, ChevronRight } from 'lucide-react';
 import { Review } from '@/types';
 import { Avatar } from './Avatar';
-import { FounderBadge, FOUNDERS } from './FounderBadge';
+import { FounderBadge, FOUNDERS, BetaTesterBadge, BETA_TESTERS } from './FounderBadge';
 import { StarRating } from './StarRating';
 import { reviewHeadline, reviewDrinkLabel, hasCustomTitle } from '@/lib/reviewDisplay';
 import { showToast } from './Toast';
@@ -131,6 +131,7 @@ export function ReviewCard({ review, currentUserId, onDelete }: ReviewCardProps)
             <p className="font-semibold text-sm hover:text-cyan-400 transition-colors cursor-pointer inline-flex items-center gap-1.5" style={{ color: 'var(--text-primary)' }}>
               {review.user?.username}
               {review.user?.username && FOUNDERS.has(review.user.username) && <FounderBadge />}
+              {review.user?.username && BETA_TESTERS.has(review.user.username) && !FOUNDERS.has(review.user.username) && <BetaTesterBadge />}
             </p>
           </Link>
           <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{timeAgo}</p>

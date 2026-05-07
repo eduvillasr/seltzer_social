@@ -7,7 +7,7 @@ import Link from 'next/link';
 import { Send, Trash2, CornerDownRight, X } from 'lucide-react';
 import { Comment } from '@/types';
 import { createComment, getComments, deleteComment, createNotification, getUserIdsByUsernames, supabase } from '@/lib/supabase';
-import { FounderBadge, FOUNDERS } from './FounderBadge';
+import { FounderBadge, FOUNDERS, BetaTesterBadge, BETA_TESTERS } from './FounderBadge';
 
 const REACTIONS = ['👍', '❤️', '😂', '😮', '🔥', '💧'];
 
@@ -398,6 +398,7 @@ function CommentItem({
                     {comment.user?.username}
                   </span>
                   {comment.user?.username && FOUNDERS.has(comment.user.username) && <FounderBadge />}
+                  {comment.user?.username && BETA_TESTERS.has(comment.user.username) && !FOUNDERS.has(comment.user.username) && <BetaTesterBadge />}
                 </Link>
                 <span className="text-xs flex-shrink-0" style={{ color: 'var(--text-muted)' }}>
                   {new Date(comment.created_at).toLocaleDateString()}

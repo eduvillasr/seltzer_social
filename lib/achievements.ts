@@ -51,67 +51,111 @@ export interface AchievementStats {
   isBetaTester: boolean;
 }
 
+// ─── Helper: build a tiered ladder for a single stat ────────────
+// All achievements should build on each other. A "ladder" is a series of
+// achievements on the same dimension (e.g. review count) with rising
+// thresholds and tiers. This factory keeps them consistent.
+function ladder(opts: {
+  baseId: string;                // 'reviewer'
+  stat: keyof AchievementStats;  // 'reviewCount'
+  unitLabel: string;             // 'reviews'
+  rungs: Array<{ tier: AchievementTier; n: number; name: string; icon: LucideIcon }>;
+}): Achievement[] {
+  return opts.rungs.map(({ tier, n, name, icon }) => ({
+    id: `${opts.baseId}_${n}`,
+    name,
+    description: `${n.toLocaleString()} ${opts.unitLabel}`,
+    tier,
+    icon,
+    evaluate: (s) => (s[opts.stat] as unknown as number) >= n,
+    progress: (s) => [Math.min(s[opts.stat] as unknown as number, n), n],
+  }));
+}
+
 // ─── The catalog ───────────────────────────────────────────────
+// All achievements are ladders by default — bronze → silver → gold → platinum
+// → legendary, building on each other. A few one-off achievements live at the
+// bottom for non-cumulative things (5-star streak, harsh critic, etc).
 export const ACHIEVEMENTS: Achievement[] = [
-  // Onboarding ladder
-  {
-    id: 'first_review',
-    name: 'First Sip',
-    description: 'Wrote your first review',
-    tier: 'bronze',
-    icon: Pencil,
-    evaluate: (s) => s.reviewCount >= 1,
-    progress: (s) => [Math.min(s.reviewCount, 1), 1],
-  },
-  {
-    id: 'reviewer_10',
-    name: 'Regular',
-    description: 'Wrote 10 reviews',
-    tier: 'silver',
-    icon: Star,
-    evaluate: (s) => s.reviewCount >= 10,
-    progress: (s) => [Math.min(s.reviewCount, 10), 10],
-  },
-  {
-    id: 'reviewer_50',
-    name: 'Connoisseur',
-    description: 'Wrote 50 reviews',
-    tier: 'gold',
-    icon: Trophy,
-    evaluate: (s) => s.reviewCount >= 50,
-    progress: (s) => [Math.min(s.reviewCount, 50), 50],
-  },
-  {
-    id: 'reviewer_100',
-    name: 'Sommelier',
-    description: 'Wrote 100 reviews',
-    tier: 'platinum',
-    icon: Crown,
-    evaluate: (s) => s.reviewCount >= 100,
-    progress: (s) => [Math.min(s.reviewCount, 100), 100],
-  },
+  // Reviews ladder
+  ...ladder({
+    baseId: 'reviewer', stat: 'reviewCount', unitLabel: 'reviews',
+    rungs: [
+      { tier: 'bronze',    n: 1,   name: 'First Sip',     icon: Pencil },
+      { tier: 'silver',    n: 10,  name: 'Regular',       icon: Star },
+      { tier: 'gold',      n: 50,  name: 'Connoisseur',   icon: Trophy },
+      { tier: 'platinum',  n: 100, name: 'Sommelier',     icon: Crown },
+      { tier: 'legendary', n: 250, name: 'Cellar Master', icon: Gem },
+    ],
+  }),
 
-  // Brand exploration
-  {
-    id: 'brands_5',
-    name: 'Open Mind',
-    description: 'Reviewed drinks from 5 different brands',
-    tier: 'bronze',
-    icon: Compass,
-    evaluate: (s) => s.uniqueBrands >= 5,
-    progress: (s) => [Math.min(s.uniqueBrands, 5), 5],
-  },
-  {
-    id: 'brands_15',
-    name: 'Brand Hopper',
-    description: 'Reviewed drinks from 15 different brands',
-    tier: 'gold',
-    icon: Rocket,
-    evaluate: (s) => s.uniqueBrands >= 15,
-    progress: (s) => [Math.min(s.uniqueBrands, 15), 15],
-  },
+  // Brand exploration ladder
+  ...ladder({
+    baseId: 'brands', stat: 'uniqueBrands', unitLabel: 'unique brands reviewed',
+    rungs: [
+      { tier: 'bronze',   n: 3,  name: 'Open Mind',          icon: Compass },
+      { tier: 'silver',   n: 8,  name: 'Brand Curious',      icon: Compass },
+      { tier: 'gold',     n: 15, name: 'Brand Hopper',       icon: Rocket },
+      { tier: 'platinum', n: 25, name: 'Brand Encyclopedia', icon: Award },
+    ],
+  }),
 
-  // Quality / generosity
+  // Likes-received ladder
+  ...ladder({
+    baseId: 'liked', stat: 'totalLikesReceived', unitLabel: 'likes received',
+    rungs: [
+      { tier: 'bronze',    n: 5,   name: 'First Cheers',  icon: Heart },
+      { tier: 'silver',    n: 25,  name: 'Crowd Pleaser', icon: Heart },
+      { tier: 'gold',      n: 100, name: 'Local Legend',  icon: Flame },
+      { tier: 'platinum',  n: 250, name: 'Hot Take',      icon: Flame },
+      { tier: 'legendary', n: 500, name: 'Hall of Fame',  icon: Trophy },
+    ],
+  }),
+
+  // Comments-received ladder
+  ...ladder({
+    baseId: 'discussed', stat: 'totalCommentsReceived', unitLabel: 'comments received',
+    rungs: [
+      { tier: 'bronze', n: 1,  name: 'Talk of the Town',   icon: MessageCircle },
+      { tier: 'silver', n: 10, name: 'Sparked Discussion', icon: MessageCircle },
+      { tier: 'gold',   n: 50, name: 'Lively Thread',      icon: MessageCircle },
+    ],
+  }),
+
+  // Tried-It-received ladder ("people tried this because of you")
+  ...ladder({
+    baseId: 'tried', stat: 'totalTriedItReceived', unitLabel: 'people tried a drink because of you',
+    rungs: [
+      { tier: 'bronze',   n: 1,  name: 'Influencer Spark', icon: Sparkles },
+      { tier: 'silver',   n: 5,  name: 'Trendsetter',      icon: Award },
+      { tier: 'gold',     n: 15, name: 'Community Pick',   icon: Award },
+      { tier: 'platinum', n: 50, name: 'Tastemaker',       icon: Crown },
+    ],
+  }),
+
+  // Followers ladder
+  ...ladder({
+    baseId: 'followers', stat: 'followers', unitLabel: 'followers',
+    rungs: [
+      { tier: 'bronze',    n: 1,   name: 'Friend Made',        icon: Users },
+      { tier: 'silver',    n: 10,  name: 'Pull',               icon: Users },
+      { tier: 'gold',      n: 50,  name: 'Influencer',         icon: Medal },
+      { tier: 'platinum',  n: 250, name: 'Voice of Authority', icon: Medal },
+      { tier: 'legendary', n: 1000, name: 'Cult Following',    icon: Crown },
+    ],
+  }),
+
+  // Tier-list memberships ladder
+  ...ladder({
+    baseId: 'lists', stat: 'tierListsAsMember', unitLabel: 'shared tier lists joined',
+    rungs: [
+      { tier: 'bronze', n: 1, name: 'Curator',          icon: ListPlus },
+      { tier: 'silver', n: 3, name: 'Council Member',   icon: ListPlus },
+      { tier: 'gold',   n: 5, name: 'Curator’s Circle', icon: Trophy },
+    ],
+  }),
+
+  // ─── One-off achievements (don't ladder) ───────────────────────
   {
     id: 'first_five_star',
     name: 'Perfect Pour',
@@ -136,93 +180,6 @@ export const ACHIEVEMENTS: Achievement[] = [
     icon: Heart,
     evaluate: (s) => s.reviewCount >= 10 && s.avgRating >= 4.0,
   },
-
-  // Social pull
-  {
-    id: 'liked_25',
-    name: 'Crowd Pleaser',
-    description: 'Earned 25 likes across all reviews',
-    tier: 'silver',
-    icon: Heart,
-    evaluate: (s) => s.totalLikesReceived >= 25,
-    progress: (s) => [Math.min(s.totalLikesReceived, 25), 25],
-  },
-  {
-    id: 'liked_100',
-    name: 'Local Legend',
-    description: 'Earned 100 likes across all reviews',
-    tier: 'gold',
-    icon: Flame,
-    evaluate: (s) => s.totalLikesReceived >= 100,
-    progress: (s) => [Math.min(s.totalLikesReceived, 100), 100],
-  },
-  {
-    id: 'discussed',
-    name: 'Sparked Discussion',
-    description: 'Got 10 comments on your reviews',
-    tier: 'silver',
-    icon: MessageCircle,
-    evaluate: (s) => s.totalCommentsReceived >= 10,
-    progress: (s) => [Math.min(s.totalCommentsReceived, 10), 10],
-  },
-  {
-    id: 'community_pick',
-    name: 'Community Pick',
-    description: '15 people tried a drink because of you',
-    tier: 'gold',
-    icon: Award,
-    evaluate: (s) => s.totalTriedItReceived >= 15,
-    progress: (s) => [Math.min(s.totalTriedItReceived, 15), 15],
-  },
-
-  // Network
-  {
-    id: 'first_follow',
-    name: 'Friend Made',
-    description: 'Got your first follower',
-    tier: 'bronze',
-    icon: Users,
-    evaluate: (s) => s.followers >= 1,
-  },
-  {
-    id: 'followers_10',
-    name: 'Pull',
-    description: '10 followers',
-    tier: 'silver',
-    icon: Users,
-    evaluate: (s) => s.followers >= 10,
-    progress: (s) => [Math.min(s.followers, 10), 10],
-  },
-  {
-    id: 'followers_50',
-    name: 'Influencer',
-    description: '50 followers',
-    tier: 'gold',
-    icon: Medal,
-    evaluate: (s) => s.followers >= 50,
-    progress: (s) => [Math.min(s.followers, 50), 50],
-  },
-
-  // Tier lists
-  {
-    id: 'list_creator',
-    name: 'Curator',
-    description: 'Member of a shared tier list',
-    tier: 'silver',
-    icon: ListPlus,
-    evaluate: (s) => s.tierListsAsMember >= 1,
-  },
-  {
-    id: 'list_collector',
-    name: 'Tastemaker',
-    description: 'Member of 5 shared tier lists',
-    tier: 'gold',
-    icon: ListPlus,
-    evaluate: (s) => s.tierListsAsMember >= 5,
-    progress: (s) => [Math.min(s.tierListsAsMember, 5), 5],
-  },
-
-  // Activity
   {
     id: 'on_streak',
     name: 'On The Hunt',
@@ -232,23 +189,8 @@ export const ACHIEVEMENTS: Achievement[] = [
     evaluate: (s) => s.hasFreshReview,
   },
 
-  // Identity
-  {
-    id: 'founder',
-    name: 'Founder',
-    description: 'One of the originals',
-    tier: 'legendary',
-    icon: Gem,
-    evaluate: (s) => s.isFounder,
-  },
-  {
-    id: 'beta_tester',
-    name: 'Beta Tester',
-    description: 'Helped shape Seltzer Social during the closed beta',
-    tier: 'platinum',
-    icon: Rocket,
-    evaluate: (s) => s.isBetaTester,
-  },
+  // Note: "Founder" and "Beta Tester" are no longer achievements — they're
+  // now exclusive identity badges (see components/FounderBadge.tsx).
 ];
 
 /** Returns the user's unlocked achievements + locked-with-progress. */

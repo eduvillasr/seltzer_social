@@ -201,6 +201,31 @@ export async function searchSeltzers(query: string) {
 }
 
 /**
+ * Returns up to `limit` distinct image URLs from past reviews of the given
+ * canonical seltzer, newest first. Used by /create to let the reviewer
+ * "copy" a previous reviewer's photo instead of uploading a new one.
+ */
+export async function getRecentImagesForSeltzer(seltzerId: string, limit: number = 12) {
+  const { data, error } = await supabase
+    .from('reviews')
+    .select('id, image_url, created_at, user:users!reviews_user_id_fkey(id, username)')
+    .eq('seltzer_id', seltzerId)
+    .not('image_url', 'is', null)
+    .order('created_at', { ascending: false })
+    .limit(limit * 2); // overfetch — we'll dedupe URLs
+  if (error) return { data: [] as Array<{ id: string; image_url: string; user?: { id: string; username: string } | null }>, error };
+  const seen = new Set<string>();
+  const out: Array<{ id: string; image_url: string; user?: { id: string; username: string } | null }> = [];
+  for (const r of (data || []) as any[]) {
+    if (!r.image_url || seen.has(r.image_url)) continue;
+    seen.add(r.image_url);
+    out.push({ id: r.id, image_url: r.image_url, user: r.user || null });
+    if (out.length >= limit) break;
+  }
+  return { data: out, error: null };
+}
+
+/**
  * Find a seltzer by case-insensitive (brand, name) or create a new one.
  * Returns the canonical row so callers can use seltzer_id.
  */
@@ -870,6 +895,37 @@ export async function createSharedTierList(ownerId: string, partnerId: string, n
 
   if (!error && data && status === 'pending_invite') {
     notifyTierListInvite(ownerId, partnerId, data.id, name);
+  }
+  return { data, error };
+}
+
+/**
+ * Owner action: invite a partner with edit access to an existing list.
+ * Only works if the list is currently solo (partner_id === owner_id).
+ * Marks the list pending_invite and fires a notification.
+ */
+export async function inviteTierListPartner(listId: string, ownerId: string, newPartnerId: string) {
+  if (ownerId === newPartnerId) return { data: null, error: new Error('Cannot invite yourself.') };
+  // verify the caller owns it and it's currently solo
+  const { data: existing, error: fetchErr } = await supabase
+    .from('shared_tier_lists')
+    .select('id, owner_id, partner_id, name, status')
+    .eq('id', listId)
+    .single();
+  if (fetchErr || !existing) return { data: null, error: fetchErr || new Error('List not found.') };
+  if (existing.owner_id !== ownerId) return { data: null, error: new Error('Only the owner can invite a partner.') };
+  if (existing.partner_id !== existing.owner_id) {
+    return { data: null, error: new Error('List already has a partner.') };
+  }
+  const { data, error } = await supabase
+    .from('shared_tier_lists')
+    .update({ partner_id: newPartnerId, status: 'pending_invite' })
+    .eq('id', listId)
+    .eq('owner_id', ownerId) // RLS belt-and-suspenders
+    .select('*')
+    .single();
+  if (!error && data) {
+    notifyTierListInvite(ownerId, newPartnerId, data.id, existing.name);
   }
   return { data, error };
 }

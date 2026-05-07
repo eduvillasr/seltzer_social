@@ -14,7 +14,7 @@ import { showToast } from '@/components/Toast';
 import {
   createReview, supabase, searchSeltzers, uploadReviewImage,
   getSharedTierLists, createSharedTierListSuggestion, findOrCreateSeltzer,
-  addSharedTierListItem,
+  addSharedTierListItem, getRecentImagesForSeltzer,
 } from '@/lib/supabase';
 import { AuthUser, SharedTierList, Seltzer } from '@/types';
 
@@ -52,6 +52,10 @@ export default function CreateReview() {
   const [content, setContent]   = useState('');
   const [reviewImage, setReviewImage] = useState<File | null>(null);
   const [imagePreviewUrl, setImagePreviewUrl] = useState('');
+  // when the user clicks a previous reviewer's photo, we stash the URL here
+  // so submission uses it directly without re-uploading.
+  const [copiedImageUrl, setCopiedImageUrl] = useState<string | null>(null);
+  const [prevImages, setPrevImages] = useState<Array<{ id: string; image_url: string; user?: { username: string } | null }>>([]);
 
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState('');
@@ -67,15 +71,31 @@ export default function CreateReview() {
   useEffect(() => { checkAuth(); loadSeltzers(); }, []);
 
   useEffect(() => {
-    if (!reviewImage) {
-      // fall back to the canonical seltzer's image (if any) instead of clearing.
-      setImagePreviewUrl(pickedSeltzer?.image_url || '');
-      return;
+    if (reviewImage) {
+      const url = URL.createObjectURL(reviewImage);
+      setImagePreviewUrl(url);
+      return () => URL.revokeObjectURL(url);
     }
-    const url = URL.createObjectURL(reviewImage);
-    setImagePreviewUrl(url);
-    return () => URL.revokeObjectURL(url);
-  }, [reviewImage, pickedSeltzer]);
+    // fall back to copied image (from a previous reviewer) → canonical seltzer image → empty
+    if (copiedImageUrl) { setImagePreviewUrl(copiedImageUrl); return; }
+    setImagePreviewUrl(pickedSeltzer?.image_url || '');
+  }, [reviewImage, pickedSeltzer, copiedImageUrl]);
+
+  // When the user picks a different drink, clear any image they copied from a
+  // previous review of the OLD drink, and load this drink's prior images.
+  useEffect(() => {
+    setCopiedImageUrl(null);
+    setPrevImages([]);
+    if (!pickedSeltzer?.id) return;
+    let cancelled = false;
+    (async () => {
+      const { data } = await getRecentImagesForSeltzer(pickedSeltzer.id);
+      if (cancelled) return;
+      // skip the canonical image_url itself — it's already shown via the preview
+      setPrevImages((data || []).filter(d => d.image_url !== pickedSeltzer.image_url));
+    })();
+    return () => { cancelled = true; };
+  }, [pickedSeltzer]);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -198,6 +218,8 @@ export default function CreateReview() {
         return;
       }
       imageUrl = url;
+    } else if (copiedImageUrl) {
+      imageUrl = copiedImageUrl;
     } else if (seltzer.image_url) {
       imageUrl = seltzer.image_url;
     } else {
@@ -627,6 +649,42 @@ export default function CreateReview() {
                   </div>
                 )}
               </label>
+
+              {/* Past reviewers' photos for this drink — click to copy */}
+              {prevImages.length > 0 && (
+                <div className="mt-3">
+                  <p className="text-xs mb-2" style={{ color: 'var(--text-muted)' }}>
+                    Or use a photo from a past review:
+                  </p>
+                  <div className="flex gap-2 overflow-x-auto pb-1">
+                    {prevImages.map((p) => {
+                      const selected = copiedImageUrl === p.image_url && !reviewImage;
+                      return (
+                        <button
+                          key={p.id}
+                          type="button"
+                          onClick={() => {
+                            setReviewImage(null);
+                            setCopiedImageUrl(p.image_url);
+                          }}
+                          title={p.user?.username ? `From @${p.user.username}` : 'From a past review'}
+                          className="flex-shrink-0 rounded-lg overflow-hidden transition-all"
+                          style={{
+                            border: selected ? '2px solid #06b6d4' : '1px solid var(--border-subtle)',
+                            boxShadow: selected ? '0 0 0 2px rgba(6,182,212,0.25)' : undefined,
+                          }}
+                        >
+                          <img
+                            src={p.image_url}
+                            alt="Past review"
+                            className="w-14 h-16 object-cover"
+                          />
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* ── RATING ───────────────────────────────────── */}

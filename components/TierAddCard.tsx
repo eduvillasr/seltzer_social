@@ -6,7 +6,7 @@
 import Link from 'next/link';
 import { ListPlus, Droplets } from 'lucide-react';
 import { Avatar } from './Avatar';
-import { FounderBadge, FOUNDERS } from './FounderBadge';
+import { FounderBadge, FOUNDERS, BetaTesterBadge, BETA_TESTERS } from './FounderBadge';
 import { SharedTierListItem } from '@/types';
 
 const TIER_COLORS: Record<string, string> = {
@@ -77,6 +77,7 @@ export function TierAddCard({ activity }: { activity: SharedTierListItem }) {
             <span className="font-bold inline-flex items-center gap-1" style={{ color: 'var(--text-primary)' }}>
               {adder?.username ? `@${adder.username}` : 'Someone'}
               {adder?.username && FOUNDERS.has(adder.username) && <FounderBadge />}
+              {adder?.username && BETA_TESTERS.has(adder.username) && !FOUNDERS.has(adder.username) && <BetaTesterBadge />}
             </span>
             {' added '}
             <span className="font-bold" style={{ color: 'var(--text-primary)' }}>{activity.seltzer_name}</span>

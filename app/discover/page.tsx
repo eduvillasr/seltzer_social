@@ -13,7 +13,7 @@ import {
 import { Navigation } from '@/components/Navigation';
 import { TopHeader } from '@/components/TopHeader';
 import { Avatar } from '@/components/Avatar';
-import { FounderBadge, FOUNDERS } from '@/components/FounderBadge';
+import { FounderBadge, FOUNDERS, BetaTesterBadge, BETA_TESTERS } from '@/components/FounderBadge';
 import { FeedSkeleton } from '@/components/Skeletons';
 import { showToast } from '@/components/Toast';
 import {
@@ -192,6 +192,7 @@ export default function DiscoverPage() {
                             <p className="font-bold text-sm hover:text-cyan-400 transition-colors cursor-pointer inline-flex items-center gap-1.5" style={{ color: 'var(--text-primary)' }}>
                               @{user.username}{isSelf ? ' (you)' : ''}
                               {FOUNDERS.has(user.username) && <FounderBadge />}
+                              {BETA_TESTERS.has(user.username) && !FOUNDERS.has(user.username) && <BetaTesterBadge />}
                             </p>
                           </Link>
                           <p className="text-xs flex items-center gap-1" style={{ color: 'var(--text-muted)' }}>
