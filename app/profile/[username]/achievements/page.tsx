@@ -9,6 +9,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Lock, Pin, Check } from 'lucide-react';
 import { Navigation } from '@/components/Navigation';
+import { BackHeader } from '@/components/BackHeader';
 import { CanLoader } from '@/components/CanLoader';
 import { AchievementBadge } from '@/components/AchievementBadge';
 import { showToast } from '@/components/Toast';
@@ -78,12 +79,16 @@ export default function AchievementsPage({ params }: { params: { username: strin
   function togglePin(id: string) {
     if (!isOwn) return;
     setShowcase((prev) => {
-      if (prev.includes(id)) return prev.filter((x) => x !== id);
-      if (prev.length >= 3) {
+      // Defensive: any stale IDs in state (from achievements that were
+      // renamed/removed) shouldn't count against the 3-pin limit.
+      const validIds = new Set(ACHIEVEMENTS.map(a => a.id));
+      const cleaned = prev.filter(x => validIds.has(x));
+      if (cleaned.includes(id)) return cleaned.filter((x) => x !== id);
+      if (cleaned.length >= 3) {
         showToast('You can pin 3 max', 'info', 'Unpin one to swap.');
-        return prev;
+        return cleaned;
       }
-      return [...prev, id];
+      return [...cleaned, id];
     });
   }
 
@@ -119,9 +124,7 @@ export default function AchievementsPage({ params }: { params: { username: strin
     <>
       <Navigation />
       <main className="max-w-md mx-auto px-4 pt-12 pb-32 space-y-5">
-        <Link href={`/profile/${params.username}`} className="inline-flex items-center gap-2 text-sm hover:opacity-80" style={{ color: 'var(--text-tertiary)' }}>
-          <ArrowLeft size={16} /> Back to profile
-        </Link>
+        <BackHeader href={`/profile/${params.username}`} label="Back to profile" />
 
         {/* Hero */}
         <div

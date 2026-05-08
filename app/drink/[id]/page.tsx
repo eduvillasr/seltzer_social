@@ -7,6 +7,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, Droplets, Users } from 'lucide-react';
 import { Navigation } from '@/components/Navigation';
+import { BackHeader } from '@/components/BackHeader';
 import { ReviewCard } from '@/components/ReviewCard';
 import { CanLoader } from '@/components/CanLoader';
 import { StarRating } from '@/components/StarRating';
@@ -75,9 +76,7 @@ export default function DrinkPage({ params }: { params: { id: string } }) {
     <>
       <Navigation />
       <main className="max-w-md mx-auto px-4 pt-12 pb-32 space-y-5">
-        <Link href="/trending" className="inline-flex items-center gap-2 text-sm hover:opacity-80" style={{ color: 'var(--text-tertiary)' }}>
-          <ArrowLeft size={16} /> Back
-        </Link>
+        <BackHeader href="/trending" />
 
         {/* Hero card */}
         <div

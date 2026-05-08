@@ -9,6 +9,7 @@ import {
   Search, Share2, Star, Trash2, UserPlus, X, AlertTriangle,
 } from 'lucide-react';
 import { Navigation } from '@/components/Navigation';
+import { BackHeader } from '@/components/BackHeader';
 import { RatingInput } from '@/components/RatingInput';
 import { CanLoader } from '@/components/CanLoader';
 import { showToast } from '@/components/Toast';
@@ -25,7 +26,9 @@ import {
   getSharedTierListItems,
   getSharedTierListSuggestions,
   getSharedTierListSubscription,
+  getTierListEditors,
   getUserReviews,
+  inviteTierListEditor,
   inviteTierListPartner,
   markSharedSuggestionTried,
   subscribeToSharedTierList,
@@ -67,10 +70,14 @@ export default function SharedListPage({ params }: { params: { id: string } }) {
   const [subscribed, setSubscribed]   = useState(false);
   const [trialRatings, setTrialRatings] = useState<Record<string, number>>({});
 
-  // Invite-a-partner modal (only relevant on solo lists owned by you)
+  // Invite modal — used for both "invite partner" (solo→shared) and
+  // "invite additional editor" (shared→multi-member)
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [mutualFollows, setMutualFollows] = useState<Array<{ id: string; username: string; display_name?: string | null }>>([]);
   const [invitingId, setInvitingId] = useState<string | null>(null);
+  // Additional editors invited beyond owner+partner. Filtered to status='active'
+  // for the membership check, but the full set is shown in the modal.
+  const [editors, setEditors] = useState<Array<{ user_id: string; status: string; user?: { id: string; username: string } | null }>>([]);
 
   // top-level UI
   const [searchQuery, setSearchQuery] = useState('');
@@ -127,14 +134,16 @@ export default function SharedListPage({ params }: { params: { id: string } }) {
     const uid = sessionData.session?.user?.id ?? '';
     setUserId(uid);
 
-    const [{ data: listData }, { data: itemData }, { data: suggData }] = await Promise.all([
+    const [{ data: listData }, { data: itemData }, { data: suggData }, { data: editorData }] = await Promise.all([
       getSharedTierList(params.id),
       getSharedTierListItems(params.id),
       getSharedTierListSuggestions(params.id),
+      getTierListEditors(params.id),
     ]);
     setList(listData);
     setItems(itemData || []);
     setSuggestions(suggData || []);
+    setEditors(editorData || []);
 
     if (uid) {
       const { data: sub } = await getSharedTierListSubscription(uid, params.id);
@@ -173,7 +182,11 @@ export default function SharedListPage({ params }: { params: { id: string } }) {
     return <><Navigation /><main className="max-w-md mx-auto px-4 pt-10 pb-32"><CanLoader /></main></>;
   }
 
-  const isMember = userId === list.owner_id || userId === list.partner_id;
+  const isActiveEditor = editors.some(e => e.user_id === userId && e.status === 'active');
+  const isMember = userId === list.owner_id || userId === list.partner_id || isActiveEditor;
+  const isOwner = userId === list.owner_id;
+  // The list is "shared" once partner has been added (partner_id !== owner_id)
+  const isSolo = list.partner_id === list.owner_id;
   const isPendingInvite = list.status === 'pending_invite';
   const isInvitee = isPendingInvite && userId === list.partner_id;
   const isInviter = isPendingInvite && userId === list.owner_id;
@@ -198,14 +211,24 @@ export default function SharedListPage({ params }: { params: { id: string } }) {
   async function handleInvitePartner(partnerUserId: string) {
     if (!userId || !list) return;
     setInvitingId(partnerUserId);
-    const { data, error } = await inviteTierListPartner(list.id, userId, partnerUserId);
+    // SOLO list → promote them to partner_id slot. SHARED list → add an
+    // additional editor via shared_tier_list_editors.
+    const result = isSolo
+      ? await inviteTierListPartner(list.id, userId, partnerUserId)
+      : await inviteTierListEditor(list.id, userId, partnerUserId);
     setInvitingId(null);
-    if (error) {
-      showToast('Could not send invite', 'error', error.message);
+    if (result.error) {
+      showToast('Could not send invite', 'error', result.error.message);
       return;
     }
-    if (data) {
-      setList(data as SharedTierList);
+    if (result.data) {
+      if (isSolo) {
+        setList(result.data as SharedTierList);
+      } else {
+        // Refresh editors list so the new pending invite shows up
+        const { data } = await getTierListEditors(list.id);
+        setEditors(data || []);
+      }
       showToast('Invite sent ✉️', 'success', 'Once they accept, they can edit this list.');
       setShowInviteModal(false);
     }
@@ -409,10 +432,8 @@ export default function SharedListPage({ params }: { params: { id: string } }) {
       <Navigation />
       <main className="max-w-md mx-auto px-4 pt-10 pb-32 space-y-4">
 
-        {/* Back */}
-        <Link href="/feed" className="inline-flex items-center gap-2 text-sm hover:opacity-80" style={{ color: 'var(--text-tertiary)' }}>
-          <ArrowLeft size={16} /> Back
-        </Link>
+        {/* Back (sticky) */}
+        <BackHeader href="/feed" />
 
         {/* ── Pending invite banner ── */}
         {isInvitee && (
@@ -472,6 +493,23 @@ export default function SharedListPage({ params }: { params: { id: string } }) {
               <span style={{ color: 'var(--text-muted)' }}> · {items.length} {items.length === 1 ? 'drink' : 'drinks'}</span>
             </p>
           </div>
+          {/* Owner gets a primary "Invite" button on shared lists so the
+              feature is discoverable, not buried in the overflow menu. */}
+          {isOwner && (
+            <button
+              onClick={openInviteModal}
+              className="flex-shrink-0 inline-flex items-center gap-1 rounded-full text-xs font-semibold transition-colors"
+              style={{
+                padding: '7px 11px',
+                background: 'rgba(6,182,212,0.12)',
+                color: 'var(--cyan-400)',
+                border: '1px solid rgba(6,182,212,0.35)',
+              }}
+              title={isSolo ? 'Invite a partner' : 'Invite another editor'}
+            >
+              <UserPlus size={13} /> {isSolo ? 'Invite' : 'Add member'}
+            </button>
+          )}
           {/* Share button — anyone can copy/share the invite link */}
           <button
             onClick={handleShare}
@@ -513,14 +551,14 @@ export default function SharedListPage({ params }: { params: { id: string } }) {
                       boxShadow: '0 16px 40px rgba(0,0,0,0.5)',
                     }}
                   >
-                    {/* Invite a partner: only the owner of a SOLO list can do this. */}
-                    {userId === list.owner_id && list.partner_id === list.owner_id && (
+                    {/* Owner can invite a partner (solo list) or additional editors (shared list). */}
+                    {isOwner && (
                       <button
                         onClick={openInviteModal}
                         className="w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-white/5 transition-colors"
                         style={{ color: 'var(--text-primary)' }}
                       >
-                        <UserPlus size={13} /> Invite a partner
+                        <UserPlus size={13} /> {isSolo ? 'Invite a partner' : 'Invite another editor'}
                       </button>
                     )}
                     <button
@@ -1107,9 +1145,11 @@ export default function SharedListPage({ params }: { params: { id: string } }) {
                 <UserPlus size={18} className="text-cyan-400" />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="font-bold text-base" style={{ color: 'var(--text-primary)' }}>Invite a partner</p>
+                <p className="font-bold text-base" style={{ color: 'var(--text-primary)' }}>
+                  {isSolo ? 'Invite a partner' : 'Invite another editor'}
+                </p>
                 <p className="text-xs mt-1 leading-snug" style={{ color: 'var(--text-secondary)' }}>
-                  Pick a mutual follower. Once they accept, they can add and edit drinks on this list.
+                  Pick a mutual follower. They'll get an in-app invite — once they accept, they can add and edit drinks on this list.
                 </p>
               </div>
             </div>

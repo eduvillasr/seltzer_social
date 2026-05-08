@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, Check, Upload, X, Trash2, Droplets, Search, Plus, Pencil } from 'lucide-react';
 import { Navigation } from '@/components/Navigation';
+import { BackHeader } from '@/components/BackHeader';
 import { RatingInput } from '@/components/RatingInput';
 import { CanLoader } from '@/components/CanLoader';
 import { showToast } from '@/components/Toast';
@@ -272,9 +273,7 @@ export default function EditReviewPage({ params }: { params: { id: string } }) {
     <>
       <Navigation />
       <main className="max-w-md mx-auto px-4 pt-12 pb-32 space-y-5">
-        <Link href={`/review/${review.id}`} className="inline-flex items-center gap-2 text-sm hover:opacity-80" style={{ color: 'var(--text-tertiary)' }}>
-          <ArrowLeft size={16} /> Back to review
-        </Link>
+        <BackHeader href={`/review/${review.id}`} label="Back to review" />
 
         <div>
           <h1 className="text-2xl font-extrabold" style={{ fontFamily: 'var(--font-display)' }}>

@@ -5,6 +5,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Navigation } from '@/components/Navigation';
+import { BackHeader } from '@/components/BackHeader';
 import { Avatar } from '@/components/Avatar';
 import { ArrowLeft, Users, UserPlus, UserMinus } from 'lucide-react';
 import { getUserByUsername, getFollowing, supabase, isFollowing as checkIsFollowing, followUser, unfollowUser } from '@/lib/supabase';
@@ -59,9 +60,7 @@ export default function FollowingPage({ params }: PageProps) {
     <>
       <Navigation />
       <main className="max-w-md mx-auto px-4 pt-20 pb-32">
-        <Link href={`/profile/${params.username}`} className="inline-flex items-center gap-2 text-sm mb-5 transition-colors hover:opacity-80" style={{ color: 'var(--text-tertiary)' }}>
-          <ArrowLeft size={16} /> Back to profile
-        </Link>
+        <BackHeader href={`/profile/${params.username}`} label="Back to profile" />
 
         <h1 className="text-2xl font-extrabold mb-1" style={{ fontFamily: 'var(--font-display)' }}>
           Following

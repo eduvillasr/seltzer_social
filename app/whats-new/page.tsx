@@ -7,6 +7,7 @@ import { useEffect } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, Sparkles, Wrench, Zap, Rocket } from 'lucide-react';
 import { Navigation } from '@/components/Navigation';
+import { BackHeader } from '@/components/BackHeader';
 import { RELEASES, CURRENT_VERSION, SEEN_KEY, type ChangeKind } from '@/lib/changelog';
 
 const KIND_META: Record<ChangeKind, { color: string; bg: string; icon: React.ReactNode; label: string }> = {
@@ -27,9 +28,7 @@ export default function WhatsNewPage() {
     <>
       <Navigation />
       <main className="max-w-md mx-auto px-4 pt-12 pb-32 space-y-5">
-        <Link href="/feed" className="inline-flex items-center gap-2 text-sm hover:opacity-80" style={{ color: 'var(--text-tertiary)' }}>
-          <ArrowLeft size={16} /> Back
-        </Link>
+        <BackHeader href="/feed" />
 
         {/* Hero */}
         <div

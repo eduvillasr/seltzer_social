@@ -900,6 +900,103 @@ export async function createSharedTierList(ownerId: string, partnerId: string, n
 }
 
 /**
+ * Owner action: invite an additional user as an editor on an existing
+ * shared tier list (beyond owner+partner). Adds a `pending_invite` row
+ * to shared_tier_list_editors and fires the existing tier_list_invite
+ * notification. The user must accept before they can edit.
+ *
+ * If the list is currently SOLO (partner_id === owner_id), this is a
+ * no-op — callers should use `inviteTierListPartner` instead, which
+ * promotes the partner_id slot. Once a list has a partner, additional
+ * members go through this editor table.
+ */
+export async function inviteTierListEditor(listId: string, ownerId: string, newEditorId: string) {
+  if (ownerId === newEditorId) return { data: null, error: new Error('Cannot invite yourself.') };
+
+  // Verify caller owns the list and grab its name for the notification
+  const { data: list, error: fetchErr } = await supabase
+    .from('shared_tier_lists')
+    .select('id, owner_id, partner_id, name')
+    .eq('id', listId)
+    .single();
+  if (fetchErr || !list) return { data: null, error: fetchErr || new Error('List not found.') };
+  if (list.owner_id !== ownerId) return { data: null, error: new Error('Only the owner can invite editors.') };
+
+  // Don't double-invite the existing owner/partner
+  if (list.partner_id === newEditorId) {
+    return { data: null, error: new Error('That user is already on this list as the partner.') };
+  }
+
+  const { data, error } = await supabase
+    .from('shared_tier_list_editors')
+    .upsert(
+      { list_id: listId, user_id: newEditorId, invited_by: ownerId, status: 'pending_invite' },
+      { onConflict: 'list_id,user_id' },
+    )
+    .select('*')
+    .single();
+  if (!error && data) {
+    notifyTierListInvite(ownerId, newEditorId, list.id, list.name);
+  }
+  return { data, error };
+}
+
+/**
+ * Editor accepts their pending invite — gains write access to the list.
+ */
+export async function acceptTierListEditorInvite(listId: string, editorId: string) {
+  const { data, error } = await supabase
+    .from('shared_tier_list_editors')
+    .update({ status: 'active', responded_at: new Date().toISOString() })
+    .eq('list_id', listId)
+    .eq('user_id', editorId)
+    .eq('status', 'pending_invite')
+    .select('*')
+    .single();
+  return { data, error };
+}
+
+/**
+ * Editor declines their pending invite. Row stays for audit.
+ */
+export async function declineTierListEditorInvite(listId: string, editorId: string) {
+  const { data, error } = await supabase
+    .from('shared_tier_list_editors')
+    .update({ status: 'declined', responded_at: new Date().toISOString() })
+    .eq('list_id', listId)
+    .eq('user_id', editorId)
+    .select('*')
+    .single();
+  return { data, error };
+}
+
+/**
+ * Owner removes an editor (or an editor removes themselves).
+ */
+export async function removeTierListEditor(listId: string, editorId: string) {
+  const { data, error } = await supabase
+    .from('shared_tier_list_editors')
+    .delete()
+    .eq('list_id', listId)
+    .eq('user_id', editorId)
+    .select('*');
+  return { data, error };
+}
+
+/**
+ * List the editors of a tier list with their user records, newest invite
+ * first. Useful for showing a "members" panel.
+ */
+export async function getTierListEditors(listId: string) {
+  const { data, error } = await supabase
+    .from('shared_tier_list_editors')
+    .select('list_id, user_id, status, invited_by, created_at, user:users!shared_tier_list_editors_user_id_fkey(id, username, avatar_url, display_name)')
+    .eq('list_id', listId)
+    .order('created_at', { ascending: false });
+  return { data: (data || []) as any[], error };
+}
+
+/**
  * Owner action: invite a partner with edit access to an existing list.
  * Only works if the list is currently solo (partner_id === owner_id).
  * Marks the list pending_invite and fires a notification.

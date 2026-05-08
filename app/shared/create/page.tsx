@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, ListPlus, Users } from 'lucide-react';
 import { Navigation } from '@/components/Navigation';
+import { BackHeader } from '@/components/BackHeader';
 import { Avatar } from '@/components/Avatar';
 import { createSharedTierList, getMutualFollows, supabase } from '@/lib/supabase';
 import { User } from '@/types';
@@ -51,9 +52,7 @@ export default function CreateSharedListPage() {
     <>
       <Navigation />
       <main className="max-w-md mx-auto px-4 pt-10 pb-32">
-        <Link href="/feed" className="inline-flex items-center gap-2 text-sm mb-5 hover:opacity-80" style={{ color: 'var(--text-tertiary)' }}>
-          <ArrowLeft size={16} /> Back
-        </Link>
+        <BackHeader href="/feed" />
 
         <h1 className="text-2xl font-extrabold mb-1" style={{ fontFamily: 'var(--font-display)' }}>
           Shared <span className="gradient-text">Tier List</span>

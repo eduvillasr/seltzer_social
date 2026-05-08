@@ -10,6 +10,7 @@ import {
   ArrowLeft, GitCompare, Sparkles, AlertCircle, ThumbsUp, ThumbsDown, Droplets,
 } from 'lucide-react';
 import { Navigation } from '@/components/Navigation';
+import { BackHeader } from '@/components/BackHeader';
 import { Avatar } from '@/components/Avatar';
 import { CanLoader } from '@/components/CanLoader';
 import {
@@ -148,9 +149,7 @@ export default function ComparePage({ params }: { params: { username: string } }
     <>
       <Navigation />
       <main className="max-w-md mx-auto px-4 pt-12 pb-32 space-y-5">
-        <Link href={`/profile/${params.username}`} className="inline-flex items-center gap-2 text-sm hover:opacity-80" style={{ color: 'var(--text-tertiary)' }}>
-          <ArrowLeft size={16} /> Back to @{them.username}
-        </Link>
+        <BackHeader href={`/profile/${params.username}`} label={`Back to @${them.username}`} />
 
         {/* ─── Header ─── */}
         <div
