@@ -10,6 +10,7 @@ import { TopHeader } from '@/components/TopHeader';
 import { ReviewCard } from '@/components/ReviewCard';
 import { Avatar } from '@/components/Avatar';
 import { FounderBadge, FOUNDERS, BetaTesterBadge, BETA_TESTERS } from '@/components/FounderBadge';
+import { WhatsNewLink } from '@/components/WhatsNewLink';
 import { CanLoader } from '@/components/CanLoader';
 import { showToast } from '@/components/Toast';
 import {
@@ -355,9 +356,12 @@ export default function ProfilePage({ params }: ProfilePageProps) {
           {/* Action row */}
           <div className="relative flex gap-2 mt-4">
             {isOwnProfile ? (
-              <Link href="/settings" className="btn-secondary flex-1 justify-center" style={{ padding: '10px', fontSize: '12px' }}>
-                <Settings size={13} /> Edit Profile
-              </Link>
+              <>
+                <Link href="/settings" className="btn-secondary flex-1 justify-center" style={{ padding: '10px', fontSize: '12px' }}>
+                  <Settings size={13} /> Edit Profile
+                </Link>
+                <WhatsNewLink variant="icon" />
+              </>
             ) : currentUserId ? (
               <>
                 <button onClick={handleFollowToggle} className={isFollowing ? 'btn-secondary flex-1 justify-center' : 'btn-primary flex-1 justify-center'} style={{ padding: '10px', fontSize: '12px' }}>

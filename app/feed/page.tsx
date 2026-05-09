@@ -13,6 +13,7 @@ import { getSmartFeed, getFollowingCount, getSubscribedSharedTierActivities, sup
 import { Plus, Droplets, Search, Sparkles, ListPlus, RotateCcw, Flame, UserPlus } from 'lucide-react';
 import { FeedSkeleton } from '@/components/Skeletons';
 import { TopHeader } from '@/components/TopHeader';
+import { WhatsNewLink } from '@/components/WhatsNewLink';
 import { usePullToRefresh } from '@/hooks/usePullToRefresh';
 import { invalidate } from '@/lib/cache';
 
@@ -183,13 +184,16 @@ export default function FeedPage() {
       <TopHeader
         title="Feed"
         right={
-          <Link
-            href="/trending"
-            className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full hover:bg-white/5 transition-colors"
-            style={{ background: 'rgba(34,211,238,0.08)', border: '1px solid rgba(34,211,238,0.2)', color: 'var(--cyan-400)' }}
-          >
-            <Flame size={11} /> Trending
-          </Link>
+          <div className="flex items-center gap-2">
+            <WhatsNewLink variant="icon" />
+            <Link
+              href="/trending"
+              className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full hover:bg-white/5 transition-colors"
+              style={{ background: 'rgba(34,211,238,0.08)', border: '1px solid rgba(34,211,238,0.2)', color: 'var(--cyan-400)' }}
+            >
+              <Flame size={11} /> Trending
+            </Link>
+          </div>
         }
       />
 

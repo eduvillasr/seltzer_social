@@ -20,7 +20,7 @@ export interface Release {
   changes: ChangeEntry[];
 }
 
-export const CURRENT_VERSION = '0.11.0';
+export const CURRENT_VERSION = '0.12.0';
 
 /** localStorage key for "last version the user opened the changelog at". */
 export const SEEN_KEY = 'seltzer:last-seen-version';
@@ -32,6 +32,63 @@ export function hasUnseenRelease(): boolean {
 }
 
 export const RELEASES: Release[] = [
+  {
+    version: '0.12.0',
+    date: '2026-05-09',
+    headline: 'A real catalog, smarter invites, and laddered achievements',
+    changes: [
+      {
+        kind: 'new',
+        title: '184 canonical seltzers, pre-seeded',
+        detail: 'Picking a drink to review now autocompletes from 17 brands across 184 SKUs (LaCroix, Bubly, Spindrift, Polar, Waterloo, San Pellegrino, Perrier, Topo Chico, Schweppes, Canada Dry, Liquid Death, Sanzo, Nixie, Hal\'s, AHA, Kirkland, Rambler). Most have a stock can image so you don\'t have to upload your own.',
+      },
+      {
+        kind: 'new',
+        title: 'Auto-fill the can image when you pick a drink',
+        detail: 'When the autocomplete matches a canonical drink, its image preview snaps into the upload tile automatically. Skip the photo step or override it with your own.',
+      },
+      {
+        kind: 'new',
+        title: 'Copy a photo from a previous reviewer',
+        detail: 'Reviewing the same drink someone else already shot? A horizontal strip of past reviewers\' photos now appears under the upload tile — tap to copy any one as your review image.',
+      },
+      {
+        kind: 'new',
+        title: 'Multi-member tier lists',
+        detail: 'Owner-only "Add member" button on shared tier lists invites a third (or fourth, fifth…) editor with full edit access. They get an in-app invite to accept — no link copying.',
+      },
+      {
+        kind: 'new',
+        title: 'Invite a partner to a solo list later',
+        detail: 'Created a solo list and now want to share it? The list menu has an "Invite a partner" option that promotes the picked user with the same invite-and-accept flow.',
+      },
+      {
+        kind: 'new',
+        title: 'Laddered achievements (30 total)',
+        detail: 'Achievements now build on each other in tiers — bronze → silver → gold → platinum → legendary. New ladders for likes received (5/25/100/250/500), comments (1/10/50), tried-it (1/5/15/50), and follower milestones up to 1,000.',
+      },
+      {
+        kind: 'new',
+        title: 'Beta Tester badge',
+        detail: 'Beta Tester is now a permanent purple identity badge instead of an achievement, matching the Founder badge style. Achievements stay earnable for everyone; badges mark special status.',
+      },
+      {
+        kind: 'improved',
+        title: 'Sticky back header on inner pages',
+        detail: 'The Back button now stays pinned to the top of the screen when you scroll. No more hunting for it on long tier lists or review threads.',
+      },
+      {
+        kind: 'improved',
+        title: 'Showcase counts no longer count ghosts',
+        detail: 'If you had old achievement IDs pinned that we\'ve since renamed, the picker now strips them and frees up your pin slots automatically the next time you open your achievements page.',
+      },
+      {
+        kind: 'fixed',
+        title: 'Founder achievement removed from the catalog',
+        detail: 'Founder is now exclusively a badge (the gold checkmark). Same for Beta Tester. Achievements you can grind, badges you can\'t.',
+      },
+    ],
+  },
   {
     version: '0.11.0',
     date: '2026-05-06',
