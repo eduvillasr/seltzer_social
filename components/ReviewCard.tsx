@@ -4,7 +4,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
-import { Heart, MessageCircle, Star, Trash2, Droplets, ChevronRight } from 'lucide-react';
+import { Heart, MessageCircle, Star, StarHalf, Trash2, Droplets, ChevronRight, Minus, Plus } from 'lucide-react';
 import { Review } from '@/types';
 import { Avatar } from './Avatar';
 import { FounderBadge, FOUNDERS, BetaTesterBadge, BETA_TESTERS } from './FounderBadge';
@@ -221,19 +221,15 @@ export function ReviewCard({ review, currentUserId, onDelete }: ReviewCardProps)
           <p className="text-xs font-semibold mb-2" style={{ color: 'var(--cyan-400)' }}>
             {hasTried ? 'Update your rating' : "Rate it — you've tried this?"}
           </p>
-          <div className="flex items-center gap-2">
-            <div className="flex gap-1">
-              {[1,2,3,4,5].map((s) => (
-                <button key={s} onClick={() => setPendingRating(s)} className="transition-transform hover:scale-110">
-                  <Star size={20} className={s <= pendingRating ? 'star-filled' : 'star-empty'} />
-                </button>
-              ))}
-            </div>
-            <span className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>{pendingRating}.0</span>
+          <TriedItStars value={pendingRating} onChange={setPendingRating} />
+          <div className="flex items-center justify-between mt-2 gap-2">
+            <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+              Tap or drag · ± for 0.1 steps
+            </span>
             <button
               onClick={handleTriedItSubmit}
               disabled={submittingTried}
-              className="btn-primary ml-auto"
+              className="btn-primary"
               style={{ padding: '6px 14px', fontSize: '12px' }}
             >
               {submittingTried ? '...' : hasTried ? 'Update' : 'Submit'}
@@ -242,6 +238,104 @@ export function ReviewCard({ review, currentUserId, onDelete }: ReviewCardProps)
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * Compact 0.1-precision rating used by the "Tried It" inline panel.
+ *
+ * - Tap a star to set the whole-number rating
+ * - Drag horizontally across the row to fine-tune to 0.1
+ * - Use ± buttons for exact 0.1 nudges
+ *
+ * This is a slimmer variant of <RatingInput /> — no label, no hint text,
+ * tighter star size — because it lives inside an already-compact action
+ * panel on each review card.
+ */
+function TriedItStars({ value, onChange }: { value: number; onChange: (n: number) => void }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const dragging = useRef(false);
+  const STAR_SIZE = 22;
+
+  function clampStep(n: number): number {
+    const c = Math.max(0, Math.min(5, n));
+    return Math.round(c * 10) / 10;
+  }
+  function set(n: number) { onChange(clampStep(n)); }
+  function bump(d: number) { set((Number.isFinite(value) ? value : 0) + d); }
+
+  function ratingFromX(clientX: number): number {
+    const el = containerRef.current;
+    if (!el) return value;
+    const rect = el.getBoundingClientRect();
+    const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+    return clampStep(ratio * 5);
+  }
+
+  // Show half-step star fills (0.5 increments) — looks tidier than trying to
+  // depict 0.1 increments visually. The numeric readout shows the real value.
+  const stepped = Math.floor(value * 2) / 2;
+
+  return (
+    <div className="flex items-center gap-2 flex-wrap">
+      <div
+        ref={containerRef}
+        className="flex gap-1 select-none"
+        style={{ touchAction: 'none', cursor: 'pointer' }}
+        onPointerDown={(e) => {
+          dragging.current = true;
+          (e.target as Element).setPointerCapture?.(e.pointerId);
+          set(ratingFromX(e.clientX));
+        }}
+        onPointerMove={(e) => { if (dragging.current) set(ratingFromX(e.clientX)); }}
+        onPointerUp={() => { dragging.current = false; }}
+        onPointerCancel={() => { dragging.current = false; }}
+        onPointerLeave={() => { dragging.current = false; }}
+        role="slider"
+        aria-valuemin={0}
+        aria-valuemax={5}
+        aria-valuenow={value}
+      >
+        {Array.from({ length: 5 }).map((_, i) => {
+          const full = i < Math.floor(stepped);
+          const half = !full && i === Math.floor(stepped) && stepped % 1 === 0.5;
+          return (
+            <span
+              key={i}
+              style={{ position: 'relative', display: 'inline-flex', width: STAR_SIZE, height: STAR_SIZE }}
+            >
+              <Star size={STAR_SIZE} className="absolute inset-0" style={{ color: 'var(--text-muted)', opacity: 0.35 }} />
+              {full && <Star size={STAR_SIZE} className="absolute inset-0 fill-amber-400 text-amber-400" />}
+              {half && <StarHalf size={STAR_SIZE} className="absolute inset-0 fill-amber-400 text-amber-400" />}
+            </span>
+          );
+        })}
+      </div>
+
+      <div className="flex items-center gap-1">
+        <button
+          type="button"
+          onClick={() => bump(-0.1)}
+          className="rounded-full flex items-center justify-center transition-colors hover:bg-white/5 active:scale-95"
+          style={{ width: 26, height: 26, border: '1px solid var(--border-medium)', color: 'var(--text-secondary)' }}
+          aria-label="Decrease rating"
+        >
+          <Minus size={12} />
+        </button>
+        <span className="text-sm font-bold tabular-nums" style={{ minWidth: 34, textAlign: 'center', color: 'var(--text-primary)' }}>
+          {value.toFixed(1)}
+        </span>
+        <button
+          type="button"
+          onClick={() => bump(0.1)}
+          className="rounded-full flex items-center justify-center transition-colors hover:bg-white/5 active:scale-95"
+          style={{ width: 26, height: 26, border: '1px solid var(--border-medium)', color: 'var(--text-secondary)' }}
+          aria-label="Increase rating"
+        >
+          <Plus size={12} />
+        </button>
+      </div>
     </div>
   );
 }

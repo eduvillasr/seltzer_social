@@ -20,7 +20,7 @@ export interface Release {
   changes: ChangeEntry[];
 }
 
-export const CURRENT_VERSION = '0.13.0';
+export const CURRENT_VERSION = '0.13.1';
 
 /** localStorage key for "last version the user opened the changelog at". */
 export const SEEN_KEY = 'seltzer:last-seen-version';
@@ -32,6 +32,18 @@ export function hasUnseenRelease(): boolean {
 }
 
 export const RELEASES: Release[] = [
+  {
+    version: '0.13.1',
+    date: '2026-05-18',
+    headline: 'Half-stars (and tenth-stars) for Tried It',
+    changes: [
+      {
+        kind: 'improved',
+        title: '"Tried It" supports 0.1 increments',
+        detail: 'When you tap "Tried It?" on someone else\'s review, you can now drag along the row for half-step ratings or use the ± buttons for exact 0.1 nudges — same precision as creating a review.',
+      },
+    ],
+  },
   {
     version: '0.13.0',
     date: '2026-05-10',
