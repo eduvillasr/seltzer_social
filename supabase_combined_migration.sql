@@ -1,3 +1,525 @@
+-- ════════════════════════════════════════════════════════════════
+-- COMBINED MIGRATION — Seltzer Social
+-- Run once in the Supabase SQL Editor. All sections idempotent.
+--
+-- Order matters: strict naming first (dedup), then catalog seed,
+-- then perf indexes. Each section's own block-comment header
+-- is preserved verbatim — safe to skim, safe to re-run.
+-- ════════════════════════════════════════════════════════════════
+
+
+-- ════════════════════════════════════════════════════════════════
+-- SECTION 1 / 5  —  STRICT FLAVOR-NAME NORMALIZATION
+-- ════════════════════════════════════════════════════════════════
+-- ─────────────────────────────────────────────────────────────
+-- STRICT FLAVOR-NAME NORMALIZATION (collision-safe, full FK handling)
+-- One canonical spelling per drink: no dashes, no plus signs, no
+-- ampersands. Existing rows are rewritten in place; if rewriting would
+-- collide with another row, both rows are merged.
+--
+-- IMPORTANT MERGE BEHAVIOR:
+--   * Reviews are NEVER deleted. Two users can review the same drink —
+--     that's expected. Reviews from the loser canonical seltzer simply
+--     have their seltzer_id repointed to the keeper. Both show up on
+--     /drink/[keeper] afterwards.
+--   * Shared tier-list ITEMS *can* duplicate on a single list when the
+--     two seltzer rows being merged were both on the same list. In that
+--     case the two items themselves are merged (rating_contributions
+--     map combined, displayed rating recomputed) and the loser item is
+--     deleted, preserving the per-list uniqueness constraint.
+--   * Same idea for shared_tier_list_suggestions: when both lose and
+--     keep already had an entry on the same list, we keep the older.
+--
+-- Idempotent. Run after supabase_tier_list_dedupe.sql.
+-- ─────────────────────────────────────────────────────────────
+
+-- 1. Drop any prior name check.
+alter table public.seltzers drop constraint if exists seltzers_name_no_plus;
+alter table public.seltzers drop constraint if exists seltzers_name_no_punctuation;
+
+-- 2. Walk every row that has forbidden punctuation. Normalize in place
+--    when safe; merge with the existing canonical row when not.
+do $$
+declare
+  rec record;
+  new_name text;
+  collision_id uuid;
+  collision_at timestamptz;
+  keeper uuid;
+  loser uuid;
+  it record;
+  existing_item_id uuid;
+  merged_contribs jsonb;
+  avg_r numeric;
+  tier_letter text;
+begin
+  for rec in
+    select id, brand, name, created_at
+    from public.seltzers
+    where name ~ '[-+–—&]'
+    order by created_at asc nulls first
+  loop
+    new_name := trim(regexp_replace(
+      replace(regexp_replace(rec.name, '[-+–—]+', ' ', 'g'), '&', 'and'),
+      '\s+', ' ', 'g'
+    ));
+    if new_name = rec.name then
+      continue;
+    end if;
+
+    -- Is there already a row at this canonical (brand, name)?
+    select id, created_at into collision_id, collision_at
+    from public.seltzers
+    where lower(brand) = lower(rec.brand)
+      and lower(name)  = lower(new_name)
+      and id <> rec.id
+    limit 1;
+
+    if collision_id is null then
+      update public.seltzers set name = new_name where id = rec.id;
+      continue;
+    end if;
+
+    -- Pick the older row as keeper.
+    if collision_at is null or (rec.created_at is not null and rec.created_at < collision_at) then
+      keeper := rec.id;
+      loser  := collision_id;
+      update public.seltzers set name = new_name where id = keeper;
+    else
+      keeper := collision_id;
+      loser  := rec.id;
+    end if;
+
+    ----------------------------------------------------------------
+    -- REVIEWS: just repoint. Two reviews on the same drink is fine.
+    ----------------------------------------------------------------
+    update public.reviews
+      set seltzer_id = keeper where seltzer_id = loser;
+
+    ----------------------------------------------------------------
+    -- TIER LIST ITEMS: if both rows are on the same list, MERGE them
+    -- (combine rating_contributions, recompute rating + tier),
+    -- otherwise just repoint.
+    ----------------------------------------------------------------
+    for it in
+      select id, list_id, rating_contributions, rating, added_by
+      from public.shared_tier_list_items
+      where seltzer_id = loser
+    loop
+      select id into existing_item_id
+      from public.shared_tier_list_items
+      where seltzer_id = keeper and list_id = it.list_id
+      limit 1;
+
+      if existing_item_id is null then
+        update public.shared_tier_list_items
+          set seltzer_id = keeper where id = it.id;
+      else
+        -- Merge the two items
+        select coalesce(jsonb_object_agg(k, v), '{}'::jsonb)
+          into merged_contribs
+        from (
+          select kv.key as k, max((kv.value)::text)::numeric as v
+          from public.shared_tier_list_items i,
+               lateral jsonb_each(
+                 coalesce(
+                   i.rating_contributions,
+                   jsonb_build_object(i.added_by::text, to_jsonb(i.rating))
+                 )
+               ) kv
+          where i.id in (existing_item_id, it.id)
+          group by kv.key
+        ) merged_kv;
+
+        -- Compute new average + tier letter
+        avg_r := 0;
+        select round((sum(value::numeric)/count(*))::numeric, 1) into avg_r
+        from jsonb_each_text(merged_contribs);
+        tier_letter := case
+          when avg_r >= 4.5 then 'S' when avg_r >= 4 then 'A'
+          when avg_r >= 3   then 'B' when avg_r >= 2 then 'C'
+          when avg_r >= 1   then 'D' else 'F' end;
+
+        update public.shared_tier_list_items
+          set rating_contributions = merged_contribs,
+              rating = avg_r,
+              tier   = tier_letter
+          where id = existing_item_id;
+
+        delete from public.shared_tier_list_items where id = it.id;
+      end if;
+    end loop;
+
+    ----------------------------------------------------------------
+    -- TIER LIST SUGGESTIONS: same idea — repoint if no collision on
+    -- the same list, otherwise drop the duplicate suggestion.
+    ----------------------------------------------------------------
+    delete from public.shared_tier_list_suggestions s1
+    using public.shared_tier_list_suggestions s2
+    where s1.seltzer_id = loser
+      and s2.seltzer_id = keeper
+      and s1.list_id    = s2.list_id
+      and s1.id <> s2.id;
+    update public.shared_tier_list_suggestions
+      set seltzer_id = keeper where seltzer_id = loser;
+
+    -- Finally drop the loser seltzer row
+    delete from public.seltzers where id = loser;
+  end loop;
+end$$;
+
+-- 3. Collapse incidental double-spaces in names that didn't have
+--    forbidden chars (e.g. from earlier ad-hoc edits).
+update public.seltzers
+set name = trim(regexp_replace(name, '\s+', ' ', 'g'))
+where name <> trim(regexp_replace(name, '\s+', ' ', 'g'));
+
+-- 4. Add the CHECK so the strict rule sticks for future inserts.
+alter table public.seltzers
+  add constraint seltzers_name_no_punctuation
+  check (name !~ '[-+&–—]');
+
+-- 5. Sanity reports.
+select 'Names with forbidden punctuation:' as note, count(*) as count
+from public.seltzers where name ~ '[-+&–—]';
+
+select 'Duplicate (brand, name) rows:' as note, count(*) as count
+from (
+  select lower(brand), lower(name)
+  from public.seltzers group by 1, 2 having count(*) > 1
+) d;
+
+select 'Duplicate tier-list items on same (list, seltzer):' as note, count(*) as count
+from (
+  select list_id, seltzer_id
+  from public.shared_tier_list_items
+  where seltzer_id is not null
+  group by 1, 2 having count(*) > 1
+) d;
+
+
+-- ════════════════════════════════════════════════════════════════
+-- SECTION 2 / 5  —  TIER-LIST ITEM DEDUPE
+-- ════════════════════════════════════════════════════════════════
+-- ─────────────────────────────────────────────────────────────
+-- DEDUPLICATE shared_tier_list_items
+-- Merges any pre-existing duplicates (same list_id + same canonical
+-- drink) into a single row whose rating_contributions map carries
+-- everyone's rating, then enforces uniqueness going forward.
+-- Idempotent. Run in Supabase SQL Editor.
+-- ─────────────────────────────────────────────────────────────
+
+-- 1. Merge duplicates by (list_id, seltzer_id) — for items with a seltzer_id.
+--    For each (list_id, seltzer_id) group with >1 rows: keep the oldest one,
+--    coalesce all rating_contributions into it, then delete the rest.
+do $$
+declare
+  rec record;
+  keeper_id uuid;
+  merged jsonb;
+  vals numeric[];
+  v numeric;
+  avg_r numeric;
+  tier_letter text;
+begin
+  for rec in
+    select list_id, seltzer_id, count(*) as c
+    from public.shared_tier_list_items
+    where seltzer_id is not null
+    group by list_id, seltzer_id
+    having count(*) > 1
+  loop
+    -- Pick the oldest as the keeper
+    select id into keeper_id
+    from public.shared_tier_list_items
+    where list_id = rec.list_id and seltzer_id = rec.seltzer_id
+    order by created_at asc
+    limit 1;
+
+    -- Build a merged contributions map across all duplicate rows.
+    -- If any row has no rating_contributions map, seed one from (added_by, rating).
+    select coalesce(
+      jsonb_object_agg(k, v),
+      '{}'::jsonb
+    )
+    into merged
+    from (
+      select kv.key as k, max((kv.value)::text)::numeric as v
+      from public.shared_tier_list_items i,
+           lateral jsonb_each(
+             coalesce(
+               i.rating_contributions,
+               jsonb_build_object(i.added_by::text, to_jsonb(i.rating))
+             )
+           ) kv
+      where i.list_id = rec.list_id and i.seltzer_id = rec.seltzer_id
+      group by kv.key
+    ) merged_kv;
+
+    -- Compute new avg + tier letter
+    select array_agg(value::numeric) into vals
+    from jsonb_each_text(merged);
+    avg_r := 0;
+    if array_length(vals, 1) > 0 then
+      select round((sum(x)/count(x))::numeric, 1) into avg_r from unnest(vals) x;
+    end if;
+    tier_letter := case
+      when avg_r >= 4.5 then 'S'
+      when avg_r >= 4   then 'A'
+      when avg_r >= 3   then 'B'
+      when avg_r >= 2   then 'C'
+      when avg_r >= 1   then 'D'
+      else 'F'
+    end;
+
+    -- Update keeper with merged values
+    update public.shared_tier_list_items
+    set rating_contributions = merged,
+        rating = avg_r,
+        tier = tier_letter
+    where id = keeper_id;
+
+    -- Delete the rest
+    delete from public.shared_tier_list_items
+    where list_id = rec.list_id and seltzer_id = rec.seltzer_id
+      and id <> keeper_id;
+  end loop;
+end$$;
+
+-- 2. For legacy items without seltzer_id, merge by case-insensitive (brand, name).
+do $$
+declare
+  rec record;
+  keeper_id uuid;
+  merged jsonb;
+  vals numeric[];
+  avg_r numeric;
+  tier_letter text;
+begin
+  for rec in
+    select list_id, lower(coalesce(brand,'')) as b, lower(seltzer_name) as n, count(*) as c
+    from public.shared_tier_list_items
+    where seltzer_id is null
+    group by list_id, lower(coalesce(brand,'')), lower(seltzer_name)
+    having count(*) > 1
+  loop
+    select id into keeper_id
+    from public.shared_tier_list_items
+    where list_id = rec.list_id
+      and lower(coalesce(brand,'')) = rec.b
+      and lower(seltzer_name) = rec.n
+      and seltzer_id is null
+    order by created_at asc
+    limit 1;
+
+    select coalesce(jsonb_object_agg(k, v), '{}'::jsonb)
+    into merged
+    from (
+      select kv.key as k, max((kv.value)::text)::numeric as v
+      from public.shared_tier_list_items i,
+           lateral jsonb_each(
+             coalesce(
+               i.rating_contributions,
+               jsonb_build_object(i.added_by::text, to_jsonb(i.rating))
+             )
+           ) kv
+      where i.list_id = rec.list_id
+        and lower(coalesce(i.brand,'')) = rec.b
+        and lower(i.seltzer_name) = rec.n
+        and i.seltzer_id is null
+      group by kv.key
+    ) merged_kv;
+
+    select array_agg(value::numeric) into vals
+    from jsonb_each_text(merged);
+    avg_r := 0;
+    if array_length(vals, 1) > 0 then
+      select round((sum(x)/count(x))::numeric, 1) into avg_r from unnest(vals) x;
+    end if;
+    tier_letter := case
+      when avg_r >= 4.5 then 'S'
+      when avg_r >= 4   then 'A'
+      when avg_r >= 3   then 'B'
+      when avg_r >= 2   then 'C'
+      when avg_r >= 1   then 'D'
+      else 'F'
+    end;
+
+    update public.shared_tier_list_items
+    set rating_contributions = merged,
+        rating = avg_r,
+        tier = tier_letter
+    where id = keeper_id;
+
+    delete from public.shared_tier_list_items
+    where list_id = rec.list_id
+      and lower(coalesce(brand,'')) = rec.b
+      and lower(seltzer_name) = rec.n
+      and seltzer_id is null
+      and id <> keeper_id;
+  end loop;
+end$$;
+
+-- 3. Add a unique constraint so we can't ever insert a duplicate again
+--    (for rows that DO have a seltzer_id). Legacy rows without one are
+--    excluded because NULL != NULL in unique constraints.
+create unique index if not exists shared_tier_list_items_list_seltzer_uniq
+  on public.shared_tier_list_items (list_id, seltzer_id)
+  where seltzer_id is not null;
+
+-- Report what's left
+select 'After dedupe — duplicates remaining (should be 0):' as note,
+       count(*) as count
+from (
+  select list_id, seltzer_id, count(*) as c
+  from public.shared_tier_list_items
+  where seltzer_id is not null
+  group by list_id, seltzer_id
+  having count(*) > 1
+) dups;
+
+
+-- ════════════════════════════════════════════════════════════════
+-- SECTION 3 / 5  —  MULTI-MEMBER TIER-LIST EDITORS
+-- ════════════════════════════════════════════════════════════════
+-- ─────────────────────────────────────────────────────────────
+-- TIER LIST EDITORS (multi-member invites)
+-- Lets the owner of a shared tier list invite N additional users
+-- with edit access (beyond the original owner+partner pair).
+-- Run in Supabase SQL Editor — idempotent.
+-- ─────────────────────────────────────────────────────────────
+
+create table if not exists public.shared_tier_list_editors (
+  list_id    uuid not null references public.shared_tier_lists(id) on delete cascade,
+  user_id    uuid not null references public.users(id)             on delete cascade,
+  status     text not null default 'pending_invite' check (status in ('pending_invite','active','declined')),
+  invited_by uuid references public.users(id) on delete set null,
+  created_at timestamptz not null default now(),
+  responded_at timestamptz,
+  primary key (list_id, user_id)
+);
+
+create index if not exists shared_tier_list_editors_user_idx
+  on public.shared_tier_list_editors (user_id);
+create index if not exists shared_tier_list_editors_list_status_idx
+  on public.shared_tier_list_editors (list_id, status);
+
+-- ─── Row-Level Security ────────────────────────────────────
+alter table public.shared_tier_list_editors enable row level security;
+
+-- Anyone can read editor rows so the UI can show "X invited you" / "Y, Z editing"
+drop policy if exists "Editors readable by anyone" on public.shared_tier_list_editors;
+create policy "Editors readable by anyone"
+  on public.shared_tier_list_editors for select
+  using (true);
+
+-- Only the list's OWNER can invite (insert) someone as editor
+drop policy if exists "Owner can invite editors" on public.shared_tier_list_editors;
+create policy "Owner can invite editors"
+  on public.shared_tier_list_editors for insert
+  with check (
+    auth.uid() = invited_by
+    and exists (
+      select 1 from public.shared_tier_lists l
+      where l.id = list_id and l.owner_id = auth.uid()
+    )
+  );
+
+-- The invited user can accept/decline (update their own row's status).
+-- The owner can also update (e.g. revoke) any editor row on their list.
+drop policy if exists "Editor can update own status" on public.shared_tier_list_editors;
+create policy "Editor can update own status"
+  on public.shared_tier_list_editors for update
+  using (
+    auth.uid() = user_id
+    or exists (
+      select 1 from public.shared_tier_lists l
+      where l.id = list_id and l.owner_id = auth.uid()
+    )
+  );
+
+-- Owner can remove an editor; an editor can remove themselves
+drop policy if exists "Owner or self can delete editor row" on public.shared_tier_list_editors;
+create policy "Owner or self can delete editor row"
+  on public.shared_tier_list_editors for delete
+  using (
+    auth.uid() = user_id
+    or exists (
+      select 1 from public.shared_tier_lists l
+      where l.id = list_id and l.owner_id = auth.uid()
+    )
+  );
+
+-- ─── Allow accepted editors to write to list items / suggestions ──
+-- The existing RLS on shared_tier_list_items / _suggestions checks
+-- (user is owner_id or partner_id). We need to extend that to also
+-- accept any user with status='active' in shared_tier_list_editors.
+-- These wrappers replace the previous policies.
+
+drop policy if exists "Members can manage items" on public.shared_tier_list_items;
+create policy "Members can manage items"
+  on public.shared_tier_list_items for all
+  using (
+    exists (
+      select 1 from public.shared_tier_lists l
+      where l.id = shared_tier_list_items.list_id
+        and (l.owner_id = auth.uid() or l.partner_id = auth.uid())
+    )
+    or exists (
+      select 1 from public.shared_tier_list_editors e
+      where e.list_id = shared_tier_list_items.list_id
+        and e.user_id = auth.uid()
+        and e.status = 'active'
+    )
+  )
+  with check (
+    exists (
+      select 1 from public.shared_tier_lists l
+      where l.id = shared_tier_list_items.list_id
+        and (l.owner_id = auth.uid() or l.partner_id = auth.uid())
+    )
+    or exists (
+      select 1 from public.shared_tier_list_editors e
+      where e.list_id = shared_tier_list_items.list_id
+        and e.user_id = auth.uid()
+        and e.status = 'active'
+    )
+  );
+
+drop policy if exists "Members can manage suggestions" on public.shared_tier_list_suggestions;
+create policy "Members can manage suggestions"
+  on public.shared_tier_list_suggestions for all
+  using (
+    exists (
+      select 1 from public.shared_tier_lists l
+      where l.id = shared_tier_list_suggestions.list_id
+        and (l.owner_id = auth.uid() or l.partner_id = auth.uid())
+    )
+    or exists (
+      select 1 from public.shared_tier_list_editors e
+      where e.list_id = shared_tier_list_suggestions.list_id
+        and e.user_id = auth.uid()
+        and e.status = 'active'
+    )
+  )
+  with check (
+    exists (
+      select 1 from public.shared_tier_lists l
+      where l.id = shared_tier_list_suggestions.list_id
+        and (l.owner_id = auth.uid() or l.partner_id = auth.uid())
+    )
+    or exists (
+      select 1 from public.shared_tier_list_editors e
+      where e.list_id = shared_tier_list_suggestions.list_id
+        and e.user_id = auth.uid()
+        and e.status = 'active'
+    )
+  );
+
+
+-- ════════════════════════════════════════════════════════════════
+-- SECTION 4 / 5  —  CANONICAL CATALOG SEED (1,092 SKUs)
+-- ════════════════════════════════════════════════════════════════
 -- Seltzer canonical-catalogue seed (1092 SKUs, strict naming)
 -- Run after supabase_standardize_data.sql AND supabase_strict_naming.sql.
 
@@ -1100,3 +1622,105 @@ update public.seltzers
   set image_quality_flag = 'needs_review'
   where image_url is null
     and (image_quality_flag is null or image_quality_flag <> 'replaced');
+
+-- ════════════════════════════════════════════════════════════════
+-- SECTION 5 / 5  —  SCALABILITY INDEXES + drink_stats VIEW
+-- ════════════════════════════════════════════════════════════════
+-- ─────────────────────────────────────────────────────────────
+-- SCALABILITY INDEXES & MATERIALIZED VIEWS
+-- One-shot migration adding the indexes that matter once you've got
+-- more than a few thousand reviews. Idempotent.
+--
+-- Hot paths covered:
+--   1. Trigram search on seltzers (brand/name)  — autocomplete
+--   2. Reviews by seltzer (drink page)           — already indexed?
+--   3. Reviews by user (profile feed)            — common
+--   4. Feed query (reviews joined with follows)  — common
+--   5. Likes/comments/tried-it counts by review  — every feed page
+--   6. Per-drink aggregates as a materialized view (cheap reads)
+-- ─────────────────────────────────────────────────────────────
+
+-- Enable trigram extension for fast ILIKE search
+create extension if not exists pg_trgm;
+
+-- 1. Seltzer search — trigram index makes `ilike '%query%'` ~10× faster
+create index if not exists seltzers_brand_trgm  on public.seltzers using gin (lower(brand)  gin_trgm_ops);
+create index if not exists seltzers_name_trgm   on public.seltzers using gin (lower(name)   gin_trgm_ops);
+
+-- 2. Drink page — fetch every review of a single seltzer, newest first
+create index if not exists reviews_seltzer_created_idx
+  on public.reviews (seltzer_id, created_at desc);
+
+-- 3. Profile reviews — fetch a user's reviews, newest first
+create index if not exists reviews_user_created_idx
+  on public.reviews (user_id, created_at desc);
+
+-- 4. Likes / comments / tried-it lookups by review
+create index if not exists likes_review_user_idx     on public.likes (review_id, user_id);
+create index if not exists comments_review_idx       on public.comments (review_id, created_at);
+create index if not exists tried_it_review_idx       on public.tried_it (review_id);
+create index if not exists tried_it_user_idx         on public.tried_it (user_id);
+
+-- 5. Follows — feed-building lookups
+create index if not exists follows_follower_idx      on public.follows (follower_id);
+create index if not exists follows_following_idx     on public.follows (following_id);
+
+-- 6. Notifications — inbox queries by user, newest first, unread filter
+--    (column is `read` on your schema, not `is_read`)
+create index if not exists notifications_user_created_idx
+  on public.notifications (user_id, created_at desc);
+create index if not exists notifications_user_unread_idx
+  on public.notifications (user_id, read)
+  where read = false;
+
+-- 7. Tier list activity feed — subscribed-list updates by created_at
+create index if not exists shared_tier_list_items_list_added_idx
+  on public.shared_tier_list_items (list_id, added_by);
+create index if not exists shared_tier_list_items_seltzer_idx
+  on public.shared_tier_list_items (seltzer_id);
+
+-- 8. Reviews JSONB — speed up rating_contributions lookups (not used yet,
+--    but cheap to add). Skipped — only add if profile aggregations grow.
+
+-- ───── MATERIALIZED VIEW: drink stats ─────
+-- For 1,000+ canonical drinks × thousands of reviews, computing
+-- (count, avg_rating, latest_image_url) on every /trending and /drink
+-- pageview is wasteful. This view recomputes on a schedule (cron).
+
+drop materialized view if exists public.drink_stats cascade;
+create materialized view public.drink_stats as
+select
+  r.seltzer_id              as seltzer_id,
+  count(*)                  as review_count,
+  round(avg(r.rating)::numeric, 2) as avg_rating,
+  max(r.created_at)         as latest_review_at,
+  -- Pick the freshest image URL from any review of this drink
+  (array_agg(r.image_url order by r.created_at desc) filter (where r.image_url is not null))[1]
+                            as latest_image_url
+from public.reviews r
+where r.seltzer_id is not null
+group by r.seltzer_id;
+
+create unique index drink_stats_seltzer_uniq on public.drink_stats (seltzer_id);
+create index       drink_stats_review_count   on public.drink_stats (review_count desc);
+create index       drink_stats_avg_rating     on public.drink_stats (avg_rating desc);
+
+-- Initial populate
+refresh materialized view public.drink_stats;
+
+-- ───── Helper RPC to refresh on demand ─────
+create or replace function public.refresh_drink_stats()
+returns void
+language plpgsql
+security definer
+as $$
+begin
+  refresh materialized view concurrently public.drink_stats;
+end;
+$$;
+
+-- Anyone authenticated can trigger a refresh (cheap; rate-limit upstream)
+grant execute on function public.refresh_drink_stats() to authenticated;
+
+
+select 'Drink stats rows:' as note, count(*) as count from public.drink_stats;

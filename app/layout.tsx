@@ -5,6 +5,7 @@ import './globals.css';
 import { ToastHost } from '@/components/Toast';
 import { PWARegistrar } from '@/components/PWARegistrar';
 import { InstallPrompt } from '@/components/InstallPrompt';
+import { RouterRefresher } from '@/components/RouterRefresher';
 
 export const metadata: Metadata = {
   title: 'Seltzer Social — Rate. Review. Discover.',
@@ -46,6 +47,7 @@ export default function RootLayout({
         <ToastHost />
         <InstallPrompt />
         <PWARegistrar />
+        <RouterRefresher />
       </body>
     </html>
   );

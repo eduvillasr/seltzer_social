@@ -70,6 +70,9 @@ export default function SharedListPage({ params }: { params: { id: string } }) {
   const [subscribed, setSubscribed]   = useState(false);
   const [trialRatings, setTrialRatings] = useState<Record<string, number>>({});
 
+  // Tap a tier letter to expand that whole tier into a fullscreen sheet.
+  const [expandedTier, setExpandedTier] = useState<Tier | null>(null);
+
   // Invite modal — used for both "invite partner" (solo→shared) and
   // "invite additional editor" (shared→multi-member)
   const [showInviteModal, setShowInviteModal] = useState(false);
@@ -930,11 +933,14 @@ export default function SharedListPage({ params }: { params: { id: string } }) {
 
             return (
               <div key={tier} className="rounded-xl overflow-hidden flex" style={{ border: '1px solid var(--border-subtle)' }}>
-                {/* Tier letter rail */}
+                {/* Tier letter rail — tap to expand into a fullscreen
+                    scrollable view of every drink in this tier. */}
                 <button
-                  onClick={() => toggleTier(tier)}
-                  className="w-10 flex flex-col items-center justify-center font-extrabold flex-shrink-0 hover:opacity-80 transition-opacity"
+                  onClick={() => !isEmpty && setExpandedTier(tier)}
+                  disabled={isEmpty}
+                  className="w-10 flex flex-col items-center justify-center font-extrabold flex-shrink-0 hover:opacity-80 transition-opacity disabled:cursor-default"
                   style={{ background: `${TIER_COLORS[tier]}22`, color: TIER_COLORS[tier] }}
+                  title={!isEmpty ? `Expand tier ${tier}` : undefined}
                 >
                   <span className="text-base">{tier}</span>
                   {!isEmpty && <span className="text-[9px] font-medium opacity-60 mt-0.5">{tierItems.length}</span>}
@@ -1138,6 +1144,115 @@ export default function SharedListPage({ params }: { params: { id: string } }) {
                     <Check size={12} /> {editSaving ? 'Saving…' : 'Save'}
                   </button>
                 </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ══════════════════════════════════════
+          TIER-EXPAND MODAL
+      ══════════════════════════════════════ */}
+      {expandedTier && (
+        <div
+          className="fixed inset-0 z-50 flex flex-col"
+          style={{ background: 'rgba(5,8,16,0.92)', backdropFilter: 'blur(10px)' }}
+        >
+          {/* Sticky header */}
+          <div
+            className="flex-shrink-0 flex items-center gap-3 px-4 py-3"
+            style={{
+              paddingTop: 'calc(env(safe-area-inset-top, 0px) + 12px)',
+              borderBottom: '1px solid var(--border-subtle)',
+              background: 'rgba(10,14,26,0.85)',
+              backdropFilter: 'blur(20px)',
+            }}
+          >
+            <div
+              className="w-10 h-10 rounded-full flex items-center justify-center text-lg font-extrabold flex-shrink-0"
+              style={{ background: `${TIER_COLORS[expandedTier]}33`, color: TIER_COLORS[expandedTier] }}
+            >
+              {expandedTier}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-[10px] font-bold uppercase tracking-[0.18em]" style={{ color: TIER_COLORS[expandedTier] }}>
+                Tier {expandedTier}
+              </p>
+              <h2 className="text-base font-extrabold truncate" style={{ fontFamily: 'var(--font-display)' }}>
+                {itemsByTier[expandedTier]?.length || 0} {(itemsByTier[expandedTier]?.length || 0) === 1 ? 'drink' : 'drinks'}
+              </h2>
+            </div>
+            <button
+              onClick={() => setExpandedTier(null)}
+              className="w-10 h-10 rounded-full flex items-center justify-center hover:bg-white/5 transition-colors flex-shrink-0"
+              style={{ color: 'var(--text-secondary)' }}
+              aria-label="Close"
+            >
+              <X size={20} />
+            </button>
+          </div>
+
+          {/* Scrollable grid of drinks */}
+          <div
+            className="flex-1 overflow-y-auto px-4 py-4"
+            style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 24px)' }}
+          >
+            <div className="max-w-md mx-auto">
+              {(itemsByTier[expandedTier] || []).length === 0 ? (
+                <p className="text-center text-sm py-12" style={{ color: 'var(--text-muted)' }}>
+                  Empty tier.
+                </p>
+              ) : (
+                <div className="grid grid-cols-3 gap-2">
+                  {(itemsByTier[expandedTier] || []).map((item) => {
+                    const drinkHref = item.seltzer_id ? `/drink/${item.seltzer_id}` : null;
+                    const imgUrl = item.review?.image_url || item.seltzer?.image_url || null;
+                    const contribCount = item.rating_contributions ? Object.keys(item.rating_contributions).length : 0;
+
+                    const card = (
+                      <div
+                        className="rounded-xl overflow-hidden transition-transform hover:scale-105"
+                        style={{ background: 'rgba(15,20,36,0.6)', border: '1px solid var(--border-subtle)' }}
+                      >
+                        <div className="aspect-square w-full overflow-hidden flex items-center justify-center" style={{ background: '#fff' }}>
+                          {imgUrl ? (
+                            <img src={imgUrl} alt={item.seltzer_name} className="w-full h-full object-contain" />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center text-xs font-bold text-center" style={{ background: `${TIER_COLORS[expandedTier]}22`, color: TIER_COLORS[expandedTier] }}>
+                              {item.seltzer_name}
+                            </div>
+                          )}
+                        </div>
+                        <div className="p-2">
+                          <p className="text-xs font-semibold truncate" style={{ color: 'var(--text-primary)' }}>
+                            {item.seltzer_name}
+                          </p>
+                          <p className="text-[10px] truncate" style={{ color: 'var(--text-muted)' }}>
+                            {item.brand}
+                          </p>
+                          <p className="text-[10px] mt-0.5" style={{ color: 'var(--text-secondary)' }}>
+                            ⭐ {item.rating.toFixed(1)}
+                            {contribCount > 1 && (
+                              <span style={{ color: 'var(--cyan-400)' }}> · avg {contribCount}</span>
+                            )}
+                          </p>
+                        </div>
+                      </div>
+                    );
+
+                    return drinkHref ? (
+                      <Link
+                        key={item.id}
+                        href={drinkHref}
+                        onClick={() => setExpandedTier(null)}
+                      >
+                        {card}
+                      </Link>
+                    ) : (
+                      <div key={item.id}>{card}</div>
+                    );
+                  })}
+                </div>
               )}
             </div>
           </div>

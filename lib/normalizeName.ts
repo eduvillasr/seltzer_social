@@ -1,25 +1,24 @@
 // lib/normalizeName.ts
 //
-// Canonical name normalization for drinks. Mirrors
-// supabase_standardize_data.sql so client and DB agree on the canonical
-// form. Used by:
-//   - findOrCreateSeltzer (so a user typing "AHA Lime + Watermelon" winds
-//     up matching the canonical "AHA Lime Watermelon")
-//   - the add-new-drink form in /create (warn or auto-clean the input)
+// Canonical name normalization for drinks. Mirrors the SQL migrations
+// supabase_standardize_data.sql and supabase_strict_naming.sql so client
+// and DB agree on the canonical form. Used by:
+//   - findOrCreateSeltzer (any user-typed input is normalized before save)
+//   - the add-new-drink form in /create (live preview + isValidName())
 //
-// Rules (kept tight, no surprises):
-//   1. " + " (plus surrounded by spaces) → " " (single space)
-//   2. Specific hyphenated flavor pairs become plain spaces:
-//        "Razz-Cranberry"  → "Razz Cranberry"
-//        "Lemon-Lime"      → "Lemon Lime"
-//      Real words with dashes (Half-and-Half, Pesca-Tea) are preserved.
-//   3. Smart quotes/apostrophes (’ ‘ " ") → straight ASCII versions.
-//   4. Collapse multiple spaces. Trim.
-
-const HYPHEN_PAIRS_TO_NORMALIZE = new Set<string>([
-  'razz-cranberry',
-  'lemon-lime',
-]);
+// FLAVOR-NAME rules (strict — there is exactly one canonical form):
+//   1. Smart quotes → straight ASCII.
+//   2. Any "+" character → space.
+//   3. Any hyphen "-" or en/em-dash → space. NO exceptions.
+//      "Half-and-Half" → "Half and Half". "Pesca-Tea" → "Pesca Tea".
+//      "Blackberry-Cucumber" → "Blackberry Cucumber".
+//      This means there's exactly one way to spell every drink.
+//   4. Any "&" → "and".
+//   5. Collapse multiple spaces. Trim.
+//
+// BRAND names are touched more lightly — brands like "Good & Gather",
+// "Hal's New York", "365 by Whole Foods" are legit canonical spellings
+// the brand owns. We just normalize whitespace + smart-quotes there.
 
 export function normalizeBrand(input: string): string {
   return collapseAndTrim(replaceSmartQuotes(input));
@@ -27,19 +26,9 @@ export function normalizeBrand(input: string): string {
 
 export function normalizeName(input: string): string {
   let s = replaceSmartQuotes(input);
-  // " + " → " "
-  s = s.split(' + ').join(' ');
-  // Specific hyphenated flavor pairs → spaces. We only convert pairs we've
-  // whitelisted so we don't accidentally mangle "Half-and-Half".
-  s = s
-    .split(/\s+/)
-    .map((token) => {
-      if (HYPHEN_PAIRS_TO_NORMALIZE.has(token.toLowerCase())) {
-        return token.replace(/-/g, ' ');
-      }
-      return token;
-    })
-    .join(' ');
+  // Replace every separator-shaped character with a space:
+  s = s.replace(/[-+]/g, ' '); // - +
+  s = s.replace(/&/g, 'and');  // "& " or "&" → "and"
   return collapseAndTrim(s);
 }
 
@@ -50,11 +39,21 @@ export function normalizeBrandAndName(
   return { brand: normalizeBrand(brand), name: normalizeName(name) };
 }
 
+/** Returns a list of human-readable problems, or [] if the name is valid. */
+export function validateName(name: string): string[] {
+  const issues: string[] = [];
+  if (!name.trim()) issues.push('Name is required.');
+  if (/[-+]/.test(name)) issues.push('Use spaces instead of dashes or +.');
+  if (/[&]/.test(name)) issues.push('Use "and" instead of "&".');
+  if (name.length > 120) issues.push('Name is too long.');
+  return issues;
+}
+
 function replaceSmartQuotes(s: string): string {
   return s
     .replace(/[‘’]/g, "'") // ‘ ’
     .replace(/[“”]/g, '"') // “ ”
-    .replace(/–|—/g, '-'); // – —
+    .replace(/–|—/g, '-'); // – — → - (then normalizeName strips it)
 }
 
 function collapseAndTrim(s: string): string {

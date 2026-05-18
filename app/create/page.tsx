@@ -501,11 +501,23 @@ export default function CreateReview() {
                   <input
                     type="text"
                     value={newName}
-                    onChange={(e) => setNewName(e.target.value)}
-                    placeholder="Drink name (e.g. Mango Lime - Sparkling Water)"
+                    onChange={(e) => {
+                      // Auto-strip forbidden punctuation as the user types
+                      // (-, +, &, en-dash, em-dash) → spaces. Keeps every
+                      // canonical drink to a single spelling.
+                      const cleaned = e.target.value
+                        .replace(/[-+–—]/g, ' ')
+                        .replace(/&/g, 'and')
+                        .replace(/\s+/g, ' ');
+                      setNewName(cleaned);
+                    }}
+                    placeholder="Drink name (e.g. Mango Lime Sparkling Water)"
                     className="input-field"
                     style={{ height: '38px', fontSize: '13px' }}
                   />
+                  <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
+                    Use plain spaces — dashes, plus signs, and "&" are auto-converted to keep the catalog tidy.
+                  </p>
 
                   <button
                     type="button"
