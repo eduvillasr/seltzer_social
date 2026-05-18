@@ -230,8 +230,12 @@ export async function getRecentImagesForSeltzer(seltzerId: string, limit: number
  * Returns the canonical row so callers can use seltzer_id.
  */
 export async function findOrCreateSeltzer(brand: string, name: string, createdBy?: string) {
-  const cleanBrand = brand.trim();
-  const cleanName  = name.trim();
+  // Always normalize through the shared canonical-form rules so we don't
+  // create "AHA Lime + Watermelon" alongside "AHA Lime Watermelon", etc.
+  // (See lib/normalizeName.ts for the rules.)
+  const { normalizeBrand, normalizeName } = await import('./normalizeName');
+  const cleanBrand = normalizeBrand(brand);
+  const cleanName  = normalizeName(name);
   if (!cleanBrand || !cleanName) return { data: null, error: new Error('Brand and name required') };
 
   // Look up existing
@@ -599,6 +603,97 @@ export async function updateReview(
     };
   }
   return { data: data[0], error: null };
+}
+
+/**
+ * Curator action: replace the canonical image of a seltzer in the public
+ * catalog. Restricted by RLS to users where users.can_curate = true (set
+ * in supabase_standardize_data.sql for founders + beta testers).
+ * Writes an audit row to image_curation_log.
+ */
+export async function replaceCanonicalSeltzerImage(
+  seltzerId: string,
+  userId: string,
+  newUrl: string,
+  reason?: string,
+) {
+  // fetch the existing url so we can audit it
+  const { data: existing } = await supabase
+    .from('seltzers')
+    .select('id, image_url')
+    .eq('id', seltzerId)
+    .maybeSingle();
+
+  const { data, error } = await supabase
+    .from('seltzers')
+    .update({ image_url: newUrl, image_quality_flag: 'replaced' })
+    .eq('id', seltzerId)
+    .select('*')
+    .single();
+  if (error) return { data: null, error };
+
+  // best-effort audit log; failure here doesn't block the update
+  await supabase.from('image_curation_log').insert({
+    seltzer_id: seltzerId,
+    changed_by: userId,
+    old_url: existing?.image_url || null,
+    new_url: newUrl,
+    reason: reason || null,
+  });
+  return { data, error: null };
+}
+
+/**
+ * Resize + upload a curator-supplied image to the review-images bucket
+ * under a `canonical/` prefix and return the public URL. Pair with
+ * replaceCanonicalSeltzerImage to set it as the new canonical image.
+ */
+export async function uploadCanonicalSeltzerImage(
+  userId: string,
+  file: File,
+): Promise<{ url: string | null; error: any }> {
+  let smallFile: File;
+  try {
+    smallFile = await prepareSmallImage(file, { maxBytes: 220 * 1024, maxSize: 420, quality: 0.85 });
+  } catch (error) {
+    return { url: null, error };
+  }
+  const ext = smallFile.name.split('.').pop();
+  const path = `canonical/${userId}-${Date.now()}.${ext}`;
+  const { data, error } = await supabase.storage
+    .from('review-images')
+    .upload(path, smallFile, { cacheControl: '3600', upsert: false });
+  if (error) return { url: null, error };
+  const { data: urlData } = supabase.storage.from('review-images').getPublicUrl(data.path);
+  return { url: urlData.publicUrl, error: null };
+}
+
+/**
+ * Returns the list of canonical drinks flagged for curator review,
+ * newest first. Used by /curator/queue.
+ */
+export async function getSeltzersNeedingReview(limit = 200) {
+  const { data, error } = await supabase
+    .from('seltzers')
+    .select('id, brand, name, image_url, image_quality_flag, created_at')
+    .eq('image_quality_flag', 'needs_review')
+    .order('brand', { ascending: true })
+    .order('name', { ascending: true })
+    .limit(limit);
+  return { data: (data || []) as any[], error };
+}
+
+/**
+ * Boolean check: is the current user permitted to curate (i.e. can they
+ * see the curator UI / call the curator endpoints)?
+ */
+export async function getMyCuratorStatus(userId: string): Promise<boolean> {
+  const { data } = await supabase
+    .from('users')
+    .select('can_curate')
+    .eq('id', userId)
+    .maybeSingle();
+  return !!data?.can_curate;
 }
 
 export async function uploadReviewImage(userId: string, file: File): Promise<{ url: string | null; error: any }> {
@@ -1159,7 +1254,7 @@ export async function unsubscribeFromSharedTierList(userId: string, listId: stri
 export async function getSharedTierListItems(listId: string) {
   const { data, error } = await supabase
     .from('shared_tier_list_items')
-    .select('*, added_by_user:users!shared_tier_list_items_added_by_fkey(*), review:reviews(id, image_url, user_id, user:users(id, username))')
+    .select('*, added_by_user:users!shared_tier_list_items_added_by_fkey(*), review:reviews(id, image_url, user_id, user:users(id, username)), seltzer:seltzers(id, image_url)')
     .eq('list_id', listId)
     .order('rating', { ascending: false });
   return { data: data || [], error };

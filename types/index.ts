@@ -115,6 +115,9 @@ export interface SharedTierListItem {
   list?: SharedTierList;
   added_by_user?: User;
   review?: { id: string; image_url: string | null; user_id: string; user?: User };
+  /** Optional join to the canonical seltzers table — used as a fallback
+   *  image when no per-review photo exists. */
+  seltzer?: { id: string; image_url: string | null } | null;
 }
 
 export interface SharedTierListSuggestion {

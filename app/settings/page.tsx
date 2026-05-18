@@ -10,7 +10,7 @@ import { TopHeader } from '@/components/TopHeader';
 import { Avatar } from '@/components/Avatar';
 import { showToast } from '@/components/Toast';
 import { ensureUserProfile, supabase, uploadAvatar, updateUserProfile } from '@/lib/supabase';
-import { ArrowLeft, LogOut, Bell, Shield, HelpCircle, Info, ChevronRight, Droplets, Camera, Check, X, Upload, Sparkles } from 'lucide-react';
+import { ArrowLeft, LogOut, Bell, Shield, HelpCircle, Info, ChevronRight, Droplets, Camera, Check, X, Upload, Sparkles, ImagePlus } from 'lucide-react';
 import { CURRENT_VERSION, hasUnseenRelease } from '@/lib/changelog';
 
 export default function SettingsPage() {
@@ -29,6 +29,7 @@ export default function SettingsPage() {
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [pendingPreview, setPendingPreview] = useState<string>('');
   const [hasUnseen, setHasUnseen] = useState(false);
+  const [canCurate, setCanCurate] = useState(false);
 
   useEffect(() => { setHasUnseen(hasUnseenRelease()); }, []);
 
@@ -44,6 +45,7 @@ export default function SettingsPage() {
     setUsername(userData.username);
     setBio(userData.bio || '');
     setAvatarUrl(userData.avatar_url);
+    setCanCurate(!!(userData as any).can_curate);
     setLoading(false);
   }
 
@@ -241,6 +243,23 @@ export default function SettingsPage() {
             <SettingItem icon={<Shield size={18} />} label="Privacy" disabled />
           </div>
         </div>
+
+        {/* Curator (founders + beta testers only) */}
+        {canCurate && (
+          <div className="mb-5">
+            <p className="text-xs uppercase tracking-wider mb-3 px-1" style={{ color: 'var(--text-muted)' }}>Curator</p>
+            <div className="rounded-2xl overflow-hidden" style={{ background: 'rgba(15, 20, 36, 0.6)', border: '1px solid rgba(255,255,255,0.06)' }}>
+              <SettingItem
+                icon={<ImagePlus size={18} />}
+                label="Improve drink images"
+                href="/curator/queue"
+              />
+            </div>
+            <p className="text-[11px] mt-2 px-1" style={{ color: 'var(--text-muted)' }}>
+              You can replace canonical drink photos. Every change is logged.
+            </p>
+          </div>
+        )}
 
         {/* Support */}
         <div className="mb-5">

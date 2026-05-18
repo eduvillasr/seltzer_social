@@ -955,66 +955,92 @@ export default function SharedListPage({ params }: { params: { id: string } }) {
                       Show {tierItems.length} {tierItems.length === 1 ? 'drink' : 'drinks'}…
                     </button>
                   ) : viewMode === 'compact' ? (
-                    /* COMPACT: thumbnails only, dense */
+                    /* COMPACT: thumbnails only, dense — click → drink page (all reviews) */
                     <div className="flex flex-wrap gap-1.5">
-                      {tierItems.map((item) => (
-                        <button
-                          key={item.id}
-                          onClick={() => isMember && startEdit(item)}
-                          className="relative group rounded-lg overflow-hidden flex-shrink-0 transition-transform hover:scale-105"
-                          style={{ width: '36px', height: '36px', border: '1px solid var(--border-subtle)', cursor: isMember ? 'pointer' : 'default' }}
-                          title={`${item.seltzer_name}${item.brand ? ' · ' + item.brand : ''} · ⭐${item.rating.toFixed(1)}`}
-                        >
-                          {item.review?.image_url ? (
-                            <img src={item.review.image_url} alt={item.seltzer_name} className="w-full h-full object-cover" />
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center text-[10px] font-bold px-0.5 text-center" style={{ background: `${TIER_COLORS[tier]}33`, color: TIER_COLORS[tier] }}>
-                              {item.seltzer_name.slice(0, 4)}
-                            </div>
-                          )}
-                        </button>
-                      ))}
+                      {tierItems.map((item) => {
+                        const inner = item.review?.image_url ? (
+                          <img src={item.review.image_url} alt={item.seltzer_name} className="w-full h-full object-cover" />
+                        ) : (item.seltzer?.image_url ? (
+                          <img src={item.seltzer.image_url} alt={item.seltzer_name} className="w-full h-full object-cover" />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-[10px] font-bold px-0.5 text-center" style={{ background: `${TIER_COLORS[tier]}33`, color: TIER_COLORS[tier] }}>
+                            {item.seltzer_name.slice(0, 4)}
+                          </div>
+                        ));
+                        const contribCount = item.rating_contributions ? Object.keys(item.rating_contributions).length : 0;
+                        const titleText = `${item.seltzer_name}${item.brand ? ' · ' + item.brand : ''} · ⭐${item.rating.toFixed(1)}${contribCount > 1 ? ` (avg of ${contribCount})` : ''}`;
+                        // Link to /drink/[seltzer_id] if we have it; otherwise no-op
+                        return item.seltzer_id ? (
+                          <Link
+                            key={item.id}
+                            href={`/drink/${item.seltzer_id}`}
+                            className="relative group rounded-lg overflow-hidden flex-shrink-0 transition-transform hover:scale-105"
+                            style={{ width: '36px', height: '36px', border: '1px solid var(--border-subtle)' }}
+                            title={titleText}
+                          >
+                            {inner}
+                          </Link>
+                        ) : (
+                          <div
+                            key={item.id}
+                            className="relative rounded-lg overflow-hidden flex-shrink-0"
+                            style={{ width: '36px', height: '36px', border: '1px solid var(--border-subtle)' }}
+                            title={titleText}
+                          >
+                            {inner}
+                          </div>
+                        );
+                      })}
                     </div>
                   ) : (
                     /* DETAILED: full row per item */
                     <div className="space-y-1.5">
-                      {tierItems.map((item) => (
-                        <div
-                          key={item.id}
-                          className="flex items-center rounded-lg overflow-hidden"
-                          style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border-subtle)' }}
-                        >
-                          {item.review?.image_url ? (
-                            <Link href={`/review/${item.review_id}`} className="flex-shrink-0 hover:opacity-80" title="View original review">
-                              <img src={item.review.image_url} alt={item.seltzer_name} className="w-10 h-10 object-cover" />
-                            </Link>
-                          ) : (
-                            <div className="w-10 h-10 flex-shrink-0" style={{ background: `${TIER_COLORS[tier]}33` }} />
-                          )}
-                          <div className="flex-1 min-w-0 px-2.5 py-1.5">
-                            <p className="text-sm font-semibold truncate" style={{ color: 'var(--text-primary)' }}>
-                              {item.seltzer_name}
-                            </p>
-                            <p className="text-xs truncate" style={{ color: 'var(--text-muted)' }}>
-                              {item.brand && <>{item.brand} · </>}⭐ {item.rating.toFixed(1)}
-                              {item.rating_contributions && Object.keys(item.rating_contributions).length > 1 && (
-                                <span style={{ color: 'var(--cyan-400)' }}> · avg of {Object.keys(item.rating_contributions).length}</span>
+                      {tierItems.map((item) => {
+                        // Tapping anywhere on the row (except the edit pencil)
+                        // takes you to the canonical drink page where every
+                        // reviewer's review is listed.
+                        const drinkHref = item.seltzer_id ? `/drink/${item.seltzer_id}` : null;
+                        const imgUrl = item.review?.image_url || item.seltzer?.image_url || null;
+                        const RowOuter: any = drinkHref ? Link : 'div';
+                        const rowProps: any = drinkHref ? { href: drinkHref, className: 'flex-1 min-w-0 flex items-center hover:bg-white/5 transition-colors' } : { className: 'flex-1 min-w-0 flex items-center' };
+                        return (
+                          <div
+                            key={item.id}
+                            className="flex items-center rounded-lg overflow-hidden"
+                            style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border-subtle)' }}
+                          >
+                            <RowOuter {...rowProps}>
+                              {imgUrl ? (
+                                <img src={imgUrl} alt={item.seltzer_name} className="w-10 h-10 object-cover flex-shrink-0" />
+                              ) : (
+                                <div className="w-10 h-10 flex-shrink-0" style={{ background: `${TIER_COLORS[tier]}33` }} />
                               )}
-                              {item.note && <> · {item.note}</>}
-                            </p>
+                              <div className="flex-1 min-w-0 px-2.5 py-1.5">
+                                <p className="text-sm font-semibold truncate" style={{ color: 'var(--text-primary)' }}>
+                                  {item.seltzer_name}
+                                </p>
+                                <p className="text-xs truncate" style={{ color: 'var(--text-muted)' }}>
+                                  {item.brand && <>{item.brand} · </>}⭐ {item.rating.toFixed(1)}
+                                  {item.rating_contributions && Object.keys(item.rating_contributions).length > 1 && (
+                                    <span style={{ color: 'var(--cyan-400)' }}> · avg of {Object.keys(item.rating_contributions).length}</span>
+                                  )}
+                                  {item.note && <> · {item.note}</>}
+                                </p>
+                              </div>
+                            </RowOuter>
+                            {isMember && (
+                              <button
+                                onClick={() => startEdit(item)}
+                                className="flex-shrink-0 self-stretch px-2.5 hover:bg-white/5 transition-colors"
+                                style={{ color: 'var(--text-muted)', borderLeft: '1px solid var(--border-subtle)' }}
+                                title="Edit your rating"
+                              >
+                                <Pencil size={12} />
+                              </button>
+                            )}
                           </div>
-                          {isMember && (
-                            <button
-                              onClick={() => startEdit(item)}
-                              className="flex-shrink-0 self-stretch px-2.5 hover:bg-white/5 transition-colors"
-                              style={{ color: 'var(--text-muted)', borderLeft: '1px solid var(--border-subtle)' }}
-                              title="Edit"
-                            >
-                              <Pencil size={12} />
-                            </button>
-                          )}
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                 </div>

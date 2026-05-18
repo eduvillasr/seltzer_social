@@ -20,7 +20,7 @@ export interface Release {
   changes: ChangeEntry[];
 }
 
-export const CURRENT_VERSION = '0.12.0';
+export const CURRENT_VERSION = '0.13.0';
 
 /** localStorage key for "last version the user opened the changelog at". */
 export const SEEN_KEY = 'seltzer:last-seen-version';
@@ -32,6 +32,48 @@ export function hasUnseenRelease(): boolean {
 }
 
 export const RELEASES: Release[] = [
+  {
+    version: '0.13.0',
+    date: '2026-05-10',
+    headline: 'Curator tools, cleaner names, no more duplicates',
+    changes: [
+      {
+        kind: 'new',
+        title: 'Curator role for founders + beta testers',
+        detail: 'Founders and beta testers can now replace any canonical drink image. On a drink page you\'ll see a small cyan upload button next to the can — tap it to upload a better photo. Every replacement is logged.',
+      },
+      {
+        kind: 'new',
+        title: 'Curator queue',
+        detail: 'New /curator/queue page (linked from Settings for curators) lists every drink whose canonical image is flagged low-quality. Pick a user-uploaded review photo and one-tap promote it as the new cover, or upload your own.',
+      },
+      {
+        kind: 'new',
+        title: 'Tier list items link to drink page',
+        detail: 'Tapping any drink in a shared tier list now opens its canonical drink page, where every reviewer\'s review of that drink is listed. Members still get a pencil-icon edit button on the right.',
+      },
+      {
+        kind: 'improved',
+        title: 'Average ratings on shared lists, properly',
+        detail: 'When multiple members add the same drink to a tier list, the rating is now an average across contributors — and we shipped a one-shot migration that merges any pre-existing duplicates. A unique index prevents the duplicate from ever coming back.',
+      },
+      {
+        kind: 'improved',
+        title: 'Drink name standardization',
+        detail: 'AHA\'s "Lime + Watermelon" became "Lime Watermelon" — and the rest of the catalog follows the same rule. Search now matches across phrasings. New drinks go through the same normalizer at submission.',
+      },
+      {
+        kind: 'improved',
+        title: 'Bigger drink-photo dataset',
+        detail: 'Database expanded from 184 to 318 SKUs across 34 brands — added Trader Joe\'s, Good & Gather, 365 by Whole Foods, Member\'s Mark, Clear American, Sparkling Ice, Hint, Klarbrunn, Recess, Olipop, Zevia, Voss, Bai Bubbles, Phocus, Crystal Geyser, Saratoga, and Mountain Valley.',
+      },
+      {
+        kind: 'improved',
+        title: 'Tighter image crops',
+        detail: 'Canonical drink images now fill the full 420×420 frame vertically instead of floating in whitespace.',
+      },
+    ],
+  },
   {
     version: '0.12.0',
     date: '2026-05-09',
