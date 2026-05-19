@@ -72,11 +72,22 @@ export default function DiscoverPage() {
       );
 
       // Extract unique brands from the drink search results.
-      const matchingBrands = Array.from(new Set(
+      // Show brands that EITHER (a) match the query themselves, or (b) belong
+      // to any drink that matched — so searching a flavor surfaces relevant brands too.
+      // Brands that directly match the query are sorted first.
+      const queryLower = q.toLowerCase();
+      const allBrands = Array.from(new Set(
         ((drinkData || []) as Array<{ brand: string | null }>)
           .map((d) => d.brand?.trim())
-          .filter((b): b is string => !!b && b.toLowerCase().includes(q.toLowerCase()))
-      )).slice(0, 6);
+          .filter((b): b is string => !!b)
+      ));
+      const matchingBrands = allBrands
+        .sort((a, b) => {
+          const aMatch = a.toLowerCase().includes(queryLower) ? 0 : 1;
+          const bMatch = b.toLowerCase().includes(queryLower) ? 0 : 1;
+          return aMatch - bMatch;
+        })
+        .slice(0, 6);
 
       // Confirm the query hasn't changed in the meantime before updating state.
       if (q === query.trim()) {

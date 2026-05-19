@@ -159,7 +159,21 @@ export function ReviewCard({ review, currentUserId, onDelete }: ReviewCardProps)
             </h3>
           </Link>
           {hasCustomTitle(review) ? (
-            <p className="text-xs mb-2 truncate" style={{ color: 'var(--text-tertiary)' }}>{reviewDrinkLabel(review)}</p>
+            <p className="text-xs mb-2 truncate" style={{ color: 'var(--text-tertiary)' }}>
+              {review.brand ? (
+                <>
+                  <Link
+                    href={`/brand/${encodeURIComponent(review.brand)}`}
+                    className="hover:text-cyan-400 transition-colors"
+                  >
+                    {review.brand}
+                  </Link>
+                  <span> · {review.seltzer_name}</span>
+                </>
+              ) : (
+                reviewDrinkLabel(review)
+              )}
+            </p>
           ) : (
             review.brand && (
               <Link
