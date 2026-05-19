@@ -588,9 +588,14 @@ export default function ProfilePage({ params }: ProfilePageProps) {
             </p>
             <div className="flex flex-wrap gap-2">
               {topBrands.map((b) => (
-                <span key={b.brand} className="text-xs px-3 py-1.5 rounded-full" style={{ background: 'rgba(15,20,36,0.6)', border: '1px solid var(--border-subtle)', color: 'var(--text-secondary)' }}>
+                <Link
+                  key={b.brand}
+                  href={`/brand/${encodeURIComponent(b.brand)}`}
+                  className="text-xs px-3 py-1.5 rounded-full transition-colors hover:bg-white/5"
+                  style={{ background: 'rgba(15,20,36,0.6)', border: '1px solid var(--border-subtle)', color: 'var(--text-secondary)' }}
+                >
                   {b.brand} <span style={{ color: 'var(--text-muted)' }}>· {b.count}</span>
-                </span>
+                </Link>
               ))}
             </div>
           </div>

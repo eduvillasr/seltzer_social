@@ -239,6 +239,60 @@ export async function getBrandHubData(brand: string, currentUserId?: string | nu
 }
 
 /**
+ * Returns every brand in the catalog plus rich aggregate stats:
+ * drink count, community avg rating, and total reviews. Used by the
+ * brands index page at /brand to let users discover brands.
+ *
+ * Computed entirely from drink_stats + seltzers so it's one cheap query
+ * pair. Brands with zero drinks are excluded by construction.
+ */
+export async function getAllBrandsWithStats(): Promise<Array<{
+  brand: string;
+  drinkCount: number;
+  reviewCount: number;
+  avgRating: number;
+}>> {
+  // 1. All drinks with their brand
+  const { data: drinks } = await supabase
+    .from('seltzers')
+    .select('id, brand');
+  if (!drinks || drinks.length === 0) return [];
+
+  // 2. Stats per drink from drink_stats view
+  const { data: statsRows } = await supabase
+    .from('drink_stats')
+    .select('seltzer_id, avg_rating, review_count');
+  const statsByDrink: Record<string, { avg: number; count: number }> = {};
+  for (const row of (statsRows || []) as any[]) {
+    statsByDrink[row.seltzer_id] = { avg: row.avg_rating ?? 0, count: row.review_count ?? 0 };
+  }
+
+  // 3. Aggregate per brand
+  const agg: Record<string, { drinkCount: number; reviewCount: number; weightedSum: number; weightedCount: number }> = {};
+  for (const d of drinks as Array<{ id: string; brand: string | null }>) {
+    const brand = (d.brand ?? '').trim();
+    if (!brand) continue;
+    const s = statsByDrink[d.id];
+    if (!agg[brand]) agg[brand] = { drinkCount: 0, reviewCount: 0, weightedSum: 0, weightedCount: 0 };
+    agg[brand].drinkCount += 1;
+    if (s && s.count > 0) {
+      agg[brand].reviewCount += s.count;
+      agg[brand].weightedSum += s.avg * s.count;
+      agg[brand].weightedCount += s.count;
+    }
+  }
+
+  return Object.entries(agg)
+    .map(([brand, v]) => ({
+      brand,
+      drinkCount: v.drinkCount,
+      reviewCount: v.reviewCount,
+      avgRating: v.weightedCount > 0 ? v.weightedSum / v.weightedCount : 0,
+    }))
+    .sort((a, b) => b.drinkCount - a.drinkCount || a.brand.localeCompare(b.brand));
+}
+
+/**
  * Returns total drink count for every brand in the canonical catalog.
  * Used by the advanced stats page to compute % explored per brand.
  *

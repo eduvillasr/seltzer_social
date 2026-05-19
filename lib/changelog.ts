@@ -20,7 +20,7 @@ export interface Release {
   changes: ChangeEntry[];
 }
 
-export const CURRENT_VERSION = '0.15.0';
+export const CURRENT_VERSION = '0.15.1';
 
 /** localStorage key for "last version the user opened the changelog at". */
 export const SEEN_KEY = 'seltzer:last-seen-version';
@@ -32,6 +32,28 @@ export function hasUnseenRelease(): boolean {
 }
 
 export const RELEASES: Release[] = [
+  {
+    version: '0.15.1',
+    date: '2026-05-18',
+    headline: 'Brand pages are now actually findable',
+    changes: [
+      {
+        kind: 'new',
+        title: '/brand index',
+        detail: 'A browsable list of every brand in the catalog at /brand. Sortable by drink count, review count, or community avg rating, with a filter input. Reached from the new "Browse brands" tile on /discover.',
+      },
+      {
+        kind: 'improved',
+        title: 'Brand text is now clickable in more spots',
+        detail: 'The brand label on a single review page, on profile review cards (both with and without a custom title), and the "Brands you reach for" chips on a profile — all now link to the brand hub.',
+      },
+      {
+        kind: 'improved',
+        title: 'Discover shows shortcut tiles',
+        detail: '"Browse brands" and "Trending" tiles now appear above the search bar, so you can jump into either without typing anything.',
+      },
+    ],
+  },
   {
     version: '0.15.0',
     date: '2026-05-18',

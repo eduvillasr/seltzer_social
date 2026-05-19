@@ -168,6 +168,36 @@ export default function DiscoverPage() {
           )}
         </div>
 
+        {/* Browse-by-category shortcuts — always visible above the search */}
+        <div className="grid grid-cols-2 gap-2">
+          <Link
+            href="/brand"
+            className="rounded-2xl p-3 flex items-center gap-2.5 transition-colors hover:bg-white/5"
+            style={{ background: 'rgba(251,191,36,0.06)', border: '1px solid rgba(251,191,36,0.22)' }}
+          >
+            <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: 'rgba(251,191,36,0.15)' }}>
+              <Tag size={16} style={{ color: 'var(--amber-400)' }} />
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs font-bold" style={{ color: 'var(--text-primary)' }}>Browse brands</p>
+              <p className="text-[10px] truncate" style={{ color: 'var(--text-muted)' }}>Every brand in the catalog</p>
+            </div>
+          </Link>
+          <Link
+            href="/trending"
+            className="rounded-2xl p-3 flex items-center gap-2.5 transition-colors hover:bg-white/5"
+            style={{ background: 'rgba(34,211,238,0.06)', border: '1px solid rgba(34,211,238,0.22)' }}
+          >
+            <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: 'rgba(34,211,238,0.15)' }}>
+              <Flame size={16} style={{ color: 'var(--cyan-400)' }} />
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs font-bold" style={{ color: 'var(--text-primary)' }}>Trending</p>
+              <p className="text-[10px] truncate" style={{ color: 'var(--text-muted)' }}>Hot drinks + tier lists</p>
+            </div>
+          </Link>
+        </div>
+
         {/* Results */}
         {!hasSearched ? (
           <div className="glass-card text-center py-10">
@@ -176,13 +206,6 @@ export default function DiscoverPage() {
             <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
               Drinks, brands, people, tier lists — one box.
             </p>
-            <Link
-              href="/trending"
-              className="inline-flex items-center gap-1.5 mt-5 text-xs font-semibold px-3 py-1.5 rounded-full transition-colors hover:bg-white/5"
-              style={{ background: 'rgba(34,211,238,0.08)', border: '1px solid rgba(34,211,238,0.2)', color: 'var(--cyan-400)' }}
-            >
-              <Flame size={11} /> See what's trending →
-            </Link>
           </div>
         ) : searching ? (
           <FeedSkeleton count={2} />

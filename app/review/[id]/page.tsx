@@ -227,9 +227,30 @@ export default function ReviewPage({ params }: ReviewPageProps) {
             </div>
           </div>
           {hasCustomTitle(review) ? (
-            <p className="text-base mb-4" style={{ color: 'var(--text-tertiary)' }}>{reviewDrinkLabel(review)}</p>
+            <p className="text-base mb-4" style={{ color: 'var(--text-tertiary)' }}>
+              {review.brand ? (
+                <>
+                  <Link href={`/brand/${encodeURIComponent(review.brand)}`} className="hover:text-cyan-400 transition-colors">
+                    {review.brand}
+                  </Link>
+                  <span> · {review.seltzer_name}</span>
+                </>
+              ) : (
+                reviewDrinkLabel(review)
+              )}
+            </p>
           ) : (
-            review.brand && <p className="text-base mb-4" style={{ color: 'var(--text-tertiary)' }}>{review.brand}</p>
+            review.brand && (
+              <p className="text-base mb-4">
+                <Link
+                  href={`/brand/${encodeURIComponent(review.brand)}`}
+                  className="hover:text-cyan-400 transition-colors"
+                  style={{ color: 'var(--text-tertiary)' }}
+                >
+                  {review.brand}
+                </Link>
+              </p>
+            )
           )}
 
           <div className="flex items-center gap-3 mb-5">
