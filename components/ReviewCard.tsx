@@ -10,6 +10,7 @@ import { Avatar } from './Avatar';
 import { FounderBadge, FOUNDERS, BetaTesterBadge, BETA_TESTERS } from './FounderBadge';
 import { StarRating } from './StarRating';
 import { reviewHeadline, reviewDrinkLabel, hasCustomTitle } from '@/lib/reviewDisplay';
+import { MentionText } from './MentionText';
 import { showToast } from './Toast';
 import { createLike, deleteLike, getUserLike, getLikes, createTriedIt, getUserTriedIt, getTriedItStats, deleteReview, getCommentCount } from '@/lib/supabase';
 
@@ -160,7 +161,15 @@ export function ReviewCard({ review, currentUserId, onDelete }: ReviewCardProps)
           {hasCustomTitle(review) ? (
             <p className="text-xs mb-2 truncate" style={{ color: 'var(--text-tertiary)' }}>{reviewDrinkLabel(review)}</p>
           ) : (
-            review.brand && <p className="text-xs mb-2" style={{ color: 'var(--text-tertiary)' }}>{review.brand}</p>
+            review.brand && (
+              <Link
+                href={`/brand/${encodeURIComponent(review.brand)}`}
+                className="text-xs mb-2 inline-block hover:text-cyan-400 transition-colors"
+                style={{ color: 'var(--text-tertiary)' }}
+              >
+                {review.brand}
+              </Link>
+            )
           )}
           <div className="flex items-center gap-1.5 mb-2"><StarRating value={review.rating} size={14} /></div>
           {review.content ? (
@@ -377,7 +386,7 @@ function ReviewBody({ content, expanded, onToggle }: { content: string; expanded
         className={`text-sm leading-relaxed whitespace-pre-wrap ${expanded ? '' : 'line-clamp-5'}`}
         style={{ color: 'var(--text-secondary)' }}
       >
-        {content}
+        <MentionText text={content} />
       </p>
       {overflowing && (
         <button

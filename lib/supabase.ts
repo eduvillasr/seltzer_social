@@ -189,6 +189,56 @@ export async function uploadAvatar(userId: string, file: File): Promise<{ url: s
 // SELTZER DATABASE (canonical drinks)
 
 /**
+ * Returns every canonical drink for a single brand, joined with community
+ * stats from the drink_stats materialized view. Used by the brand hub page.
+ *
+ * Brand match is case-insensitive — the URL passes a "pretty" brand name and
+ * we want LaCroix == lacroix == LaCroix.
+ */
+export async function getBrandHubData(brand: string, currentUserId?: string | null) {
+  // 1. Drinks belonging to this brand
+  const { data: drinks, error: drinkErr } = await supabase
+    .from('seltzers')
+    .select('id, brand, name, image_url, image_quality_flag, created_at')
+    .ilike('brand', brand)
+    .order('name', { ascending: true });
+  if (drinkErr || !drinks) return { brand, drinks: [], stats: {}, myReviews: {}, error: drinkErr };
+
+  const drinkIds = (drinks as any[]).map((d) => d.id);
+  if (drinkIds.length === 0) return { brand, drinks: [], stats: {}, myReviews: {}, error: null };
+
+  // 2. Community stats per drink
+  const { data: statsRows } = await supabase
+    .from('drink_stats')
+    .select('seltzer_id, review_count, avg_rating, latest_image_url')
+    .in('seltzer_id', drinkIds);
+  const stats: Record<string, { count: number; avg: number; image: string | null }> = {};
+  for (const row of (statsRows || []) as any[]) {
+    stats[row.seltzer_id] = {
+      count: row.review_count ?? 0,
+      avg: row.avg_rating ?? 0,
+      image: row.latest_image_url ?? null,
+    };
+  }
+
+  // 3. Current user's reviews of any of these drinks (so we can label "your rating")
+  const myReviews: Record<string, number> = {};
+  if (currentUserId) {
+    const { data: mine } = await supabase
+      .from('reviews')
+      .select('seltzer_id, rating')
+      .eq('user_id', currentUserId)
+      .in('seltzer_id', drinkIds);
+    for (const r of (mine || []) as Array<{ seltzer_id: string; rating: number }>) {
+      // Keep the highest rating if user reviewed the same drink multiple times
+      myReviews[r.seltzer_id] = Math.max(myReviews[r.seltzer_id] ?? 0, r.rating);
+    }
+  }
+
+  return { brand: (drinks[0] as any).brand as string, drinks: drinks as any[], stats, myReviews, error: null };
+}
+
+/**
  * Returns total drink count for every brand in the canonical catalog.
  * Used by the advanced stats page to compute % explored per brand.
  *
@@ -345,6 +395,9 @@ export async function createReview(review: {
     title: review.title?.trim() || null,
   };
   const { data, error } = await supabase.from('reviews').insert([payload]).select('*').single();
+  if (!error && data && payload.content) {
+    notifyMentions(payload.user_id, payload.content, { kind: 'review', id: data.id, link: `/review/${data.id}` });
+  }
   return { data, error };
 }
 
@@ -465,6 +518,57 @@ export interface TrendingDrink {
  * aggregation — fine until we hit ~thousands of reviews; then we'd
  * materialize a view.
  */
+/**
+ * Suggested users for the empty-feed discovery rail.
+ * Prioritizes users with the most followers, excluding the current user
+ * and anyone they already follow.
+ */
+export async function getSuggestedUsersToFollow(currentUserId: string | null, limit: number = 6) {
+  // Pull a candidate set — recent active users with at least one review
+  const { data: candidates } = await supabase
+    .from('users')
+    .select('id, username, avatar_url, bio, created_at')
+    .neq('id', currentUserId ?? '00000000-0000-0000-0000-000000000000')
+    .order('created_at', { ascending: false })
+    .limit(80);
+  if (!candidates || candidates.length === 0) return [];
+
+  const candidateIds = candidates.map((u: any) => u.id);
+
+  // Get follower counts in one query
+  const { data: followerRows } = await supabase
+    .from('follows')
+    .select('following_id')
+    .in('following_id', candidateIds);
+  const followerCounts: Record<string, number> = {};
+  for (const row of (followerRows || []) as Array<{ following_id: string }>) {
+    followerCounts[row.following_id] = (followerCounts[row.following_id] || 0) + 1;
+  }
+
+  // Filter out people the current user already follows
+  let alreadyFollowing = new Set<string>();
+  if (currentUserId) {
+    const { data: myFollows } = await supabase
+      .from('follows')
+      .select('following_id')
+      .eq('follower_id', currentUserId);
+    alreadyFollowing = new Set(((myFollows || []) as Array<{ following_id: string }>).map((r) => r.following_id));
+  }
+
+  // Score: 2 * follower count + 1 if they have a bio (avoids dead profiles)
+  return (candidates as any[])
+    .filter((u) => !alreadyFollowing.has(u.id))
+    .map((u) => ({
+      id: u.id,
+      username: u.username,
+      avatar_url: u.avatar_url,
+      bio: u.bio,
+      followerCount: followerCounts[u.id] || 0,
+    }))
+    .sort((a, b) => b.followerCount - a.followerCount)
+    .slice(0, limit);
+}
+
 export async function getTrendingDrinks(daysWindow: number = 30, limit: number = 8) {
   const since = new Date(Date.now() - daysWindow * 86_400_000).toISOString();
   const { data, error } = await supabase
@@ -609,6 +713,41 @@ export async function getSmartFeed(userId: string, limit: number = 50) {
     .limit(limit);
 
   return { data: data || [], error };
+}
+
+/**
+ * Returns up to N other drinks from the same brand, excluding the given
+ * drink. Used by the "More from this brand" rail on /drink/[id].
+ */
+export async function getOtherDrinksFromBrand(brand: string, excludeId: string, limit: number = 6) {
+  const { data } = await supabase
+    .from('seltzers')
+    .select('id, brand, name, image_url')
+    .ilike('brand', brand)
+    .neq('id', excludeId)
+    .limit(limit + 4); // overfetch so we can pick those with stats
+  if (!data || data.length === 0) return [];
+
+  const ids = (data as any[]).map((d) => d.id);
+  const { data: statsRows } = await supabase
+    .from('drink_stats')
+    .select('seltzer_id, avg_rating, review_count')
+    .in('seltzer_id', ids);
+  const statsByDrink: Record<string, { avg: number; count: number }> = {};
+  for (const row of (statsRows || []) as any[]) {
+    statsByDrink[row.seltzer_id] = { avg: row.avg_rating, count: row.review_count };
+  }
+
+  return (data as any[]).map((d) => ({
+    id: d.id,
+    brand: d.brand,
+    name: d.name,
+    image_url: d.image_url,
+    avg: statsByDrink[d.id]?.avg ?? 0,
+    count: statsByDrink[d.id]?.count ?? 0,
+  }))
+  .sort((a, b) => (b.count - a.count) || (b.avg - a.avg))
+  .slice(0, limit);
 }
 
 export async function getUserReviews(userId: string) {
@@ -829,8 +968,60 @@ export async function createComment(
   if (!error) {
     if (parentId) notifyOnReply(userId, reviewId, parentId, content);
     else notifyOnComment(userId, reviewId, content);
+    // Note: @mention notifications for comments are sent client-side from
+    // CommentSection.tsx so it can include the actor's username without an
+    // extra DB lookup. Adding it here would cause duplicate notifications.
   }
   return { data, error };
+}
+
+/**
+ * Parses any @username references out of free-text and sends mention
+ * notifications to the users that exist. Safe-to-call even if the text
+ * has no mentions (cheap no-op).
+ *
+ * Rules:
+ *   - Usernames are matched as /@([a-zA-Z0-9_]+)/ — same charset our
+ *     signup form allows
+ *   - Skips self-mentions
+ *   - Skips the review/comment author if they're also the target
+ *   - Dedupes — same user mentioned twice = one notification
+ */
+async function notifyMentions(
+  actorId: string,
+  text: string,
+  source: { kind: 'review' | 'comment'; id: string; link: string }
+) {
+  if (!text) return;
+  const matches = Array.from(text.matchAll(/@([a-zA-Z0-9_]+)/g));
+  if (matches.length === 0) return;
+
+  const handles = Array.from(new Set(matches.map((m) => m[1].toLowerCase())));
+  if (handles.length === 0) return;
+
+  // Look up which of those handles map to real users.
+  const { data: targets } = await supabase
+    .from('users')
+    .select('id, username')
+    .in('username', handles);
+  if (!targets || targets.length === 0) return;
+
+  // Need the actor's username for the notification body.
+  const { data: actor } = await supabase
+    .from('users').select('username').eq('id', actorId).maybeSingle();
+  const actorName = actor?.username ? `@${actor.username}` : 'Someone';
+
+  const rows = (targets as Array<{ id: string; username: string }>)
+    .filter((t) => t.id !== actorId)
+    .map((t) => ({
+      user_id: t.id,
+      type: 'mention' as const,
+      title: `${actorName} mentioned you`,
+      body: text.length > 120 ? text.slice(0, 117) + '…' : text,
+      link: source.link,
+    }));
+  if (rows.length === 0) return;
+  supabase.from('notifications').insert(rows).then(() => {});
 }
 
 async function notifyOnComment(actorId: string, reviewId: string, content: string) {

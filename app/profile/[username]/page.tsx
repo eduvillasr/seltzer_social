@@ -13,6 +13,8 @@ import { Avatar } from '@/components/Avatar';
 import { FounderBadge, FOUNDERS, BetaTesterBadge, BETA_TESTERS } from '@/components/FounderBadge';
 import { WhatsNewLink } from '@/components/WhatsNewLink';
 import { CanLoader } from '@/components/CanLoader';
+import { PullIndicator, pullContentStyle } from '@/components/PullIndicator';
+import { usePullToRefresh } from '@/hooks/usePullToRefresh';
 import { showToast } from '@/components/Toast';
 import {
   getUserByUsername, getUserReviews, supabase,
@@ -289,6 +291,12 @@ export default function ProfilePage({ params }: ProfilePageProps) {
     };
   }, [reviews, triedIts]);
 
+  const ptr = usePullToRefresh(async () => {
+    const cache = await import('@/lib/cache');
+    cache.invalidate(`profile:${params.username}`);
+    await loadProfile();
+  });
+
   if (loading) {
     return (<><Navigation /><main className="max-w-md mx-auto px-4 pt-20 pb-32"><CanLoader /></main></>);
   }
@@ -305,26 +313,29 @@ export default function ProfilePage({ params }: ProfilePageProps) {
   return (
     <>
       <Navigation />
+      <PullIndicator ptr={ptr} />
       <TopHeader title={`@${user.username}`} back="/feed" />
-      <main className="max-w-md mx-auto px-4 with-top-header pb-32 space-y-5">
+      <main {...ptr.bind} style={pullContentStyle(ptr)} className="max-w-md mx-auto px-4 with-top-header pb-32 space-y-5">
         <div className="h-1" />{/* breathing room below the fixed header */}
 
-        {/* ─── Profile hero — bigger, more confident ─── */}
+        {/* ─── Profile hero — tier-themed by their top pick ─── */}
+        {/* The gradient + glow color is driven by the tier of the user's
+            highest-rated review. Users with no reviews fall back to cyan. */}
         <div
           className="relative rounded-3xl overflow-hidden animate-fade-in-up"
           style={{
-            background: 'linear-gradient(160deg, rgba(34,211,238,0.08) 0%, rgba(15,20,36,0.6) 60%)',
-            border: '1px solid var(--border-subtle)',
+            background: `linear-gradient(160deg, ${tierColor}14 0%, rgba(15,20,36,0.6) 60%)`,
+            border: `1px solid ${tierColor}33`,
             padding: '20px',
           }}
         >
-          {/* glow blobs */}
-          <div className="pointer-events-none absolute -top-12 -right-10 w-44 h-44 rounded-full" style={{ background: 'radial-gradient(closest-side, rgba(34,211,238,0.18), transparent)' }} />
+          {/* glow blobs — primary tinted by tier, secondary stays violet for contrast */}
+          <div className="pointer-events-none absolute -top-12 -right-10 w-44 h-44 rounded-full" style={{ background: `radial-gradient(closest-side, ${tierColor}33, transparent)` }} />
           <div className="pointer-events-none absolute -bottom-16 -left-8 w-40 h-40 rounded-full" style={{ background: 'radial-gradient(closest-side, rgba(167,139,250,0.12), transparent)' }} />
 
           <div className="relative flex items-start gap-4">
             <div className="relative flex-shrink-0">
-              <div style={{ filter: 'drop-shadow(0 8px 24px rgba(6,182,212,0.25))' }}>
+              <div style={{ filter: `drop-shadow(0 8px 24px ${tierColor}40)` }}>
                 <Avatar username={user.username} avatarUrl={user.avatar_url} size={84} />
               </div>
             </div>

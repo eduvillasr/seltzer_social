@@ -16,6 +16,9 @@ import { TopHeader } from '@/components/TopHeader';
 import { Avatar } from '@/components/Avatar';
 import { FounderBadge, FOUNDERS, BetaTesterBadge, BETA_TESTERS } from '@/components/FounderBadge';
 import { FeedSkeleton } from '@/components/Skeletons';
+import { PullIndicator, pullContentStyle } from '@/components/PullIndicator';
+import { usePullToRefresh } from '@/hooks/usePullToRefresh';
+import { invalidate } from '@/lib/cache';
 import {
   getTrendingDrinks, getTopRatedDrinks, getTrendingTierLists, getActiveReviewers,
   TrendingDrink,
@@ -78,11 +81,17 @@ export default function TrendingPage() {
 
   const empty = !loading && trending.length === 0 && lists.length === 0 && reviewers.length === 0;
 
+  const ptr = usePullToRefresh(async () => {
+    invalidate('trending:all');
+    await load();
+  });
+
   return (
     <>
       <Navigation />
+      <PullIndicator ptr={ptr} />
       <TopHeader title="Trending" back="/feed" />
-      <main className="max-w-md mx-auto px-4 with-top-header pb-32 space-y-6">
+      <main {...ptr.bind} style={pullContentStyle(ptr)} className="max-w-md mx-auto px-4 with-top-header pb-32 space-y-6">
         <div className="h-1" />
 
         {loading ? (

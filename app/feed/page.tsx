@@ -14,6 +14,7 @@ import { Plus, Droplets, Search, Sparkles, ListPlus, RotateCcw, Flame, UserPlus 
 import { FeedSkeleton } from '@/components/Skeletons';
 import { TopHeader } from '@/components/TopHeader';
 import { WhatsNewLink } from '@/components/WhatsNewLink';
+import { DiscoveryRail } from '@/components/DiscoveryRail';
 import { usePullToRefresh } from '@/hooks/usePullToRefresh';
 import { invalidate } from '@/lib/cache';
 
@@ -227,49 +228,42 @@ export default function FeedPage() {
           <FeedSkeleton count={3} />
         ) : isEmpty ? (
           followingCount === 0 ? (
-            // No follows yet — point them to Discover, not "write your own."
-            <div className="glass-card text-center py-12 animate-fade-in-up">
-              <div
-                className="w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-4"
-                style={{ background: 'linear-gradient(135deg, rgba(34,211,238,0.18), rgba(167,139,250,0.18))' }}
-              >
-                <Flame size={22} className="text-cyan-400" />
+            <>
+              <div className="glass-card text-center py-8 animate-fade-in-up">
+                <div
+                  className="w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-3"
+                  style={{ background: 'linear-gradient(135deg, rgba(34,211,238,0.18), rgba(167,139,250,0.18))' }}
+                >
+                  <Flame size={22} className="text-cyan-400" />
+                </div>
+                <h3 className="text-lg font-bold mb-2" style={{ fontFamily: 'var(--font-display)' }}>
+                  Your feed is empty
+                </h3>
+                <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+                  Follow people below and your feed fills up with their reviews.
+                </p>
               </div>
-              <h3 className="text-lg font-bold mb-2" style={{ fontFamily: 'var(--font-display)' }}>
-                Your feed is empty
-              </h3>
-              <p className="text-sm mb-5 leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
-                Follow some people and your feed fills up with their reviews + tier list updates.
-                <br />Browse what's hot or search for friends to follow.
-              </p>
-              <div className="flex gap-2 justify-center flex-wrap">
-                <Link href="/trending" className="btn-primary inline-flex">
-                  <Flame size={14} /> See Trending
-                </Link>
-                <Link href="/discover" className="btn-secondary inline-flex">
-                  <UserPlus size={14} /> Find people
-                </Link>
-              </div>
-            </div>
+              <DiscoveryRail currentUserId={currentUser?.id ?? null} />
+            </>
           ) : (
             // They follow people but those people haven't posted lately.
-            <div className="glass-card text-center py-12 animate-fade-in-up">
-              <Droplets size={32} className="mx-auto mb-3" style={{ color: 'var(--text-muted)' }} />
-              <h3 className="text-lg font-bold mb-2" style={{ fontFamily: 'var(--font-display)' }}>
-                Quiet on this end
-              </h3>
-              <p className="text-sm mb-5" style={{ color: 'var(--text-secondary)' }}>
-                Nobody you follow has posted lately. Drop a review — they'll see it.
-              </p>
-              <div className="flex gap-2 justify-center flex-wrap">
-                <Link href="/create" className="btn-primary inline-flex">
-                  <Plus size={14} /> Write a Review
-                </Link>
-                <Link href="/trending" className="btn-secondary inline-flex">
-                  <Flame size={14} /> Trending
-                </Link>
+            <>
+              <div className="glass-card text-center py-8 animate-fade-in-up">
+                <Droplets size={28} className="mx-auto mb-2" style={{ color: 'var(--text-muted)' }} />
+                <h3 className="text-lg font-bold mb-2" style={{ fontFamily: 'var(--font-display)' }}>
+                  Quiet on this end
+                </h3>
+                <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+                  Nobody you follow has posted lately. Here's what's happening elsewhere.
+                </p>
+                <div className="flex gap-2 justify-center flex-wrap mt-4">
+                  <Link href="/create" className="btn-primary inline-flex">
+                    <Plus size={14} /> Write a Review
+                  </Link>
+                </div>
               </div>
-            </div>
+              <DiscoveryRail currentUserId={currentUser?.id ?? null} />
+            </>
           )
         ) : (
           <div className="space-y-6">

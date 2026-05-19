@@ -20,7 +20,7 @@ export interface Release {
   changes: ChangeEntry[];
 }
 
-export const CURRENT_VERSION = '0.14.0';
+export const CURRENT_VERSION = '0.15.0';
 
 /** localStorage key for "last version the user opened the changelog at". */
 export const SEEN_KEY = 'seltzer:last-seen-version';
@@ -32,6 +32,58 @@ export function hasUnseenRelease(): boolean {
 }
 
 export const RELEASES: Release[] = [
+  {
+    version: '0.15.0',
+    date: '2026-05-18',
+    headline: 'Brand pages, discovery, search, mentions, and more',
+    changes: [
+      {
+        kind: 'new',
+        title: 'Brand pages',
+        detail: 'Tap any brand name anywhere in the app — review cards, drink pages, stats — to open a brand hub. See the full catalog, community top picks, and (if signed in) how many of the brand\'s drinks you\'ve explored.',
+      },
+      {
+        kind: 'new',
+        title: 'Discovery on an empty feed',
+        detail: 'If your feed is dead (no follows yet, or nobody\'s posted), you\'ll now see a horizontal trending-drinks rail and suggested people to follow, with a one-tap Follow button.',
+      },
+      {
+        kind: 'new',
+        title: 'Pull to refresh everywhere',
+        detail: 'Profile, drink pages, trending, and inbox now support pull-to-refresh — same rubber-band gesture as the feed.',
+      },
+      {
+        kind: 'improved',
+        title: 'Search drinks and brands from /discover',
+        detail: 'The Discover search bar now matches drinks and brands in addition to people and tier lists. One box, four result types.',
+      },
+      {
+        kind: 'new',
+        title: 'Community photo gallery on drink pages',
+        detail: 'Each canonical drink page now shows a 12-photo grid of community-uploaded review images, tap to view full-size.',
+      },
+      {
+        kind: 'new',
+        title: '@mentions in reviews',
+        detail: 'Drop an @username inside a review body — it auto-links to that profile and sends them a notification.',
+      },
+      {
+        kind: 'new',
+        title: 'Tier-themed profile hero',
+        detail: 'The profile header gradient and glow now match the user\'s top-rated drink tier. S-tier reviewers get amber; F-tier (sorry) gets coral.',
+      },
+      {
+        kind: 'new',
+        title: '"More from this brand" rail',
+        detail: 'Drink pages now show a horizontal scroll of other drinks from the same brand, sorted by community popularity.',
+      },
+      {
+        kind: 'improved',
+        title: 'Open Graph previews for every shareable page',
+        detail: 'Drink, brand, profile, review, and tier-list URLs now unfurl with rich previews in iMessage, Slack, Twitter, and Discord.',
+      },
+    ],
+  },
   {
     version: '0.14.0',
     date: '2026-05-18',

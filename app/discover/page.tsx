@@ -7,17 +7,18 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import {
-  Search, X, Users, ArrowRight, Flame,
+  Search, X, Users, ArrowRight, Flame, Droplets, Tag,
   UserPlus, UserMinus, List as ListIcon,
 } from 'lucide-react';
 import { Navigation } from '@/components/Navigation';
 import { TopHeader } from '@/components/TopHeader';
 import { Avatar } from '@/components/Avatar';
 import { FounderBadge, FOUNDERS, BetaTesterBadge, BETA_TESTERS } from '@/components/FounderBadge';
+import { StarRating } from '@/components/StarRating';
 import { FeedSkeleton } from '@/components/Skeletons';
 import { showToast } from '@/components/Toast';
 import {
-  searchUsers, searchSharedTierLists, supabase,
+  searchUsers, searchSharedTierLists, searchSeltzers, supabase,
   followUser, unfollowUser, isFollowing as checkIsFollowing, getFollowerCount,
 } from '@/lib/supabase';
 import { SharedTierList, User } from '@/types';
@@ -27,6 +28,8 @@ export default function DiscoverPage() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [people, setPeople] = useState<(User & { isFollowing?: boolean; followers?: number })[]>([]);
   const [matchingLists, setMatchingLists] = useState<SharedTierList[]>([]);
+  const [drinks, setDrinks] = useState<any[]>([]);
+  const [brands, setBrands] = useState<string[]>([]);
   const [searching, setSearching] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
 
@@ -49,9 +52,10 @@ export default function DiscoverPage() {
     setSearching(true);
     setHasSearched(true);
     const handle = setTimeout(async () => {
-      const [{ data: peopleData }, { data: listsData }] = await Promise.all([
+      const [{ data: peopleData }, { data: listsData }, { data: drinkData }] = await Promise.all([
         searchUsers(q),
         searchSharedTierLists(q),
+        searchSeltzers(q),
       ]);
 
       // Enrich people with follow state + follower counts in parallel.
@@ -67,10 +71,19 @@ export default function DiscoverPage() {
         }),
       );
 
+      // Extract unique brands from the drink search results.
+      const matchingBrands = Array.from(new Set(
+        ((drinkData || []) as Array<{ brand: string | null }>)
+          .map((d) => d.brand?.trim())
+          .filter((b): b is string => !!b && b.toLowerCase().includes(q.toLowerCase()))
+      )).slice(0, 6);
+
       // Confirm the query hasn't changed in the meantime before updating state.
       if (q === query.trim()) {
         setPeople(enriched);
         setMatchingLists((listsData || []) as SharedTierList[]);
+        setDrinks((drinkData || []).slice(0, 8));
+        setBrands(matchingBrands);
         setSearching(false);
       }
     }, 200);
@@ -96,7 +109,11 @@ export default function DiscoverPage() {
     );
   }
 
-  const noResults = hasSearched && !searching && people.length === 0 && matchingLists.length === 0;
+  const noResults = hasSearched && !searching
+    && people.length === 0
+    && matchingLists.length === 0
+    && drinks.length === 0
+    && brands.length === 0;
 
   return (
     <>
@@ -123,7 +140,7 @@ export default function DiscoverPage() {
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search people or tier lists…"
+            placeholder="Search drinks, brands, people, lists…"
             className="input-field pl-11 pr-11"
             style={{ borderRadius: '999px', height: '44px' }}
             autoFocus
@@ -144,9 +161,9 @@ export default function DiscoverPage() {
         {!hasSearched ? (
           <div className="glass-card text-center py-10">
             <Search size={26} className="mx-auto mb-3" style={{ color: 'var(--text-muted)' }} />
-            <p className="text-sm font-bold mb-1" style={{ color: 'var(--text-primary)' }}>Find people and lists</p>
+            <p className="text-sm font-bold mb-1" style={{ color: 'var(--text-primary)' }}>Search anything</p>
             <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
-              Start typing a username or tier list name above.
+              Drinks, brands, people, tier lists — one box.
             </p>
             <Link
               href="/trending"
@@ -166,6 +183,73 @@ export default function DiscoverPage() {
           </div>
         ) : (
           <>
+            {/* Brands — chip row */}
+            {brands.length > 0 && (
+              <section className="space-y-3">
+                <div className="flex items-baseline justify-between gap-2 px-1">
+                  <h2 className="text-xs font-bold uppercase tracking-[0.18em] flex items-center gap-2" style={{ color: 'var(--amber-400)' }}>
+                    <Tag size={12} /> Brands
+                  </h2>
+                  <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                    {brands.length} match{brands.length === 1 ? '' : 'es'}
+                  </span>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {brands.map((b) => (
+                    <Link
+                      key={b}
+                      href={`/brand/${encodeURIComponent(b)}`}
+                      className="text-xs font-semibold px-3 py-1.5 rounded-full transition-colors hover:bg-white/5"
+                      style={{
+                        background: 'rgba(251,191,36,0.08)',
+                        border: '1px solid rgba(251,191,36,0.22)',
+                        color: 'var(--amber-400)',
+                      }}
+                    >
+                      {b} →
+                    </Link>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {/* Drinks */}
+            {drinks.length > 0 && (
+              <section className="space-y-3 stagger-children">
+                <div className="flex items-baseline justify-between gap-2 px-1">
+                  <h2 className="text-xs font-bold uppercase tracking-[0.18em] flex items-center gap-2" style={{ color: 'var(--cyan-400)' }}>
+                    <Droplets size={12} /> Drinks
+                  </h2>
+                  <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                    {drinks.length} match{drinks.length === 1 ? '' : 'es'}
+                  </span>
+                </div>
+                <div className="space-y-2">
+                  {drinks.map((d) => (
+                    <Link
+                      key={d.id}
+                      href={`/drink/${d.id}`}
+                      className="glass-card flex items-center gap-3 transition-colors hover:bg-white/5"
+                      style={{ padding: '10px 12px' }}
+                    >
+                      {d.image_url ? (
+                        <img src={d.image_url} alt={d.name} loading="lazy" className="w-12 h-14 rounded-lg object-cover flex-shrink-0" style={{ border: '1px solid var(--border-subtle)' }} />
+                      ) : (
+                        <div className="w-12 h-14 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: 'rgba(34,211,238,0.06)', border: '1px solid var(--border-subtle)' }}>
+                          <Droplets size={18} style={{ color: 'var(--text-muted)' }} />
+                        </div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <p className="font-bold text-sm truncate" style={{ color: 'var(--text-primary)' }}>{d.name}</p>
+                        {d.brand && <p className="text-[11px] truncate" style={{ color: 'var(--text-muted)' }}>{d.brand}</p>}
+                      </div>
+                      <ArrowRight size={14} style={{ color: 'var(--text-muted)' }} />
+                    </Link>
+                  ))}
+                </div>
+              </section>
+            )}
+
             {/* People */}
             {people.length > 0 && (
               <section className="space-y-3 stagger-children">

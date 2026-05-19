@@ -459,10 +459,10 @@ function BrandStatRow({ row, username }: { row: BrandRow; username: string }) {
                            '#fb7185';
   return (
     <Link
-      // Use the username-scoped review filter via query param so tapping a
-      // brand jumps back to the profile with the search pre-filled. That
-      // sidesteps the need for a separate per-brand subpage.
-      href={`/profile/${username}?brand=${encodeURIComponent(row.brand)}`}
+      // Tap a brand row → land on the brand hub. The brand hub then lets
+      // users see the catalog, top picks, and (if signed in) their own
+      // explored % for that brand.
+      href={`/brand/${encodeURIComponent(row.brand)}`}
       className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-white/[0.03]"
     >
       <div className="flex-1 min-w-0">

@@ -9,6 +9,8 @@ import { Bell, Check, CheckCheck, Trash2, Vote, AtSign, Heart, MessageCircle, Us
 import { Navigation } from '@/components/Navigation';
 import { TopHeader } from '@/components/TopHeader';
 import { CanLoader } from '@/components/CanLoader';
+import { PullIndicator, pullContentStyle } from '@/components/PullIndicator';
+import { usePullToRefresh } from '@/hooks/usePullToRefresh';
 import { Notification } from '@/types';
 import {
   getNotifications,
@@ -72,9 +74,12 @@ export default function InboxPage() {
 
   const unreadCount = notifications.filter((n) => !n.read).length;
 
+  const ptr = usePullToRefresh(async () => { await load(); });
+
   return (
     <>
       <Navigation />
+      <PullIndicator ptr={ptr} />
       <TopHeader
         title="Inbox"
         right={
@@ -89,7 +94,7 @@ export default function InboxPage() {
           ) : null
         }
       />
-      <main className="max-w-md mx-auto px-4 with-top-header pb-32">
+      <main {...ptr.bind} style={pullContentStyle(ptr)} className="max-w-md mx-auto px-4 with-top-header pb-32">
         {unreadCount > 0 && (
           <div className="mt-4 mb-3">
             <span
