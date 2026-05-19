@@ -65,15 +65,21 @@ export default function BrandHubPage({ params }: { params: { name: string } }) {
 
     setBrand(displayBrand || decodedBrand);
     setRows(
-      drinks.map((d: any) => ({
-        id: d.id,
-        name: d.name,
-        image_url: stats[d.id]?.image ?? d.image_url ?? null,
-        count: stats[d.id]?.count ?? 0,
-        avg: stats[d.id]?.avg ?? 0,
-        myRating: myReviews[d.id] ?? null,
-        createdAt: d.created_at,
-      }))
+      drinks.map((d: any) => {
+        // Coerce id to string up front — TypeScript's strict mode refuses
+        // to use an `any` value as a Record<string, …> index, and the
+        // production build (tsc) flags it as an implicit-any error.
+        const id: string = String(d.id);
+        return {
+          id,
+          name: d.name,
+          image_url: stats[id]?.image ?? d.image_url ?? null,
+          count: stats[id]?.count ?? 0,
+          avg: stats[id]?.avg ?? 0,
+          myRating: myReviews[id] ?? null,
+          createdAt: d.created_at,
+        };
+      })
     );
     setLoading(false);
   }

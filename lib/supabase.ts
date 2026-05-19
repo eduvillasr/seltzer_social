@@ -213,7 +213,8 @@ export async function getBrandHubData(brand: string, currentUserId?: string | nu
     .select('seltzer_id, review_count, avg_rating, latest_image_url')
     .in('seltzer_id', drinkIds);
   const stats: Record<string, { count: number; avg: number; image: string | null }> = {};
-  for (const row of (statsRows || []) as any[]) {
+  type StatsRow = { seltzer_id: string; review_count: number; avg_rating: number; latest_image_url: string | null };
+  for (const row of (statsRows || []) as StatsRow[]) {
     stats[row.seltzer_id] = {
       count: row.review_count ?? 0,
       avg: row.avg_rating ?? 0,
@@ -263,7 +264,8 @@ export async function getAllBrandsWithStats(): Promise<Array<{
     .from('drink_stats')
     .select('seltzer_id, avg_rating, review_count');
   const statsByDrink: Record<string, { avg: number; count: number }> = {};
-  for (const row of (statsRows || []) as any[]) {
+  type StatsRow2 = { seltzer_id: string; avg_rating: number; review_count: number };
+  for (const row of (statsRows || []) as StatsRow2[]) {
     statsByDrink[row.seltzer_id] = { avg: row.avg_rating ?? 0, count: row.review_count ?? 0 };
   }
 
@@ -782,17 +784,20 @@ export async function getOtherDrinksFromBrand(brand: string, excludeId: string, 
     .limit(limit + 4); // overfetch so we can pick those with stats
   if (!data || data.length === 0) return [];
 
-  const ids = (data as any[]).map((d) => d.id);
+  type DrinkRow = { id: string; brand: string | null; name: string; image_url: string | null };
+  type StatsRow3 = { seltzer_id: string; avg_rating: number; review_count: number };
+  const typedDrinks = (data as DrinkRow[]);
+  const ids = typedDrinks.map((d) => d.id);
   const { data: statsRows } = await supabase
     .from('drink_stats')
     .select('seltzer_id, avg_rating, review_count')
     .in('seltzer_id', ids);
   const statsByDrink: Record<string, { avg: number; count: number }> = {};
-  for (const row of (statsRows || []) as any[]) {
+  for (const row of (statsRows || []) as StatsRow3[]) {
     statsByDrink[row.seltzer_id] = { avg: row.avg_rating, count: row.review_count };
   }
 
-  return (data as any[]).map((d) => ({
+  return typedDrinks.map((d) => ({
     id: d.id,
     brand: d.brand,
     name: d.name,
