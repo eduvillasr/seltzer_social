@@ -20,7 +20,7 @@ export interface Release {
   changes: ChangeEntry[];
 }
 
-export const CURRENT_VERSION = '0.13.1';
+export const CURRENT_VERSION = '0.14.0';
 
 /** localStorage key for "last version the user opened the changelog at". */
 export const SEEN_KEY = 'seltzer:last-seen-version';
@@ -32,6 +32,28 @@ export function hasUnseenRelease(): boolean {
 }
 
 export const RELEASES: Release[] = [
+  {
+    version: '0.14.0',
+    date: '2026-05-18',
+    headline: 'Advanced stats + search inside a profile',
+    changes: [
+      {
+        kind: 'new',
+        title: 'Search a profile by brand or flavor',
+        detail: 'Open any profile, hit the Reviews tab, and type a brand ("AHA") or a flavor ("Blackberry") to instantly filter that user\'s reviews. The search bar matches against brand, drink name, and review title.',
+      },
+      {
+        kind: 'new',
+        title: 'Detailed stats page',
+        detail: 'Tap "Detailed stats" inside the Taste Profile card to open /profile/[username]/stats. You\'ll see catalog explored %, brand diversity, generosity vs. the platform average, last-30-day average, a 0.5-bucket rating distribution, and a per-brand explorer with % explored, your average, and a progress bar. Tap a brand to jump back to the profile with that brand pre-filtered.',
+      },
+      {
+        kind: 'new',
+        title: 'Brand superlatives',
+        detail: 'A "Superlatives" card on the stats page highlights the brand you score highest, the brand you\'ve explored most thoroughly (as a % of its catalog), and the brand you reach for most often.',
+      },
+    ],
+  },
   {
     version: '0.13.1',
     date: '2026-05-18',

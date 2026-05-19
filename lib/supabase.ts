@@ -187,6 +187,66 @@ export async function uploadAvatar(userId: string, file: File): Promise<{ url: s
 }
 
 // SELTZER DATABASE (canonical drinks)
+
+/**
+ * Returns total drink count for every brand in the canonical catalog.
+ * Used by the advanced stats page to compute % explored per brand.
+ *
+ * One query, grouped client-side — Postgres doesn't expose a clean
+ * groupBy via the supabase-js client, so we fetch (brand) columns
+ * and count in JS. For 1,000+ rows this is still O(n) and runs once
+ * per stats page load — cheap.
+ */
+export async function getBrandCatalogTotals(): Promise<Record<string, number>> {
+  const { data, error } = await supabase
+    .from('seltzers')
+    .select('brand');
+  if (error || !data) return {};
+  const totals: Record<string, number> = {};
+  for (const row of data as Array<{ brand: string | null }>) {
+    const b = (row.brand ?? '').trim();
+    if (!b) continue;
+    totals[b] = (totals[b] || 0) + 1;
+  }
+  return totals;
+}
+
+/**
+ * Total canonical drink count across the whole catalog.
+ * Used for "catalog completion" on the stats page.
+ */
+export async function getCatalogSize(): Promise<number> {
+  const { count } = await supabase
+    .from('seltzers')
+    .select('id', { count: 'exact', head: true });
+  return count ?? 0;
+}
+
+/**
+ * The global average rating across every review in the system.
+ * Used to compute a user's "generosity vs. global" score on stats.
+ * Materialized — could be cached at the edge, but for now we just hit
+ * the materialized view drink_stats which already has avg per drink.
+ */
+export async function getGlobalAvgRating(): Promise<number> {
+  // Pull from the drink_stats materialized view — it's already an avg
+  // per drink, so we average the averages. Not perfectly identical to
+  // a raw avg(rating) over all reviews (drinks with few reviews get
+  // equal weight), but it's stable and cheap.
+  const { data } = await supabase
+    .from('drink_stats')
+    .select('avg_rating, review_count');
+  if (!data || data.length === 0) return 3.5;
+  // Weight by review_count so it matches a true global mean
+  let totalSum = 0;
+  let totalCount = 0;
+  for (const row of data as Array<{ avg_rating: number; review_count: number }>) {
+    totalSum += (row.avg_rating || 0) * (row.review_count || 0);
+    totalCount += row.review_count || 0;
+  }
+  return totalCount > 0 ? totalSum / totalCount : 3.5;
+}
+
 export async function searchSeltzers(query: string) {
   if (!query || query.length < 1) {
     const { data, error } = await supabase.from('seltzers').select('*').order('brand').limit(20);

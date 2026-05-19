@@ -4,6 +4,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { Review, SharedTierList, User } from '@/types';
 import { Navigation } from '@/components/Navigation';
 import { TopHeader } from '@/components/TopHeader';
@@ -21,7 +22,7 @@ import {
 } from '@/lib/supabase';
 import {
   ArrowLeft, Calendar, Droplets, UserPlus, UserMinus, List, Settings, ListPlus,
-  Star, Trophy, GitCompare, Award,
+  Star, Trophy, GitCompare, Award, Search, X, BarChart3,
 } from 'lucide-react';
 import { AchievementBadge } from '@/components/AchievementBadge';
 import { ACHIEVEMENTS } from '@/lib/achievements';
@@ -52,6 +53,17 @@ export default function ProfilePage({ params }: ProfilePageProps) {
   const [followingCount, setFollowingCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState<'lists' | 'reviews'>('reviews');
+  // Brand/drink-name filter on the Reviews tab. Empty string = no filter.
+  // Initial value may be seeded from a ?brand= query param (used when
+  // jumping in from the stats page brand explorer).
+  const searchParams = useSearchParams();
+  const [reviewQuery, setReviewQuery] = useState(() => searchParams?.get('brand') ?? '');
+
+  // If the query param changes (e.g. back/forward nav), keep the input in sync.
+  useEffect(() => {
+    const next = searchParams?.get('brand') ?? '';
+    setReviewQuery(next);
+  }, [searchParams]);
 
   useEffect(() => { checkUser(); }, []);
   useEffect(() => { loadProfile(); }, [params.username, currentUserId]);
@@ -147,6 +159,21 @@ export default function ProfilePage({ params }: ProfilePageProps) {
   }
 
   // ── derived ─────────────────────────────────────────────────
+  // Brand-or-drink-name filter for the Reviews tab. Case-insensitive.
+  // Matches against brand, seltzer_name, and the optional title — so a
+  // search for "Blackberry" finds anything blackberry-flavored, and a
+  // search for "AHA" finds every AHA review.
+  const filteredReviews = useMemo(() => {
+    const q = reviewQuery.trim().toLowerCase();
+    if (!q) return reviews;
+    return reviews.filter((r) => {
+      const brand = (r.brand ?? '').toLowerCase();
+      const name = (r.seltzer_name ?? '').toLowerCase();
+      const title = (r.title ?? '').toLowerCase();
+      return brand.includes(q) || name.includes(q) || title.includes(q);
+    });
+  }, [reviews, reviewQuery]);
+
   const topRated = useMemo<Review | null>(() => {
     if (reviews.length === 0) return null;
     return [...reviews].sort((a, b) => b.rating - a.rating || (
@@ -527,9 +554,18 @@ export default function ProfilePage({ params }: ProfilePageProps) {
               </div>
             )}
 
-            <p className="text-[10px] mt-3 text-center" style={{ color: 'var(--text-muted)' }}>
-              {taste.uniqueBrands} {taste.uniqueBrands === 1 ? 'brand' : 'brands'} explored
-            </p>
+            <div className="flex items-center justify-between gap-2 mt-3 pt-3" style={{ borderTop: '1px solid var(--border-subtle)' }}>
+              <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                {taste.uniqueBrands} {taste.uniqueBrands === 1 ? 'brand' : 'brands'} explored
+              </p>
+              <Link
+                href={`/profile/${user.username}/stats`}
+                className="text-[11px] font-semibold inline-flex items-center gap-1 hover:underline"
+                style={{ color: 'var(--cyan-400)' }}
+              >
+                <BarChart3 size={11} /> Detailed stats →
+              </Link>
+            </div>
           </div>
         )}
 
@@ -604,17 +640,67 @@ export default function ProfilePage({ params }: ProfilePageProps) {
         )}
 
         {view === 'reviews' && (
-          <div>
+          <div className="space-y-4">
+            {/* Brand / drink name filter — hidden when the profile is empty */}
+            {reviews.length > 0 && (
+              <div
+                className="flex items-center gap-2 rounded-2xl px-3"
+                style={{ background: 'rgba(15,20,36,0.6)', border: '1px solid var(--border-subtle)' }}
+              >
+                <Search size={14} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
+                <input
+                  type="text"
+                  value={reviewQuery}
+                  onChange={(e) => setReviewQuery(e.target.value)}
+                  placeholder={isOwnProfile ? 'Search your reviews by brand or flavor…' : 'Search by brand or flavor…'}
+                  className="flex-1 bg-transparent border-none outline-none py-2.5 text-sm"
+                  style={{ color: 'var(--text-primary)' }}
+                  aria-label="Filter reviews"
+                />
+                {reviewQuery && (
+                  <button
+                    onClick={() => setReviewQuery('')}
+                    className="rounded-full p-1 transition-colors hover:bg-white/10"
+                    style={{ color: 'var(--text-muted)' }}
+                    aria-label="Clear search"
+                  >
+                    <X size={13} />
+                  </button>
+                )}
+              </div>
+            )}
+
             {reviews.length === 0 ? (
               <div className="glass-card text-center py-10">
                 <Droplets size={26} className="mx-auto mb-3" style={{ color: 'var(--text-muted)' }} />
                 <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>No reviews yet</p>
                 {isOwnProfile && (<Link href="/create" className="btn-primary mt-4 inline-flex" style={{ padding: '8px 16px', fontSize: '12px' }}>Write Your First Review</Link>)}
               </div>
-            ) : (
-              <div className="space-y-4 stagger-children">
-                {reviews.map((review) => (<ReviewCard key={review.id} review={review} currentUserId={currentUserId || undefined} />))}
+            ) : filteredReviews.length === 0 ? (
+              <div className="glass-card text-center py-10">
+                <Search size={26} className="mx-auto mb-3" style={{ color: 'var(--text-muted)' }} />
+                <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+                  No reviews match "{reviewQuery}"
+                </p>
+                <button
+                  onClick={() => setReviewQuery('')}
+                  className="text-xs mt-3 underline"
+                  style={{ color: 'var(--cyan-400)' }}
+                >
+                  Clear search
+                </button>
               </div>
+            ) : (
+              <>
+                {reviewQuery && (
+                  <p className="text-[11px] px-1" style={{ color: 'var(--text-muted)' }}>
+                    {filteredReviews.length} of {reviews.length} reviews
+                  </p>
+                )}
+                <div className="space-y-4 stagger-children">
+                  {filteredReviews.map((review) => (<ReviewCard key={review.id} review={review} currentUserId={currentUserId || undefined} />))}
+                </div>
+              </>
             )}
           </div>
         )}
