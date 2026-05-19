@@ -1,10 +1,11 @@
 // app/discover/page.tsx
-// Search for people + tier lists. Reached from the bottom-nav Discover tab.
-// (Trending content lives at /trending — surfaced from the Feed page header.)
+// Two-tab discovery: People (users) and Catalog (drinks + brands + tier
+// lists). The search input filters whichever tab is active. Reached from
+// the bottom-nav Discover tab. (Trending content lives at /trending.)
 
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import {
   Search, X, Users, ArrowRight, Flame, Droplets, Tag,
@@ -23,8 +24,11 @@ import {
 } from '@/lib/supabase';
 import { SharedTierList, User } from '@/types';
 
+type Tab = 'people' | 'catalog';
+
 export default function DiscoverPage() {
   const [query, setQuery] = useState('');
+  const [tab, setTab] = useState<Tab>('people');
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [people, setPeople] = useState<(User & { isFollowing?: boolean; followers?: number })[]>([]);
   const [matchingLists, setMatchingLists] = useState<SharedTierList[]>([]);
@@ -120,11 +124,16 @@ export default function DiscoverPage() {
     );
   }
 
-  const noResults = hasSearched && !searching
-    && people.length === 0
-    && matchingLists.length === 0
+  // Per-tab "no results" — so the People tab can say "no people" even when
+  // the Catalog tab has matches (and vice versa).
+  const peopleNoResults  = hasSearched && !searching && people.length === 0;
+  const catalogNoResults = hasSearched && !searching
     && drinks.length === 0
-    && brands.length === 0;
+    && brands.length === 0
+    && matchingLists.length === 0;
+
+  const peopleCount  = people.length;
+  const catalogCount = drinks.length + brands.length + matchingLists.length;
 
   return (
     <>
@@ -151,10 +160,9 @@ export default function DiscoverPage() {
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search drinks, brands, people, lists…"
+            placeholder={tab === 'people' ? 'Search people…' : 'Search drinks, brands, lists…'}
             className="input-field pl-11 pr-11"
             style={{ borderRadius: '999px', height: '44px' }}
-            autoFocus
           />
           {query && (
             <button
@@ -168,7 +176,159 @@ export default function DiscoverPage() {
           )}
         </div>
 
-        {/* Browse-by-category shortcuts — always visible above the search */}
+        {/* ─── Tab toggle ─── */}
+        <div
+          className="flex gap-1 p-1 rounded-2xl"
+          style={{ background: 'rgba(15,20,36,0.6)', border: '1px solid rgba(255,255,255,0.06)' }}
+        >
+          {([
+            { id: 'people'  as Tab, label: 'People',  icon: <Users size={13} />,    count: peopleCount  },
+            { id: 'catalog' as Tab, label: 'Catalog', icon: <Droplets size={13} />, count: catalogCount },
+          ]).map((t) => {
+            const active = tab === t.id;
+            return (
+              <button
+                key={t.id}
+                onClick={() => setTab(t.id)}
+                className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-semibold transition-all"
+                style={{
+                  background: active ? 'linear-gradient(135deg, var(--cyan-400), var(--cyan-600))' : 'transparent',
+                  color: active ? '#fff' : 'var(--text-tertiary)',
+                  boxShadow: active ? '0 0 12px rgba(6,182,212,0.25)' : 'none',
+                }}
+              >
+                {t.icon} {t.label}
+                {hasSearched && !searching && t.count > 0 && (
+                  <span
+                    className="text-[10px] tabular-nums px-1.5 py-0.5 rounded-full ml-0.5"
+                    style={{
+                      background: active ? 'rgba(255,255,255,0.18)' : 'rgba(255,255,255,0.06)',
+                      color: active ? '#fff' : 'var(--text-muted)',
+                    }}
+                  >
+                    {t.count}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* ─── Tab content ─── */}
+        {searching ? (
+          <FeedSkeleton count={2} />
+        ) : tab === 'people' ? (
+          <PeopleTab
+            people={people}
+            currentUserId={currentUserId}
+            hasSearched={hasSearched}
+            noResults={peopleNoResults}
+            onToggleFollow={toggleFollow}
+          />
+        ) : (
+          <CatalogTab
+            brands={brands}
+            drinks={drinks}
+            matchingLists={matchingLists}
+            hasSearched={hasSearched}
+            noResults={catalogNoResults}
+          />
+        )}
+      </main>
+    </>
+  );
+}
+
+// ─── PEOPLE TAB ────────────────────────────────────────────────────
+
+interface PeopleTabProps {
+  people: (User & { isFollowing?: boolean; followers?: number })[];
+  currentUserId: string | null;
+  hasSearched: boolean;
+  noResults: boolean;
+  onToggleFollow: (userId: string, currentlyFollowing: boolean) => void;
+}
+
+function PeopleTab({ people, currentUserId, hasSearched, noResults, onToggleFollow }: PeopleTabProps) {
+  if (!hasSearched) {
+    return (
+      <div className="glass-card text-center py-10">
+        <Users size={26} className="mx-auto mb-3" style={{ color: 'var(--text-muted)' }} />
+        <p className="text-sm font-bold mb-1" style={{ color: 'var(--text-primary)' }}>Find people</p>
+        <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+          Start typing a username to find reviewers to follow.
+        </p>
+      </div>
+    );
+  }
+  if (noResults) {
+    return (
+      <div className="glass-card text-center py-10">
+        <Users size={26} className="mx-auto mb-3" style={{ color: 'var(--text-muted)' }} />
+        <p className="font-bold text-sm mb-1" style={{ color: 'var(--text-primary)' }}>No people match</p>
+        <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>Try a different username.</p>
+      </div>
+    );
+  }
+  return (
+    <div className="space-y-2 stagger-children">
+      {people.map((user) => {
+        const isSelf = user.id === currentUserId;
+        return (
+          <div key={user.id} className="glass-card flex items-center gap-3" style={{ padding: '12px' }}>
+            <Link href={`/profile/${user.username}`} className="flex-shrink-0">
+              <div className="cursor-pointer hover:scale-105 transition-transform">
+                <Avatar username={user.username} avatarUrl={user.avatar_url} size={40} />
+              </div>
+            </Link>
+            <div className="flex-1 min-w-0">
+              <Link href={`/profile/${user.username}`}>
+                <p className="font-bold text-sm hover:text-cyan-400 transition-colors cursor-pointer inline-flex items-center gap-1.5" style={{ color: 'var(--text-primary)' }}>
+                  @{user.username}{isSelf ? ' (you)' : ''}
+                  {FOUNDERS.has(user.username) && <FounderBadge />}
+                  {BETA_TESTERS.has(user.username) && !FOUNDERS.has(user.username) && <BetaTesterBadge />}
+                </p>
+              </Link>
+              <p className="text-xs flex items-center gap-1" style={{ color: 'var(--text-muted)' }}>
+                <Users size={10} /> {user.followers} {user.followers === 1 ? 'follower' : 'followers'}
+              </p>
+            </div>
+            {isSelf ? (
+              <Link href={`/profile/${user.username}`} className="btn-secondary flex-shrink-0" style={{ padding: '6px 12px', fontSize: '11px' }}>
+                View
+              </Link>
+            ) : currentUserId && (
+              <button
+                onClick={() => onToggleFollow(user.id, !!user.isFollowing)}
+                className={user.isFollowing ? 'btn-secondary flex-shrink-0' : 'btn-primary flex-shrink-0'}
+                style={{ padding: '6px 12px', fontSize: '11px' }}
+              >
+                {user.isFollowing ? <><UserMinus size={11} /> Unfollow</> : <><UserPlus size={11} /> Follow</>}
+              </button>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ─── CATALOG TAB ───────────────────────────────────────────────────
+
+interface CatalogTabProps {
+  brands: string[];
+  drinks: any[];
+  matchingLists: SharedTierList[];
+  hasSearched: boolean;
+  noResults: boolean;
+}
+
+function CatalogTab({ brands, drinks, matchingLists, hasSearched, noResults }: CatalogTabProps) {
+  // Empty state of the Catalog tab — even with no search, surface
+  // shortcut tiles into the deeper browse pages.
+  if (!hasSearched) {
+    return (
+      <div className="space-y-3">
         <div className="grid grid-cols-2 gap-2">
           <Link
             href="/brand"
@@ -180,7 +340,7 @@ export default function DiscoverPage() {
             </div>
             <div className="min-w-0">
               <p className="text-xs font-bold" style={{ color: 'var(--text-primary)' }}>Browse brands</p>
-              <p className="text-[10px] truncate" style={{ color: 'var(--text-muted)' }}>Every brand in the catalog</p>
+              <p className="text-[10px] truncate" style={{ color: 'var(--text-muted)' }}>Every brand</p>
             </div>
           </Link>
           <Link
@@ -193,194 +353,139 @@ export default function DiscoverPage() {
             </div>
             <div className="min-w-0">
               <p className="text-xs font-bold" style={{ color: 'var(--text-primary)' }}>Trending</p>
-              <p className="text-[10px] truncate" style={{ color: 'var(--text-muted)' }}>Hot drinks + tier lists</p>
+              <p className="text-[10px] truncate" style={{ color: 'var(--text-muted)' }}>Hot this week</p>
             </div>
           </Link>
         </div>
-
-        {/* Results */}
-        {!hasSearched ? (
-          <div className="glass-card text-center py-10">
-            <Search size={26} className="mx-auto mb-3" style={{ color: 'var(--text-muted)' }} />
-            <p className="text-sm font-bold mb-1" style={{ color: 'var(--text-primary)' }}>Search anything</p>
-            <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
-              Drinks, brands, people, tier lists — one box.
-            </p>
+        <div className="glass-card text-center py-8">
+          <Droplets size={26} className="mx-auto mb-3" style={{ color: 'var(--text-muted)' }} />
+          <p className="text-sm font-bold mb-1" style={{ color: 'var(--text-primary)' }}>Search the catalog</p>
+          <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+            Drinks, brands, and shared tier lists.
+          </p>
+        </div>
+      </div>
+    );
+  }
+  if (noResults) {
+    return (
+      <div className="glass-card text-center py-10">
+        <Droplets size={26} className="mx-auto mb-3" style={{ color: 'var(--text-muted)' }} />
+        <p className="font-bold text-sm mb-1" style={{ color: 'var(--text-primary)' }}>No catalog matches</p>
+        <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>Try a different flavor, brand, or list name.</p>
+      </div>
+    );
+  }
+  return (
+    <div className="space-y-5">
+      {/* Brands */}
+      {brands.length > 0 && (
+        <section className="space-y-3">
+          <div className="flex items-baseline justify-between gap-2 px-1">
+            <h2 className="text-xs font-bold uppercase tracking-[0.18em] flex items-center gap-2" style={{ color: 'var(--amber-400)' }}>
+              <Tag size={12} /> Brands
+            </h2>
+            <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+              {brands.length} match{brands.length === 1 ? '' : 'es'}
+            </span>
           </div>
-        ) : searching ? (
-          <FeedSkeleton count={2} />
-        ) : noResults ? (
-          <div className="glass-card text-center py-10">
-            <Search size={28} className="mx-auto mb-3" style={{ color: 'var(--text-muted)' }} />
-            <p className="font-bold text-sm mb-1" style={{ color: 'var(--text-primary)' }}>No matches</p>
-            <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>Try a different name or username.</p>
+          <div className="flex flex-wrap gap-2">
+            {brands.map((b) => (
+              <Link
+                key={b}
+                href={`/brand/${encodeURIComponent(b)}`}
+                className="text-xs font-semibold px-3 py-1.5 rounded-full transition-colors hover:bg-white/5"
+                style={{
+                  background: 'rgba(251,191,36,0.08)',
+                  border: '1px solid rgba(251,191,36,0.22)',
+                  color: 'var(--amber-400)',
+                }}
+              >
+                {b} →
+              </Link>
+            ))}
           </div>
-        ) : (
-          <>
-            {/* Brands — chip row */}
-            {brands.length > 0 && (
-              <section className="space-y-3">
-                <div className="flex items-baseline justify-between gap-2 px-1">
-                  <h2 className="text-xs font-bold uppercase tracking-[0.18em] flex items-center gap-2" style={{ color: 'var(--amber-400)' }}>
-                    <Tag size={12} /> Brands
-                  </h2>
-                  <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
-                    {brands.length} match{brands.length === 1 ? '' : 'es'}
-                  </span>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {brands.map((b) => (
-                    <Link
-                      key={b}
-                      href={`/brand/${encodeURIComponent(b)}`}
-                      className="text-xs font-semibold px-3 py-1.5 rounded-full transition-colors hover:bg-white/5"
-                      style={{
-                        background: 'rgba(251,191,36,0.08)',
-                        border: '1px solid rgba(251,191,36,0.22)',
-                        color: 'var(--amber-400)',
-                      }}
-                    >
-                      {b} →
-                    </Link>
-                  ))}
-                </div>
-              </section>
-            )}
+        </section>
+      )}
 
-            {/* Drinks */}
-            {drinks.length > 0 && (
-              <section className="space-y-3 stagger-children">
-                <div className="flex items-baseline justify-between gap-2 px-1">
-                  <h2 className="text-xs font-bold uppercase tracking-[0.18em] flex items-center gap-2" style={{ color: 'var(--cyan-400)' }}>
-                    <Droplets size={12} /> Drinks
-                  </h2>
-                  <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
-                    {drinks.length} match{drinks.length === 1 ? '' : 'es'}
-                  </span>
+      {/* Drinks */}
+      {drinks.length > 0 && (
+        <section className="space-y-3 stagger-children">
+          <div className="flex items-baseline justify-between gap-2 px-1">
+            <h2 className="text-xs font-bold uppercase tracking-[0.18em] flex items-center gap-2" style={{ color: 'var(--cyan-400)' }}>
+              <Droplets size={12} /> Drinks
+            </h2>
+            <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+              {drinks.length} match{drinks.length === 1 ? '' : 'es'}
+            </span>
+          </div>
+          <div className="space-y-2">
+            {drinks.map((d) => (
+              <Link
+                key={d.id}
+                href={`/drink/${d.id}`}
+                className="glass-card flex items-center gap-3 transition-colors hover:bg-white/5"
+                style={{ padding: '10px 12px' }}
+              >
+                {d.image_url ? (
+                  <img src={d.image_url} alt={d.name} loading="lazy" className="w-12 h-14 rounded-lg object-cover flex-shrink-0" style={{ border: '1px solid var(--border-subtle)' }} />
+                ) : (
+                  <div className="w-12 h-14 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: 'rgba(34,211,238,0.06)', border: '1px solid var(--border-subtle)' }}>
+                    <Droplets size={18} style={{ color: 'var(--text-muted)' }} />
+                  </div>
+                )}
+                <div className="flex-1 min-w-0">
+                  <p className="font-bold text-sm truncate" style={{ color: 'var(--text-primary)' }}>{d.name}</p>
+                  {d.brand && <p className="text-[11px] truncate" style={{ color: 'var(--text-muted)' }}>{d.brand}</p>}
                 </div>
-                <div className="space-y-2">
-                  {drinks.map((d) => (
-                    <Link
-                      key={d.id}
-                      href={`/drink/${d.id}`}
-                      className="glass-card flex items-center gap-3 transition-colors hover:bg-white/5"
-                      style={{ padding: '10px 12px' }}
-                    >
-                      {d.image_url ? (
-                        <img src={d.image_url} alt={d.name} loading="lazy" className="w-12 h-14 rounded-lg object-cover flex-shrink-0" style={{ border: '1px solid var(--border-subtle)' }} />
-                      ) : (
-                        <div className="w-12 h-14 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: 'rgba(34,211,238,0.06)', border: '1px solid var(--border-subtle)' }}>
-                          <Droplets size={18} style={{ color: 'var(--text-muted)' }} />
-                        </div>
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <p className="font-bold text-sm truncate" style={{ color: 'var(--text-primary)' }}>{d.name}</p>
-                        {d.brand && <p className="text-[11px] truncate" style={{ color: 'var(--text-muted)' }}>{d.brand}</p>}
-                      </div>
-                      <ArrowRight size={14} style={{ color: 'var(--text-muted)' }} />
-                    </Link>
-                  ))}
-                </div>
-              </section>
-            )}
+                <ArrowRight size={14} style={{ color: 'var(--text-muted)' }} />
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
 
-            {/* People */}
-            {people.length > 0 && (
-              <section className="space-y-3 stagger-children">
-                <div className="flex items-baseline justify-between gap-2 px-1">
-                  <h2 className="text-xs font-bold uppercase tracking-[0.18em] flex items-center gap-2" style={{ color: 'var(--violet-400)' }}>
-                    <Users size={12} /> People
-                  </h2>
-                  <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
-                    {people.length} match{people.length === 1 ? '' : 'es'}
-                  </span>
+      {/* Tier lists */}
+      {matchingLists.length > 0 && (
+        <section className="space-y-3 stagger-children">
+          <div className="flex items-baseline justify-between gap-2 px-1">
+            <h2 className="text-xs font-bold uppercase tracking-[0.18em] flex items-center gap-2" style={{ color: 'var(--cyan-400)' }}>
+              <ListIcon size={12} /> Tier Lists
+            </h2>
+            <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+              {matchingLists.length} match{matchingLists.length === 1 ? '' : 'es'}
+            </span>
+          </div>
+          <div className="space-y-2">
+            {matchingLists.map((list) => (
+              <Link
+                key={list.id}
+                href={`/shared/${list.id}`}
+                className="glass-card block hover:bg-white/5 transition-colors"
+                style={{ padding: '12px' }}
+              >
+                <div className="flex items-start gap-3">
+                  <div
+                    className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+                    style={{ background: 'rgba(6,182,212,0.12)', color: 'var(--cyan-400)' }}
+                  >
+                    <ListIcon size={18} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-bold text-sm truncate" style={{ color: 'var(--text-primary)' }}>{list.name}</p>
+                    <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                      @{list.owner?.username}
+                      <span style={{ color: 'var(--border-strong)' }}> × </span>
+                      @{list.partner?.username}
+                    </p>
+                  </div>
+                  <ArrowRight size={14} className="flex-shrink-0 mt-2" style={{ color: 'var(--text-muted)' }} />
                 </div>
-                <div className="space-y-2">
-                  {people.map((user) => {
-                    const isSelf = user.id === currentUserId;
-                    return (
-                      <div key={user.id} className="glass-card flex items-center gap-3" style={{ padding: '12px' }}>
-                        <Link href={`/profile/${user.username}`} className="flex-shrink-0">
-                          <div className="cursor-pointer hover:scale-105 transition-transform">
-                            <Avatar username={user.username} avatarUrl={user.avatar_url} size={40} />
-                          </div>
-                        </Link>
-                        <div className="flex-1 min-w-0">
-                          <Link href={`/profile/${user.username}`}>
-                            <p className="font-bold text-sm hover:text-cyan-400 transition-colors cursor-pointer inline-flex items-center gap-1.5" style={{ color: 'var(--text-primary)' }}>
-                              @{user.username}{isSelf ? ' (you)' : ''}
-                              {FOUNDERS.has(user.username) && <FounderBadge />}
-                              {BETA_TESTERS.has(user.username) && !FOUNDERS.has(user.username) && <BetaTesterBadge />}
-                            </p>
-                          </Link>
-                          <p className="text-xs flex items-center gap-1" style={{ color: 'var(--text-muted)' }}>
-                            <Users size={10} /> {user.followers} {user.followers === 1 ? 'follower' : 'followers'}
-                          </p>
-                        </div>
-                        {isSelf ? (
-                          <Link href={`/profile/${user.username}`} className="btn-secondary flex-shrink-0" style={{ padding: '6px 12px', fontSize: '11px' }}>
-                            View
-                          </Link>
-                        ) : currentUserId && (
-                          <button
-                            onClick={() => toggleFollow(user.id, !!user.isFollowing)}
-                            className={user.isFollowing ? 'btn-secondary flex-shrink-0' : 'btn-primary flex-shrink-0'}
-                            style={{ padding: '6px 12px', fontSize: '11px' }}
-                          >
-                            {user.isFollowing ? <><UserMinus size={11} /> Unfollow</> : <><UserPlus size={11} /> Follow</>}
-                          </button>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </section>
-            )}
-
-            {/* Tier lists */}
-            {matchingLists.length > 0 && (
-              <section className="space-y-3 stagger-children">
-                <div className="flex items-baseline justify-between gap-2 px-1">
-                  <h2 className="text-xs font-bold uppercase tracking-[0.18em] flex items-center gap-2" style={{ color: 'var(--cyan-400)' }}>
-                    <ListIcon size={12} /> Tier Lists
-                  </h2>
-                  <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
-                    {matchingLists.length} match{matchingLists.length === 1 ? '' : 'es'}
-                  </span>
-                </div>
-                <div className="space-y-2">
-                  {matchingLists.map((list) => (
-                    <Link
-                      key={list.id}
-                      href={`/shared/${list.id}`}
-                      className="glass-card block hover:bg-white/5 transition-colors"
-                      style={{ padding: '12px' }}
-                    >
-                      <div className="flex items-start gap-3">
-                        <div
-                          className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
-                          style={{ background: 'rgba(6,182,212,0.12)', color: 'var(--cyan-400)' }}
-                        >
-                          <ListIcon size={18} />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="font-bold text-sm truncate" style={{ color: 'var(--text-primary)' }}>{list.name}</p>
-                          <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
-                            @{list.owner?.username}
-                            <span style={{ color: 'var(--border-strong)' }}> × </span>
-                            @{list.partner?.username}
-                          </p>
-                        </div>
-                        <ArrowRight size={14} className="flex-shrink-0 mt-2" style={{ color: 'var(--text-muted)' }} />
-                      </div>
-                    </Link>
-                  ))}
-                </div>
-              </section>
-            )}
-          </>
-        )}
-      </main>
-    </>
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
+    </div>
   );
 }

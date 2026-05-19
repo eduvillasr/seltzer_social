@@ -20,7 +20,7 @@ export interface Release {
   changes: ChangeEntry[];
 }
 
-export const CURRENT_VERSION = '0.15.1';
+export const CURRENT_VERSION = '0.15.2';
 
 /** localStorage key for "last version the user opened the changelog at". */
 export const SEEN_KEY = 'seltzer:last-seen-version';
@@ -32,6 +32,23 @@ export function hasUnseenRelease(): boolean {
 }
 
 export const RELEASES: Release[] = [
+  {
+    version: '0.15.2',
+    date: '2026-05-18',
+    headline: 'Discover, now with tabs',
+    changes: [
+      {
+        kind: 'improved',
+        title: 'Two tabs on Discover',
+        detail: 'Discover now splits into "People" and "Catalog" tabs. People searches users only; Catalog searches drinks, brands, and shared tier lists in one shot. Each tab shows a result count badge once you\'ve searched, and the search box placeholder changes to match the active tab.',
+      },
+      {
+        kind: 'improved',
+        title: 'Browse-brands shortcut moved into Catalog',
+        detail: 'The "Browse brands" and "Trending" tiles now live inside the Catalog tab\'s empty state — they\'re still one tap away but no longer compete with people-search.',
+      },
+    ],
+  },
   {
     version: '0.15.1',
     date: '2026-05-18',
