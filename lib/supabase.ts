@@ -195,17 +195,33 @@ export async function uploadAvatar(userId: string, file: File): Promise<{ url: s
  * Brand match is case-insensitive — the URL passes a "pretty" brand name and
  * we want LaCroix == lacroix == LaCroix.
  */
-export async function getBrandHubData(brand: string, currentUserId?: string | null) {
+// Stable shapes so TS doesn't union-narrow the return into something
+// that includes an unindexable `{}` for the empty-result early returns.
+type BrandStatsMap   = Record<string, { count: number; avg: number; image: string | null }>;
+type BrandMyReviews  = Record<string, number>;
+interface BrandHubResult {
+  brand: string;
+  drinks: any[];
+  stats: BrandStatsMap;
+  myReviews: BrandMyReviews;
+  error: any;
+}
+
+export async function getBrandHubData(brand: string, currentUserId?: string | null): Promise<BrandHubResult> {
   // 1. Drinks belonging to this brand
   const { data: drinks, error: drinkErr } = await supabase
     .from('seltzers')
     .select('id, brand, name, image_url, image_quality_flag, created_at')
     .ilike('brand', brand)
     .order('name', { ascending: true });
-  if (drinkErr || !drinks) return { brand, drinks: [], stats: {}, myReviews: {}, error: drinkErr };
+  if (drinkErr || !drinks) {
+    return { brand, drinks: [], stats: {} as BrandStatsMap, myReviews: {} as BrandMyReviews, error: drinkErr };
+  }
 
   const drinkIds = (drinks as any[]).map((d) => d.id);
-  if (drinkIds.length === 0) return { brand, drinks: [], stats: {}, myReviews: {}, error: null };
+  if (drinkIds.length === 0) {
+    return { brand, drinks: [], stats: {} as BrandStatsMap, myReviews: {} as BrandMyReviews, error: null };
+  }
 
   // 2. Community stats per drink
   const { data: statsRows } = await supabase
