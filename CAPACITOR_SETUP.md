@@ -149,6 +149,57 @@ After that, any new `notifications` row (likes, comments, mentions, tier invites
 delivers a native push to the recipient's devices. Dead tokens are pruned
 automatically when FCM reports them unregistered.
 
+## 9 · Camera permission (barcode scanner)
+
+The "scan a barcode" feature uses `@capacitor-mlkit/barcode-scanning` natively
+(and the web `BarcodeDetector` API as a browser fallback). The native scanner
+needs the **camera** permission declared in each platform, or the app will be
+rejected / crash when the scanner opens. Apply these after `npx cap add`.
+
+**iOS** — `ios/App/App/Info.plist`, add inside the top-level `<dict>`:
+
+```xml
+<key>NSCameraUsageDescription</key>
+<string>Seltzer Social uses the camera to scan a drink's barcode so you can quickly find or add it.</string>
+```
+
+**Android** — `android/app/src/main/AndroidManifest.xml`:
+
+```xml
+<!-- inside <manifest>, above <application> -->
+<uses-permission android:name="android.permission.CAMERA" />
+
+<!-- inside <application>, so Play preloads the ML Kit barcode model -->
+<meta-data
+    android:name="com.google.mlkit.vision.DEPENDENCIES"
+    android:value="barcode_ui" />
+```
+
+Then re-sync so the plugin's native code is linked:
+
+```bash
+npm install        # ensures @capacitor-mlkit/barcode-scanning is present
+npx cap sync
+```
+
+> The web fallback needs no manifest entry — the browser prompts for camera
+> access at runtime, and it only works over HTTPS (your Vercel deploy is fine).
+
+## 10 · In-app account deletion (Apple 5.1.1(v))
+
+Settings → "Delete account" calls the `delete-account` Edge Function with the
+service role, which purges the user's storage and deletes their `auth.users`
+row (cascading every owned table). Deploy it once:
+
+```bash
+npx supabase functions deploy delete-account
+```
+
+`SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are injected automatically — no
+extra secrets needed. Also run `supabase_moderation_barcode.sql` (adds the
+`terms_accepted_at` column, the `reports`/`blocks` tables, and `seltzers.upc`)
+and `supabase_merge_1877.sql` in the SQL editor before launch.
+
 ## After config changes
 
 Run `npx cap sync` whenever you edit `capacitor.config.ts` or add a plugin.
