@@ -9,12 +9,14 @@ import { ReviewCard } from '@/components/ReviewCard';
 import { TierAddCard } from '@/components/TierAddCard';
 import { Navigation } from '@/components/Navigation';
 import { Review, AuthUser, SharedTierListItem } from '@/types';
-import { getSmartFeed, getFollowingCount, getSubscribedSharedTierActivities, supabase } from '@/lib/supabase';
-import { Plus, Droplets, Search, Sparkles, ListPlus, RotateCcw, Flame, UserPlus } from 'lucide-react';
+import { getSmartFeed, getForYouFeed, getFollowingCount, getSubscribedSharedTierActivities, supabase } from '@/lib/supabase';
+import { Plus, Droplets, Search, Sparkles, ListPlus, RotateCcw, Flame, UserPlus, Users } from 'lucide-react';
 import { FeedSkeleton } from '@/components/Skeletons';
 import { TopHeader } from '@/components/TopHeader';
 import { WhatsNewLink } from '@/components/WhatsNewLink';
 import { DiscoveryRail } from '@/components/DiscoveryRail';
+import { GettingStarted } from '@/components/GettingStarted';
+import { FirstTimeTip } from '@/components/FirstTimeTip';
 import { usePullToRefresh } from '@/hooks/usePullToRefresh';
 import { invalidate } from '@/lib/cache';
 
@@ -23,6 +25,7 @@ type FeedItem =
   | { kind: 'tierAdd'; at: number; activity: SharedTierListItem };
 
 type Section = { label: string; items: FeedItem[] };
+type FeedTab = 'following' | 'forYou';
 
 export default function FeedPage() {
   const [reviews, setReviews] = useState<Review[]>([]);
@@ -30,6 +33,10 @@ export default function FeedPage() {
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [followingCount, setFollowingCount] = useState(0);
+  const [tab, setTab] = useState<FeedTab>('following');
+  const [forYou, setForYou] = useState<Review[]>([]);
+  const [forYouLoading, setForYouLoading] = useState(false);
+  const [forYouLoaded, setForYouLoaded] = useState(false);
   const router = useRouter();
 
   useEffect(() => { checkUser(); }, []);
@@ -89,9 +96,32 @@ export default function FeedPage() {
     if (withSpinner) setLoading(false);
   }
 
+  async function loadForYou(uid: string, opts?: { force?: boolean }) {
+    setForYouLoading(true);
+    const cache = await import('@/lib/cache');
+    if (opts?.force) cache.invalidate(`forYou:${uid}`);
+    const cached = !opts?.force ? cache.peekCache<Review[]>(`forYou:${uid}`) : undefined;
+    if (cached) { setForYou(cached); setForYouLoaded(true); setForYouLoading(false); }
+    const { data } = await getForYouFeed(uid, 30);
+    const recs = (data as Review[]) || [];
+    setForYou(recs);
+    setForYouLoaded(true);
+    cache.setCache(`forYou:${uid}`, recs);
+    setForYouLoading(false);
+  }
+
+  // Lazy-load the For You tab the first time it's opened.
+  useEffect(() => {
+    if (tab === 'forYou' && currentUser && !forYouLoaded && !forYouLoading) {
+      loadForYou(currentUser.id);
+    }
+  }, [tab, currentUser, forYouLoaded, forYouLoading]);
+
   const { pull, progress, isRefreshing, triggered, bind } = usePullToRefresh(async () => {
     // Pull-to-refresh always bypasses the cache for guaranteed-fresh data.
-    if (currentUser) await loadFeed(currentUser.id, false, { force: true });
+    if (!currentUser) return;
+    if (tab === 'forYou') await loadForYou(currentUser.id, { force: true });
+    else await loadFeed(currentUser.id, false, { force: true });
   });
 
   // Silently refresh when the user comes back to the tab.
@@ -207,6 +237,20 @@ export default function FeedPage() {
         }}
       >
 
+        {/* Getting Started checklist — only renders for new users who
+            haven't completed all 5 steps yet, or haven't dismissed it. */}
+        {currentUser && (
+          <div className="mt-4 space-y-3">
+            <GettingStarted userId={currentUser.id} />
+            <FirstTimeTip
+              tipId="feed-create-button"
+              title="Drop a quick review anytime"
+              body="Tap the cyan + button in the bottom nav to rate any seltzer in under 10 seconds."
+              arrow="down"
+            />
+          </div>
+        )}
+
         {/* Promo: start a shared list */}
         <Link
           href="/shared/create"
@@ -223,6 +267,55 @@ export default function FeedPage() {
           <ListPlus size={18} className="text-cyan-400" />
         </Link>
 
+        {/* Following / For You tabs */}
+        <div
+          className="mb-4 flex p-1 rounded-full"
+          style={{ background: 'rgba(148,163,184,0.08)', border: '1px solid var(--border-subtle)' }}
+        >
+          {([
+            { id: 'following' as const, label: 'Following', icon: Users },
+            { id: 'forYou' as const, label: 'For You', icon: Sparkles },
+          ]).map(({ id, label, icon: Icon }) => {
+            const active = tab === id;
+            return (
+              <button
+                key={id}
+                onClick={() => setTab(id)}
+                className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-full text-xs font-semibold transition-colors"
+                style={{
+                  background: active ? 'rgba(34,211,238,0.14)' : 'transparent',
+                  color: active ? 'var(--cyan-400)' : 'var(--text-secondary)',
+                  border: active ? '1px solid rgba(34,211,238,0.28)' : '1px solid transparent',
+                }}
+              >
+                <Icon size={13} /> {label}
+              </button>
+            );
+          })}
+        </div>
+
+        {tab === 'forYou' ? (
+          forYouLoading && forYou.length === 0 ? (
+            <FeedSkeleton count={3} />
+          ) : forYou.length === 0 ? (
+            <div className="glass-card text-center py-8 animate-fade-in-up">
+              <Sparkles size={28} className="mx-auto mb-2" style={{ color: 'var(--text-muted)' }} />
+              <h3 className="text-lg font-bold mb-2" style={{ fontFamily: 'var(--font-display)' }}>
+                Nothing to recommend yet
+              </h3>
+              <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+                As more people post and engage, fresh reviews from across the community show up here.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-3 stagger-children">
+              {forYou.map((r) => (
+                <ReviewCard key={`fy-${r.id}`} review={r} currentUserId={currentUser?.id} />
+              ))}
+            </div>
+          )
+        ) : (
+        <>
         {/* Feed */}
         {loading ? (
           <FeedSkeleton count={3} />
@@ -310,6 +403,8 @@ export default function FeedPage() {
               </section>
             ))}
           </div>
+        )}
+        </>
         )}
       </main>
     </>

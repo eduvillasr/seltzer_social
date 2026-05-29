@@ -7,6 +7,7 @@ import Link from 'next/link';
 import { Heart, MessageCircle, Star, StarHalf, Trash2, Droplets, ChevronRight, Minus, Plus } from 'lucide-react';
 import { Review } from '@/types';
 import { Avatar } from './Avatar';
+import { CanImage } from './CanImage';
 import { FounderBadge, FOUNDERS, BetaTesterBadge, BETA_TESTERS } from './FounderBadge';
 import { StarRating } from './StarRating';
 import { reviewHeadline, reviewDrinkLabel, hasCustomTitle } from '@/lib/reviewDisplay';
@@ -42,7 +43,13 @@ export function ReviewCard({ review, currentUserId, onDelete }: ReviewCardProps)
 
   const isOwnReview = currentUserId === review.user?.id;
 
+  // Guards against setState after unmount / after the card is reused for a
+  // different review.id — the feed mounts many of these and the per-card
+  // queries can resolve after the user has already scrolled/navigated away.
+  const mountedRef = useRef(true);
+
   useEffect(() => {
+    mountedRef.current = true;
     loadLikeCount();
     if (currentUserId) {
       checkLike();
@@ -50,33 +57,34 @@ export function ReviewCard({ review, currentUserId, onDelete }: ReviewCardProps)
     }
     loadTriedItCount();
     loadCommentCount();
+    return () => { mountedRef.current = false; };
   }, [currentUserId, review.id]);
 
   async function loadCommentCount() {
     const { count } = await getCommentCount(review.id);
-    setCommentCount(count);
+    if (mountedRef.current) setCommentCount(count);
   }
 
   async function loadLikeCount() {
     const { data } = await getLikes(review.id);
-    setLikeCount(data?.length || 0);
+    if (mountedRef.current) setLikeCount(data?.length || 0);
   }
 
   async function checkLike() {
     if (!currentUserId) return;
     const { data } = await getUserLike(currentUserId, review.id);
-    setIsLiked(!!data);
+    if (mountedRef.current) setIsLiked(!!data);
   }
 
   async function loadTriedIt() {
     if (!currentUserId) return;
     const { data } = await getUserTriedIt(currentUserId, review.id);
-    if (data) { setHasTried(true); setMyTriedRating(data.rating); setPendingRating(data.rating); }
+    if (data && mountedRef.current) { setHasTried(true); setMyTriedRating(data.rating); setPendingRating(data.rating); }
   }
 
   async function loadTriedItCount() {
     const { count } = await getTriedItStats(review.id);
-    setTriedCount(count);
+    if (mountedRef.current) setTriedCount(count);
   }
 
   async function handleLike() {
@@ -85,11 +93,11 @@ export function ReviewCard({ review, currentUserId, onDelete }: ReviewCardProps)
     if (isLiked) {
       await deleteLike(currentUserId, review.id);
       setIsLiked(false);
-      setLikeCount(Math.max(0, likeCount - 1));
+      setLikeCount((c) => Math.max(0, c - 1));
     } else {
       await createLike(currentUserId, review.id);
       setIsLiked(true);
-      setLikeCount(likeCount + 1);
+      setLikeCount((c) => c + 1);
     }
     setLoading(false);
   }
@@ -198,9 +206,12 @@ export function ReviewCard({ review, currentUserId, onDelete }: ReviewCardProps)
         </div>
         {review.image_url && (
           <Link href={`/review/${review.id}`} className="flex-shrink-0">
-            <div className="rounded-lg overflow-hidden" style={{ border: '1px solid var(--border-subtle)' }}>
-              <img src={review.image_url} alt={review.seltzer_name} className="w-20 h-24 object-cover hover:scale-105 transition-transform duration-300" loading="lazy" />
-            </div>
+            <CanImage
+              src={review.image_url}
+              alt={review.seltzer_name}
+              className="w-20 h-24 rounded-lg transition-transform duration-300 hover:scale-105"
+              style={{ border: '1px solid var(--border-subtle)' }}
+            />
           </Link>
         )}
       </div>

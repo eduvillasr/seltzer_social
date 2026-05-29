@@ -4,6 +4,7 @@ import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import { ToastHost } from '@/components/Toast';
 import { PWARegistrar } from '@/components/PWARegistrar';
+import { PushRegistrar } from '@/components/PushRegistrar';
 import { InstallPrompt } from '@/components/InstallPrompt';
 import { RouterRefresher } from '@/components/RouterRefresher';
 
@@ -47,6 +48,7 @@ export default function RootLayout({
         <ToastHost />
         <InstallPrompt />
         <PWARegistrar />
+        <PushRegistrar />
         <RouterRefresher />
       </body>
     </html>

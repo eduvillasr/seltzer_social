@@ -8,12 +8,14 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
   Droplets, ArrowRight, Sparkles, Check, UserPlus, ListOrdered, Plus, Users,
-  PenSquare, ListPlus, ChevronLeft,
+  PenSquare, ListPlus, ChevronLeft, Star,
 } from 'lucide-react';
 import { Avatar } from '@/components/Avatar';
+import { CanImage } from '@/components/CanImage';
 import { showToast } from '@/components/Toast';
 import {
   ensureUserProfile, getReviews, supabase, followUser,
+  getTopRatedDrinks, createReview, type TrendingDrink,
 } from '@/lib/supabase';
 import { User } from '@/types';
 
@@ -32,7 +34,7 @@ async function loadSuggestedPeople(currentId: string) {
     .slice(0, 8);
 }
 
-const STEPS = ['welcome', 'follow', 'next-step'] as const;
+const STEPS = ['welcome', 'follow', 'rate', 'next-step'] as const;
 type Step = typeof STEPS[number];
 
 export default function OnboardingPage() {
@@ -42,6 +44,12 @@ export default function OnboardingPage() {
   const [suggested, setSuggested] = useState<{ user: User; count: number }[]>([]);
   const [followed, setFollowed] = useState<Set<string>>(new Set());
   const [loadingPeople, setLoadingPeople] = useState(false);
+
+  // Rate step state — popular drinks the user can tap-rate as they onboard
+  const [rateDrinks, setRateDrinks] = useState<TrendingDrink[]>([]);
+  const [loadingRateDrinks, setLoadingRateDrinks] = useState(false);
+  const [ratings, setRatings] = useState<Record<string, number>>({});
+  const [submittingRatings, setSubmittingRatings] = useState(false);
 
   useEffect(() => { boot(); }, []);
 
@@ -76,7 +84,54 @@ export default function OnboardingPage() {
 
   function next() {
     const idx = STEPS.indexOf(step);
-    if (idx < STEPS.length - 1) setStep(STEPS[idx + 1]);
+    const target = STEPS[idx + 1];
+    if (!target) return;
+    setStep(target);
+    // Lazy-load drinks for the rate step when we land on it.
+    if (target === 'rate' && rateDrinks.length === 0) {
+      setLoadingRateDrinks(true);
+      getTopRatedDrinks(2, 4).then(({ data }) => {
+        setRateDrinks(data ?? []);
+        setLoadingRateDrinks(false);
+      });
+    }
+  }
+
+  /** Persist all in-progress ratings as real reviews, then advance. */
+  async function submitRatingsAndContinue() {
+    if (!me) { next(); return; }
+    const entries = Object.entries(ratings);
+    if (entries.length === 0) { next(); return; }
+    setSubmittingRatings(true);
+    const inserts = entries.map(([drinkId, rating]) => {
+      const d = rateDrinks.find((x) => x.seltzer_id === drinkId);
+      if (!d) return null;
+      return createReview({
+        user_id: me.id,
+        seltzer_id: d.seltzer_id,
+        seltzer_name: d.seltzer_name,
+        brand: d.brand ?? undefined,
+        rating,
+      });
+    }).filter(Boolean) as Promise<any>[];
+
+    // createReview resolves with { error } instead of throwing, so Promise.all
+    // would never catch a DB failure. Settle them all and count real results.
+    const results = await Promise.allSettled(inserts);
+    const failed = results.filter(
+      (r) => r.status === 'rejected' || (r.status === 'fulfilled' && r.value?.error),
+    ).length;
+    const saved = entries.length - failed;
+
+    if (failed === 0) {
+      showToast(`Logged ${saved} ${saved === 1 ? 'rating' : 'ratings'}`, 'success');
+    } else if (saved > 0) {
+      showToast(`Saved ${saved} of ${entries.length} ratings`, 'info', `${failed} didn't save — you can rate them again later.`);
+    } else {
+      showToast("Couldn't save your ratings", 'error', 'You can rate these seltzers again from their pages.');
+    }
+    setSubmittingRatings(false);
+    next();
   }
   function back() {
     const idx = STEPS.indexOf(step);
@@ -250,6 +305,103 @@ export default function OnboardingPage() {
 
               <button onClick={next} className="btn-primary w-full justify-center mt-6" style={{ padding: '14px', fontSize: '14px' }}>
                 {followed.size > 0 ? `Continue · following ${followed.size}` : 'Continue'} <ArrowRight size={16} />
+              </button>
+            </div>
+          )}
+
+          {step === 'rate' && (
+            <div className="animate-fade-in-up">
+              <div className="text-center mb-6">
+                <div
+                  className="w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-4"
+                  style={{ background: 'linear-gradient(135deg, rgba(251,191,36,0.18), rgba(34,211,238,0.18))' }}
+                >
+                  <Star size={22} className="text-amber-400" />
+                </div>
+                <h2 className="text-2xl font-extrabold mb-2" style={{ fontFamily: 'var(--font-display)', color: 'var(--text-primary)' }}>
+                  Rate one you've tried
+                </h2>
+                <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+                  Tap stars on anything you've had — totally optional, but it gives your profile a starting point.
+                </p>
+              </div>
+
+              {loadingRateDrinks ? (
+                <div className="grid grid-cols-2 gap-2">
+                  {[1, 2, 3, 4].map((i) => (
+                    <div key={i} className="rounded-2xl h-40 skeleton-onboard" style={{ background: 'rgba(15,20,36,0.5)', border: '1px solid var(--border-subtle)' }} />
+                  ))}
+                </div>
+              ) : rateDrinks.length === 0 ? (
+                <div className="rounded-2xl p-6 text-center" style={{ background: 'rgba(15,20,36,0.5)', border: '1px solid var(--border-subtle)' }}>
+                  <Droplets size={22} className="mx-auto mb-2" style={{ color: 'var(--text-muted)' }} />
+                  <p className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Nothing trending yet</p>
+                  <p className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>
+                    You can rate anything from the feed once you're in.
+                  </p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-2.5">
+                  {rateDrinks.map((d) => {
+                    const myRating = ratings[d.seltzer_id] ?? 0;
+                    return (
+                      <div
+                        key={d.seltzer_id}
+                        className="rounded-2xl p-3 flex flex-col"
+                        style={{
+                          background: myRating > 0 ? 'rgba(34,211,238,0.08)' : 'rgba(15,20,36,0.5)',
+                          border: `1px solid ${myRating > 0 ? 'rgba(34,211,238,0.30)' : 'var(--border-subtle)'}`,
+                        }}
+                      >
+                        {d.latestImage ? (
+                          <CanImage
+                            src={d.latestImage}
+                            alt={d.seltzer_name}
+                            className="w-full h-20 rounded-lg mb-2"
+                          />
+                        ) : (
+                          <div
+                            className="w-full h-20 rounded-lg mb-2 flex items-center justify-center"
+                            style={{ background: 'rgba(34,211,238,0.06)' }}
+                          >
+                            <Droplets size={18} style={{ color: 'var(--text-muted)' }} />
+                          </div>
+                        )}
+                        <p className="text-xs font-bold truncate" style={{ color: 'var(--text-primary)' }}>{d.seltzer_name}</p>
+                        {d.brand && <p className="text-[10px] truncate" style={{ color: 'var(--text-muted)' }}>{d.brand}</p>}
+                        <div className="flex gap-0.5 mt-2 justify-center">
+                          {[1, 2, 3, 4, 5].map((s) => (
+                            <button
+                              key={s}
+                              onClick={() => setRatings((prev) => ({ ...prev, [d.seltzer_id]: prev[d.seltzer_id] === s ? 0 : s }))}
+                              className="transition-transform active:scale-90"
+                            >
+                              <Star
+                                size={16}
+                                className={s <= myRating ? 'star-filled' : 'star-empty'}
+                                style={{ color: s <= myRating ? '#fbbf24' : 'rgba(255,255,255,0.18)' }}
+                              />
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              <button
+                onClick={submitRatingsAndContinue}
+                disabled={submittingRatings}
+                className="btn-primary w-full justify-center mt-6"
+                style={{ padding: '14px', fontSize: '14px' }}
+              >
+                {submittingRatings
+                  ? 'Saving…'
+                  : Object.keys(ratings).length > 0
+                    ? `Save ${Object.keys(ratings).length} ${Object.keys(ratings).length === 1 ? 'rating' : 'ratings'}`
+                    : 'Skip for now'}
+                <ArrowRight size={16} />
               </button>
             </div>
           )}

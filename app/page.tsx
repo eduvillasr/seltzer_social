@@ -114,7 +114,7 @@ export default function LandingPage() {
               <div className="flex flex-wrap gap-2 mt-8 animate-fade-in-up" style={{ animationDelay: '0.35s' }}>
                 {[
                   { icon: <Check size={11} />, text: 'Collaborative tier lists' },
-                  { icon: <Check size={11} />, text: 'Detailed reviews' },
+                  { icon: <Check size={11} />, text: '1,000+ drink catalog' },
                   { icon: <Check size={11} />, text: 'Compare your taste' },
                   { icon: <Check size={11} />, text: 'Earn achievements' },
                 ].map((p) => (

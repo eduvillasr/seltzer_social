@@ -253,7 +253,7 @@ export function CommentSection({ reviewId, reviewSlug, currentUsername, currentU
             <button
               type="submit"
               disabled={loading || !newComment.trim()}
-              className="absolute right-3 bottom-3 w-8 h-8 rounded-full bg-gradient-to-br from-cyan-400 to-cyan-600 text-white flex items-center justify-center disabled:opacity-30 hover:opacity-90 transition-opacity"
+              className="absolute right-3 bottom-3 w-8 h-8 rounded-full bg-gradient-to-br from-cyan-400 to-cyan-600 text-white flex items-center justify-center disabled:opacity-50 hover:opacity-90 transition-opacity"
             >
               <Send size={14} />
             </button>
@@ -330,7 +330,7 @@ export function CommentSection({ reviewId, reviewSlug, currentUsername, currentU
                       <button
                         type="submit"
                         disabled={replyLoading || !replyText.trim()}
-                        className="absolute right-2 bottom-2 w-7 h-7 rounded-full bg-gradient-to-br from-cyan-400 to-cyan-600 text-white flex items-center justify-center disabled:opacity-30 hover:opacity-90 transition-opacity"
+                        className="absolute right-2 bottom-2 w-7 h-7 rounded-full bg-gradient-to-br from-cyan-400 to-cyan-600 text-white flex items-center justify-center disabled:opacity-50 hover:opacity-90 transition-opacity"
                       >
                         <Send size={12} />
                       </button>

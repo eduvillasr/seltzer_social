@@ -9,12 +9,13 @@ import {
   ArrowLeft, Droplets, Search, Check, Plus, Upload, X, ListPlus, ArrowRight, CheckCircle2,
 } from 'lucide-react';
 import { Navigation } from '@/components/Navigation';
+import { CanImage } from '@/components/CanImage';
 import { RatingInput } from '@/components/RatingInput';
 import { showToast } from '@/components/Toast';
 import {
   createReview, supabase, searchSeltzers, uploadReviewImage,
   getSharedTierLists, createSharedTierListSuggestion, findOrCreateSeltzer,
-  addSharedTierListItem, getRecentImagesForSeltzer,
+  addSharedTierListItem, getRecentImagesForSeltzer, findSimilarSeltzers,
 } from '@/lib/supabase';
 import { AuthUser, SharedTierList, Seltzer } from '@/types';
 
@@ -32,6 +33,8 @@ export default function CreateReview() {
   // ── canonical drink picker state ──
   const [allSeltzers, setAllSeltzers] = useState<Seltzer[]>([]);
   const [drinkQuery, setDrinkQuery]   = useState('');
+  const [searchResults, setSearchResults] = useState<Seltzer[]>([]);
+  const [searching, setSearching]     = useState(false);
   const [pickedSeltzer, setPickedSeltzer] = useState<Seltzer | null>(null);
   const [pickerOpen, setPickerOpen]   = useState(false);
 
@@ -39,6 +42,8 @@ export default function CreateReview() {
   const [showNewForm, setShowNewForm] = useState(false);
   const [newBrand, setNewBrand]       = useState('');
   const [newName, setNewName]         = useState('');
+  // near-duplicate suggestions while adding a new drink ("Did you mean…?")
+  const [similarDrinks, setSimilarDrinks] = useState<Seltzer[]>([]);
 
   // brands collected from existing seltzers + defaults
   const [availableBrands, setAvailableBrands] = useState<string[]>(DEFAULT_BRANDS);
@@ -123,13 +128,45 @@ export default function CreateReview() {
   }
 
   // ─── drink picker ────────────────────────────────────────────
+  // Debounced server-side search: query the whole catalog (not just the
+  // ~20 preloaded rows) so existing drinks always surface and reviewers
+  // stop creating duplicates.
+  useEffect(() => {
+    const q = drinkQuery.trim();
+    if (!q) { setSearchResults([]); setSearching(false); return; }
+    setSearching(true);
+    let cancelled = false;
+    const t = setTimeout(async () => {
+      const { data } = await searchSeltzers(q);
+      if (cancelled) return;
+      setSearchResults((data || []) as Seltzer[]);
+      setSearching(false);
+    }, 220);
+    return () => { cancelled = true; clearTimeout(t); };
+  }, [drinkQuery]);
+
   const filteredDrinks = useMemo(() => {
-    const q = drinkQuery.trim().toLowerCase();
+    const q = drinkQuery.trim();
     if (!q) return allSeltzers.slice(0, 12);
-    return allSeltzers.filter((s) =>
-      s.name.toLowerCase().includes(q) || s.brand.toLowerCase().includes(q)
-    ).slice(0, 12);
-  }, [allSeltzers, drinkQuery]);
+    return searchResults.slice(0, 12);
+  }, [allSeltzers, searchResults, drinkQuery]);
+
+  // ─── near-duplicate guard (new-drink form) ───────────────────
+  // While the reviewer fills in a brand-new drink, look for existing
+  // canonical drinks that look like the same thing and offer them up.
+  useEffect(() => {
+    if (!showNewForm) { setSimilarDrinks([]); return; }
+    const brand = (newBrand || brandQuery).trim();
+    const name  = newName.trim();
+    if (!name) { setSimilarDrinks([]); return; }
+    let cancelled = false;
+    const t = setTimeout(async () => {
+      const { data } = await findSimilarSeltzers(brand, name);
+      if (cancelled) return;
+      setSimilarDrinks((data || []) as Seltzer[]);
+    }, 300);
+    return () => { cancelled = true; clearTimeout(t); };
+  }, [showNewForm, newBrand, brandQuery, newName]);
 
   function selectSeltzer(s: Seltzer) {
     setPickedSeltzer(s);
@@ -245,6 +282,13 @@ export default function CreateReview() {
         : dbError.message;
       setError(msg);
       showToast('Could not publish review', 'error', msg);
+      setLoading(false);
+      return;
+    }
+    if (!data?.id) {
+      const msg = 'Review saved but came back empty — please refresh and check your profile.';
+      setError(msg);
+      showToast('Something went wrong', 'error', msg);
       setLoading(false);
       return;
     }
@@ -519,6 +563,34 @@ export default function CreateReview() {
                     Use plain spaces — dashes, plus signs, and "&" are auto-converted to keep the catalog tidy.
                   </p>
 
+                  {similarDrinks.length > 0 && (
+                    <div
+                      className="rounded-xl p-2.5"
+                      style={{ background: 'rgba(234,179,8,0.08)', border: '1px solid rgba(234,179,8,0.35)' }}
+                    >
+                      <p className="text-[11px] font-semibold mb-1.5" style={{ color: '#fbbf24' }}>
+                        Did you mean one of these? Pick it instead of adding a duplicate.
+                      </p>
+                      <div className="space-y-1">
+                        {similarDrinks.slice(0, 4).map((s) => (
+                          <button
+                            key={s.id}
+                            type="button"
+                            onClick={() => selectSeltzer(s)}
+                            className="w-full flex items-center gap-2.5 rounded-lg px-2 py-1.5 hover:bg-white/5 transition-colors text-left"
+                          >
+                            <CanImage src={s.image_url} alt="" className="w-7 h-9 rounded-md flex-shrink-0" />
+                            <div className="min-w-0 flex-1">
+                              <p className="text-[13px] font-semibold truncate" style={{ color: 'var(--text-primary)' }}>{s.name}</p>
+                              <p className="text-[11px] truncate" style={{ color: 'var(--text-muted)' }}>{s.brand}</p>
+                            </div>
+                            <Check size={13} className="text-cyan-400 flex-shrink-0" />
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   <button
                     type="button"
                     onClick={() => { setShowNewForm(false); setNewBrand(''); setNewName(''); setPickerOpen(true); }}
@@ -555,6 +627,10 @@ export default function CreateReview() {
                       {filteredDrinks.length === 0 && !drinkQuery.trim() ? (
                         <p className="px-3 py-2 text-xs" style={{ color: 'var(--text-muted)' }}>
                           No drinks yet — add one!
+                        </p>
+                      ) : searching && filteredDrinks.length === 0 ? (
+                        <p className="px-3 py-2 text-xs" style={{ color: 'var(--text-muted)' }}>
+                          Searching…
                         </p>
                       ) : filteredDrinks.length === 0 ? (
                         <p className="px-3 py-2 text-xs" style={{ color: 'var(--text-muted)' }}>
@@ -630,10 +706,10 @@ export default function CreateReview() {
                 />
                 {imagePreviewUrl ? (
                   <div className="flex items-center gap-3">
-                    <img
+                    <CanImage
                       src={imagePreviewUrl}
                       alt="Preview"
-                      className="w-16 h-20 rounded-lg object-cover"
+                      className="w-16 h-20 rounded-lg flex-shrink-0"
                       style={{ border: '1px solid var(--border-subtle)' }}
                     />
                     <div className="flex-1 min-w-0">
@@ -686,10 +762,10 @@ export default function CreateReview() {
                             boxShadow: selected ? '0 0 0 2px rgba(6,182,212,0.25)' : undefined,
                           }}
                         >
-                          <img
+                          <CanImage
                             src={p.image_url}
                             alt="Past review"
-                            className="w-14 h-16 object-cover"
+                            className="w-14 h-16"
                           />
                         </button>
                       );

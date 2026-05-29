@@ -6,9 +6,12 @@ import type { MetadataRoute } from 'next';
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
+    id: '/',
     name: 'Seltzer Social',
     short_name: 'Seltzer',
     description: 'Rate seltzers. Build collaborative tier lists. Find your taste-twins.',
+    lang: 'en',
+    dir: 'ltr',
     start_url: '/feed',
     display: 'standalone',
     background_color: '#0a0e1a',
@@ -16,13 +19,19 @@ export default function manifest(): MetadataRoute.Manifest {
     orientation: 'portrait',
     scope: '/',
     categories: ['social', 'lifestyle', 'food'],
+    // Hide the "open in browser" prompt once installed.
+    prefer_related_applications: false,
     icons: [
-      // Next.js auto-generates these from app/icon.tsx + app/apple-icon.tsx.
+      // Small favicon-class icons (Next generates these from app/icon.tsx +
+      // app/apple-icon.tsx).
       { src: '/icon', sizes: '64x64', type: 'image/png' },
-      { src: '/apple-icon', sizes: '180x180', type: 'image/png', purpose: 'any' },
-      // Larger maskable variant — Android adaptive icons crop to a circle, so
-      // using the same 180px asset still looks fine here.
-      { src: '/apple-icon', sizes: '180x180', type: 'image/png', purpose: 'maskable' },
+      { src: '/apple-icon', sizes: '180x180', type: 'image/png' },
+      // Install-grade icons that Android / Play / the install dialog expect.
+      { src: '/app-icon?size=192', sizes: '192x192', type: 'image/png', purpose: 'any' },
+      { src: '/app-icon?size=512', sizes: '512x512', type: 'image/png', purpose: 'any' },
+      // Maskable variant has the logo padded into the safe zone so the
+      // adaptive mask never clips it.
+      { src: '/app-icon?size=512&maskable=1', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
     ],
   };
 }

@@ -14,6 +14,7 @@ import {
 import { Navigation } from '@/components/Navigation';
 import { TopHeader } from '@/components/TopHeader';
 import { Avatar } from '@/components/Avatar';
+import { CanImage } from '@/components/CanImage';
 import { FounderBadge, FOUNDERS, BetaTesterBadge, BETA_TESTERS } from '@/components/FounderBadge';
 import { StarRating } from '@/components/StarRating';
 import { FeedSkeleton } from '@/components/Skeletons';
@@ -427,13 +428,17 @@ function CatalogTab({ brands, drinks, matchingLists, hasSearched, noResults }: C
                 className="glass-card flex items-center gap-3 transition-colors hover:bg-white/5"
                 style={{ padding: '10px 12px' }}
               >
-                {d.image_url ? (
-                  <img src={d.image_url} alt={d.name} loading="lazy" className="w-12 h-14 rounded-lg object-cover flex-shrink-0" style={{ border: '1px solid var(--border-subtle)' }} />
-                ) : (
-                  <div className="w-12 h-14 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: 'rgba(34,211,238,0.06)', border: '1px solid var(--border-subtle)' }}>
-                    <Droplets size={18} style={{ color: 'var(--text-muted)' }} />
-                  </div>
-                )}
+                <CanImage
+                  src={d.image_url}
+                  alt={d.name}
+                  className="w-12 h-14 rounded-lg flex-shrink-0"
+                  style={{ border: '1px solid var(--border-subtle)' }}
+                  fallback={
+                    <div className="w-full h-full flex items-center justify-center" style={{ background: 'rgba(34,211,238,0.06)' }}>
+                      <Droplets size={18} style={{ color: 'var(--text-muted)' }} />
+                    </div>
+                  }
+                />
                 <div className="flex-1 min-w-0">
                   <p className="font-bold text-sm truncate" style={{ color: 'var(--text-primary)' }}>{d.name}</p>
                   {d.brand && <p className="text-[11px] truncate" style={{ color: 'var(--text-muted)' }}>{d.brand}</p>}

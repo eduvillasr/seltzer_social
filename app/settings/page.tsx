@@ -98,6 +98,9 @@ export default function SettingsPage() {
   }
 
   async function handleLogout() {
+    // Stop this device from receiving the previous user's push notifications.
+    const { unregisterPushNotifications } = await import('@/lib/push');
+    await unregisterPushNotifications().catch(() => {});
     await supabase.auth.signOut();
     // Don't leak the previous user's profile/feed data into the next session.
     const cache = await import('@/lib/cache');

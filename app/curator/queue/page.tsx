@@ -14,6 +14,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Navigation } from '@/components/Navigation';
+import { CanImage } from '@/components/CanImage';
 import { BackHeader } from '@/components/BackHeader';
 import { CanLoader } from '@/components/CanLoader';
 import { ImagePlus, Check, Filter, AlertTriangle } from 'lucide-react';
@@ -41,8 +42,15 @@ export default function CuratorQueuePage() {
   const [loading, setLoading] = useState(true);
   const [rows, setRows] = useState<QueueRow[]>([]);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [scope, setScope] = useState<'needs_review' | 'all'>('needs_review');
 
   useEffect(() => { boot(); /* eslint-disable-line */ }, []);
+
+  // Reload whenever the scope toggle flips (after the initial auth check).
+  useEffect(() => {
+    if (authorized) loadQueue();
+    /* eslint-disable-line */
+  }, [scope]);
 
   async function boot() {
     const { data: sess } = await supabase.auth.getSession();
@@ -57,7 +65,7 @@ export default function CuratorQueuePage() {
 
   async function loadQueue() {
     setLoading(true);
-    const { data } = await getSeltzersNeedingReview(200);
+    const { data } = await getSeltzersNeedingReview(scope === 'all' ? 500 : 200, scope);
     // For each seltzer, fetch up to 4 review-image samples so the curator
     // can pick the best one without leaving this page.
     const ids = data.map((d: any) => d.id);
@@ -142,17 +150,42 @@ export default function CuratorQueuePage() {
             <p className="text-[10px] font-bold uppercase tracking-[0.18em]" style={{ color: 'var(--cyan-400)' }}>Curator Queue</p>
           </div>
           <h1 className="text-xl font-extrabold mt-1" style={{ fontFamily: 'var(--font-display)' }}>
-            {rows.length} {rows.length === 1 ? 'drink' : 'drinks'} need a better photo
+            {scope === 'needs_review'
+              ? `${rows.length} ${rows.length === 1 ? 'drink needs' : 'drinks need'} a better photo`
+              : `${rows.length} ${rows.length === 1 ? 'drink' : 'drinks'} in the catalog`}
           </h1>
           <p className="text-xs mt-2" style={{ color: 'var(--text-secondary)' }}>
             Either pick a user-uploaded review photo below or upload your own. Replacement is logged.
           </p>
+
+          <div className="mt-3 inline-flex rounded-full p-0.5" style={{ background: 'rgba(10,14,26,0.5)', border: '1px solid var(--border-subtle)' }}>
+            <button
+              onClick={() => setScope('needs_review')}
+              className="px-3 py-1 rounded-full text-[11px] font-semibold transition-colors"
+              style={scope === 'needs_review'
+                ? { background: 'var(--cyan-400)', color: '#0a0e1a' }
+                : { background: 'transparent', color: 'var(--text-muted)' }}
+            >
+              Needs review
+            </button>
+            <button
+              onClick={() => setScope('all')}
+              className="px-3 py-1 rounded-full text-[11px] font-semibold transition-colors"
+              style={scope === 'all'
+                ? { background: 'var(--cyan-400)', color: '#0a0e1a' }
+                : { background: 'transparent', color: 'var(--text-muted)' }}
+            >
+              All drinks
+            </button>
+          </div>
         </div>
 
         {rows.length === 0 ? (
           <div className="glass-card text-center py-10">
             <Check size={26} className="mx-auto mb-3" style={{ color: '#10b981' }} />
-            <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>Queue is clear. Nice.</p>
+            <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+              {scope === 'needs_review' ? 'Queue is clear. Nice.' : 'No drinks in the catalog yet.'}
+            </p>
           </div>
         ) : (
           <div className="space-y-3">
@@ -163,17 +196,24 @@ export default function CuratorQueuePage() {
                 style={{ background: 'rgba(15,20,36,0.55)', border: '1px solid var(--border-subtle)' }}
               >
                 <div className="flex items-start gap-3">
-                  {row.image_url ? (
-                    <img src={row.image_url} alt="" className="w-16 h-20 rounded-lg object-cover flex-shrink-0" style={{ border: '1px solid var(--border-subtle)' }} />
-                  ) : (
-                    <div className="w-16 h-20 rounded-lg flex-shrink-0" style={{ background: 'rgba(255,255,255,0.05)' }} />
-                  )}
+                  <CanImage
+                    src={row.image_url}
+                    alt=""
+                    className="w-16 h-20 rounded-lg flex-shrink-0"
+                    style={{ border: '1px solid var(--border-subtle)' }}
+                  />
                   <div className="flex-1 min-w-0">
                     <Link href={`/drink/${row.id}`} className="font-semibold text-sm hover:underline" style={{ color: 'var(--text-primary)' }}>
                       {row.brand} · {row.name}
                     </Link>
                     <p className="text-[10px] mt-0.5" style={{ color: 'var(--text-muted)' }}>
-                      Current image flagged as low quality
+                      {row.image_quality_flag === 'needs_review'
+                        ? 'Current image flagged as low quality'
+                        : row.image_quality_flag === 'replaced'
+                          ? 'Image already curated'
+                          : row.image_url
+                            ? 'Has an image'
+                            : 'No image yet'}
                     </p>
                     <div className="mt-2 flex items-center gap-1.5">
                       <label
@@ -206,7 +246,7 @@ export default function CuratorQueuePage() {
                           style={{ border: '1px solid var(--border-subtle)' }}
                           title="Promote to canonical"
                         >
-                          <img src={s.image_url} alt="" className="w-14 h-16 object-cover" />
+                          <CanImage src={s.image_url} alt="" className="w-14 h-16" />
                         </button>
                       ))}
                     </div>

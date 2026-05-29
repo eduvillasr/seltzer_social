@@ -140,6 +140,8 @@ export function Navigation() {
 
             <Link
               href="/create"
+              title="Write a review"
+              aria-label="Write a review"
               className="flex items-center justify-center transition-all hover:scale-105 active:scale-95"
               style={{
                 width: '48px',

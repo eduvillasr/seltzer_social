@@ -10,6 +10,7 @@ import {
   ArrowLeft, GitCompare, Sparkles, AlertCircle, ThumbsUp, ThumbsDown, Droplets,
 } from 'lucide-react';
 import { Navigation } from '@/components/Navigation';
+import { CanImage } from '@/components/CanImage';
 import { BackHeader } from '@/components/BackHeader';
 import { Avatar } from '@/components/Avatar';
 import { CanLoader } from '@/components/CanLoader';
@@ -297,13 +298,16 @@ function CompareRowCard({ row, themUsername }: { row: CompareRow; themUsername: 
       <div className="flex items-stretch">
         {/* image */}
         <div className="w-16 flex-shrink-0">
-          {row.imageMine ? (
-            <img src={row.imageMine} alt={row.seltzer_name} className="w-16 h-full object-cover" />
-          ) : (
-            <div className="w-16 h-full flex items-center justify-center" style={{ background: 'rgba(34,211,238,0.08)' }}>
-              <Droplets size={16} className="text-cyan-400" />
-            </div>
-          )}
+          <CanImage
+            src={row.imageMine}
+            alt={row.seltzer_name}
+            className="w-16 h-full min-h-[64px]"
+            fallback={
+              <div className="w-full h-full flex items-center justify-center" style={{ background: 'rgba(34,211,238,0.08)' }}>
+                <Droplets size={16} className="text-cyan-400" />
+              </div>
+            }
+          />
         </div>
 
         {/* info */}

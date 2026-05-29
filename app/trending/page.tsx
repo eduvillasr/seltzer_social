@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { Navigation } from '@/components/Navigation';
 import { TopHeader } from '@/components/TopHeader';
+import { CanImage } from '@/components/CanImage';
 import { Avatar } from '@/components/Avatar';
 import { FounderBadge, FOUNDERS, BetaTesterBadge, BETA_TESTERS } from '@/components/FounderBadge';
 import { FeedSkeleton } from '@/components/Skeletons';
@@ -200,13 +201,16 @@ function DrinkCard({ drink }: { drink: TrendingDrink }) {
       style={{ background: 'rgba(15,20,36,0.5)', border: '1px solid var(--border-subtle)' }}
     >
       <div className="relative aspect-square overflow-hidden">
-        {drink.latestImage ? (
-          <img src={drink.latestImage} alt={drink.seltzer_name} className="w-full h-full object-cover" />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center" style={{ background: `${color}1a` }}>
-            <Droplets size={26} style={{ color }} />
-          </div>
-        )}
+        <CanImage
+          src={drink.latestImage}
+          alt={drink.seltzer_name}
+          className="w-full h-full"
+          fallback={
+            <div className="w-full h-full flex items-center justify-center" style={{ background: `${color}1a` }}>
+              <Droplets size={26} style={{ color }} />
+            </div>
+          }
+        />
         <span
           className="absolute top-2 right-2 w-7 h-7 rounded-full flex items-center justify-center text-xs font-extrabold"
           style={{ background: color, color: '#0a0e1a', boxShadow: `0 0 12px ${color}66` }}
@@ -240,13 +244,17 @@ function TopRatedRow({ drink, rank }: { drink: TrendingDrink; rank: number }) {
       >
         {rank}
       </span>
-      {drink.latestImage ? (
-        <img src={drink.latestImage} alt={drink.seltzer_name} className="w-12 h-12 rounded-xl object-cover flex-shrink-0" />
-      ) : (
-        <div className="w-12 h-12 rounded-xl flex-shrink-0 flex items-center justify-center" style={{ background: `${color}1a` }}>
-          <Droplets size={16} style={{ color }} />
-        </div>
-      )}
+      <CanImage
+        src={drink.latestImage}
+        alt={drink.seltzer_name}
+        className="w-12 h-12 rounded-xl flex-shrink-0"
+        padded={false}
+        fallback={
+          <div className="w-full h-full flex items-center justify-center" style={{ background: `${color}1a` }}>
+            <Droplets size={16} style={{ color }} />
+          </div>
+        }
+      />
       <div className="flex-1 min-w-0">
         <p className="text-sm font-bold truncate" style={{ color: 'var(--text-primary)' }}>{drink.seltzer_name}</p>
         <p className="text-[11px] truncate" style={{ color: 'var(--text-muted)' }}>{drink.brand ?? 'No brand'}</p>

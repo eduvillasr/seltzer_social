@@ -6,32 +6,45 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "cap:sync": "cap sync",
+    "cap:ios": "cap open ios",
+    "cap:android": "cap open android",
+    "cap:assets": "capacitor-assets generate --iconBackgroundColor #0891b2 --iconBackgroundColorDark #0891b2 --splashBackgroundColor #0a0e1a --splashBackgroundColorDark #0a0e1a"
   },
   "dependencies": {
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "next": "^14.0.0",
-    "@supabase/supabase-js": "^2.38.0",
+    "@capacitor-firebase/messaging": "^6.1.0",
+    "@capacitor/android": "^6.1.0",
+    "@capacitor/core": "^6.1.0",
+    "@capacitor/ios": "^6.1.0",
+    "@capacitor/splash-screen": "^6.0.0",
+    "@capacitor/status-bar": "^6.0.0",
     "@supabase/auth-helpers-nextjs": "^0.8.0",
     "@supabase/auth-helpers-react": "^0.4.0",
-    "framer-motion": "^10.16.0",
-    "zustand": "^4.4.0",
-    "lucide-react": "^0.294.0",
+    "@supabase/supabase-js": "^2.38.0",
     "clsx": "^2.0.0",
-    "tailwind-merge": "^2.2.0"
+    "firebase": "^11.10.0",
+    "framer-motion": "^10.16.0",
+    "lucide-react": "^0.294.0",
+    "next": "^14.0.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "tailwind-merge": "^2.2.0",
+    "zustand": "^4.4.0"
   },
   "devDependencies": {
-    "typescript": "^5.2.0",
+    "@capacitor/assets": "^3.0.5",
+    "@capacitor/cli": "^6.1.0",
     "@types/node": "^20.0.0",
     "@types/react": "^18.2.0",
     "@types/react-dom": "^18.2.0",
     "@typescript-eslint/eslint-plugin": "^6.0.0",
     "@typescript-eslint/parser": "^6.0.0",
     "autoprefixer": "^10.4.0",
+    "eslint": "^8.50.0",
+    "eslint-config-next": "^14.0.0",
     "postcss": "^8.4.0",
     "tailwindcss": "^3.3.0",
-    "eslint": "^8.50.0",
-    "eslint-config-next": "^14.0.0"
+    "typescript": "^5.2.0"
   }
 }

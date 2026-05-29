@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, Check, Upload, X, Trash2, Droplets, Search, Plus, Pencil } from 'lucide-react';
 import { Navigation } from '@/components/Navigation';
+import { CanImage } from '@/components/CanImage';
 import { BackHeader } from '@/components/BackHeader';
 import { RatingInput } from '@/components/RatingInput';
 import { CanLoader } from '@/components/CanLoader';
@@ -467,10 +468,10 @@ export default function EditReviewPage({ params }: { params: { id: string } }) {
               <input type="file" accept="image/*" className="sr-only" onChange={pickImage} />
               {currentImage ? (
                 <div className="flex items-center gap-3">
-                  <img
+                  <CanImage
                     src={currentImage}
                     alt="Current"
-                    className="w-16 h-20 rounded-lg object-cover"
+                    className="w-16 h-20 rounded-lg flex-shrink-0"
                     style={{ border: pendingPreview ? '2px solid var(--cyan-400)' : '1px solid var(--border-subtle)' }}
                   />
                   <div className="flex-1 min-w-0">

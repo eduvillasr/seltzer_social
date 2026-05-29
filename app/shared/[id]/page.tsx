@@ -4,11 +4,12 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
-  ArrowLeft, Bell, BellOff, Check, ChevronDown, ChevronUp,
+  ArrowLeft, Bell, BellOff, Check, ChevronDown, ChevronUp, ChevronLeft, ChevronRight,
   ExternalLink, Inbox, LayoutGrid, List as ListIcon, MoreHorizontal, Pencil, Plus,
   Search, Share2, Star, Trash2, UserPlus, X, AlertTriangle,
 } from 'lucide-react';
 import { Navigation } from '@/components/Navigation';
+import { CanImage } from '@/components/CanImage';
 import { BackHeader } from '@/components/BackHeader';
 import { RatingInput } from '@/components/RatingInput';
 import { CanLoader } from '@/components/CanLoader';
@@ -72,6 +73,9 @@ export default function SharedListPage({ params }: { params: { id: string } }) {
 
   // Tap a tier letter to expand that whole tier into a fullscreen sheet.
   const [expandedTier, setExpandedTier] = useState<Tier | null>(null);
+  // Tap a drink to open an immersive viewer you can swipe/arrow through.
+  // Holds the index into the expanded tier's items, or null when closed.
+  const [viewerIndex, setViewerIndex] = useState<number | null>(null);
 
   // Invite modal — used for both "invite partner" (solo→shared) and
   // "invite additional editor" (shared→multi-member)
@@ -180,6 +184,22 @@ export default function SharedListPage({ params }: { params: { id: string } }) {
     () => new Set(items.map((i) => i.review_id).filter(Boolean) as string[]),
     [items]
   );
+
+  // The drinks the immersive viewer scrolls through = the expanded tier's items.
+  const viewerItems = expandedTier ? (itemsByTier[expandedTier] || []) : [];
+  const viewerItem = viewerIndex !== null ? viewerItems[viewerIndex] : null;
+
+  // Arrow-key navigation while the viewer is open.
+  useEffect(() => {
+    if (viewerIndex === null) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'ArrowRight') setViewerIndex((i) => (i === null ? i : Math.min(viewerItems.length - 1, i + 1)));
+      else if (e.key === 'ArrowLeft') setViewerIndex((i) => (i === null ? i : Math.max(0, i - 1)));
+      else if (e.key === 'Escape') setViewerIndex(null);
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [viewerIndex, viewerItems.length]);
 
   if (!list) {
     return <><Navigation /><main className="max-w-md mx-auto px-4 pt-10 pb-32"><CanLoader /></main></>;
@@ -694,7 +714,7 @@ export default function SharedListPage({ params }: { params: { id: string } }) {
                               </div>
 
                               {r.image_url ? (
-                                <img src={r.image_url} alt={r.seltzer_name} className="w-10 h-10 rounded-lg object-cover flex-shrink-0" />
+                                <CanImage src={r.image_url} alt={r.seltzer_name} className="w-10 h-10 rounded-lg flex-shrink-0" padded={false} />
                               ) : (
                                 <div className="w-10 h-10 rounded-lg flex-shrink-0 flex items-center justify-center" style={{ background: 'rgba(34,211,238,0.1)' }}>
                                   <Star size={13} className="text-cyan-400" />
@@ -964,15 +984,19 @@ export default function SharedListPage({ params }: { params: { id: string } }) {
                     /* COMPACT: thumbnails only, dense — click → drink page (all reviews) */
                     <div className="flex flex-wrap gap-1.5">
                       {tierItems.map((item) => {
-                        const inner = item.review?.image_url ? (
-                          <img src={item.review.image_url} alt={item.seltzer_name} className="w-full h-full object-cover" />
-                        ) : (item.seltzer?.image_url ? (
-                          <img src={item.seltzer.image_url} alt={item.seltzer_name} className="w-full h-full object-cover" />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center text-[10px] font-bold px-0.5 text-center" style={{ background: `${TIER_COLORS[tier]}33`, color: TIER_COLORS[tier] }}>
-                            {item.seltzer_name.slice(0, 4)}
-                          </div>
-                        ));
+                        const inner = (
+                          <CanImage
+                            src={item.review?.image_url || item.seltzer?.image_url || null}
+                            alt={item.seltzer_name}
+                            className="w-full h-full"
+                            padded={false}
+                            fallback={
+                              <div className="w-full h-full flex items-center justify-center text-[10px] font-bold px-0.5 text-center" style={{ background: `${TIER_COLORS[tier]}33`, color: TIER_COLORS[tier] }}>
+                                {item.seltzer_name.slice(0, 4)}
+                              </div>
+                            }
+                          />
+                        );
                         const contribCount = item.rating_contributions ? Object.keys(item.rating_contributions).length : 0;
                         const titleText = `${item.seltzer_name}${item.brand ? ' · ' + item.brand : ''} · ⭐${item.rating.toFixed(1)}${contribCount > 1 ? ` (avg of ${contribCount})` : ''}`;
                         // Link to /drink/[seltzer_id] if we have it; otherwise no-op
@@ -1016,11 +1040,13 @@ export default function SharedListPage({ params }: { params: { id: string } }) {
                             style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border-subtle)' }}
                           >
                             <RowOuter {...rowProps}>
-                              {imgUrl ? (
-                                <img src={imgUrl} alt={item.seltzer_name} className="w-10 h-10 object-cover flex-shrink-0" />
-                              ) : (
-                                <div className="w-10 h-10 flex-shrink-0" style={{ background: `${TIER_COLORS[tier]}33` }} />
-                              )}
+                              <CanImage
+                                src={imgUrl}
+                                alt={item.seltzer_name}
+                                className="w-10 h-10 flex-shrink-0"
+                                padded={false}
+                                fallback={<div className="w-full h-full" style={{ background: `${TIER_COLORS[tier]}33` }} />}
+                              />
                               <div className="flex-1 min-w-0 px-2.5 py-1.5">
                                 <p className="text-sm font-semibold truncate" style={{ color: 'var(--text-primary)' }}>
                                   {item.seltzer_name}
@@ -1204,8 +1230,7 @@ export default function SharedListPage({ params }: { params: { id: string } }) {
                 </p>
               ) : (
                 <div className="grid grid-cols-3 gap-2">
-                  {(itemsByTier[expandedTier] || []).map((item) => {
-                    const drinkHref = item.seltzer_id ? `/drink/${item.seltzer_id}` : null;
+                  {(itemsByTier[expandedTier] || []).map((item, idx) => {
                     const imgUrl = item.review?.image_url || item.seltzer?.image_url || null;
                     const contribCount = item.rating_contributions ? Object.keys(item.rating_contributions).length : 0;
 
@@ -1214,15 +1239,16 @@ export default function SharedListPage({ params }: { params: { id: string } }) {
                         className="rounded-xl overflow-hidden transition-transform hover:scale-105"
                         style={{ background: 'rgba(15,20,36,0.6)', border: '1px solid var(--border-subtle)' }}
                       >
-                        <div className="aspect-square w-full overflow-hidden flex items-center justify-center" style={{ background: '#fff' }}>
-                          {imgUrl ? (
-                            <img src={imgUrl} alt={item.seltzer_name} className="w-full h-full object-contain" />
-                          ) : (
+                        <CanImage
+                          src={imgUrl}
+                          alt={item.seltzer_name}
+                          className="aspect-square w-full"
+                          fallback={
                             <div className="w-full h-full flex items-center justify-center text-xs font-bold text-center" style={{ background: `${TIER_COLORS[expandedTier]}22`, color: TIER_COLORS[expandedTier] }}>
                               {item.seltzer_name}
                             </div>
-                          )}
-                        </div>
+                          }
+                        />
                         <div className="p-2">
                           <p className="text-xs font-semibold truncate" style={{ color: 'var(--text-primary)' }}>
                             {item.seltzer_name}
@@ -1240,21 +1266,144 @@ export default function SharedListPage({ params }: { params: { id: string } }) {
                       </div>
                     );
 
-                    return drinkHref ? (
-                      <Link
+                    return (
+                      <button
                         key={item.id}
-                        href={drinkHref}
-                        onClick={() => setExpandedTier(null)}
+                        type="button"
+                        onClick={() => setViewerIndex(idx)}
+                        className="text-left"
                       >
                         {card}
-                      </Link>
-                    ) : (
-                      <div key={item.id}>{card}</div>
+                      </button>
                     );
                   })}
                 </div>
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ══════════════════════════════════════
+          IMMERSIVE DRINK VIEWER — swipe / arrow through a tier's drinks
+      ══════════════════════════════════════ */}
+      {viewerItem && expandedTier && (
+        <div
+          className="fixed inset-0 z-[60] flex flex-col"
+          style={{ background: 'rgba(3,5,12,0.96)', backdropFilter: 'blur(14px)' }}
+          onTouchStart={(e) => { (e.currentTarget as any)._sx = e.touches[0].clientX; }}
+          onTouchEnd={(e) => {
+            const sx = (e.currentTarget as any)._sx as number | undefined;
+            if (sx == null) return;
+            const dx = e.changedTouches[0].clientX - sx;
+            if (dx < -50) setViewerIndex((i) => (i === null ? i : Math.min(viewerItems.length - 1, i + 1)));
+            else if (dx > 50) setViewerIndex((i) => (i === null ? i : Math.max(0, i - 1)));
+          }}
+        >
+          {/* Header */}
+          <div
+            className="flex-shrink-0 flex items-center gap-3 px-4 py-3"
+            style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 12px)' }}
+          >
+            <div
+              className="w-9 h-9 rounded-full flex items-center justify-center text-base font-extrabold flex-shrink-0"
+              style={{ background: `${TIER_COLORS[expandedTier]}33`, color: TIER_COLORS[expandedTier] }}
+            >
+              {expandedTier}
+            </div>
+            <span className="text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>
+              {(viewerIndex ?? 0) + 1} / {viewerItems.length}
+            </span>
+            <button
+              onClick={() => setViewerIndex(null)}
+              className="ml-auto w-10 h-10 rounded-full flex items-center justify-center hover:bg-white/5 transition-colors"
+              style={{ color: 'var(--text-secondary)' }}
+              aria-label="Close"
+            >
+              <X size={20} />
+            </button>
+          </div>
+
+          {/* Drink */}
+          <div className="flex-1 flex items-center px-2 min-h-0">
+            <button
+              onClick={() => setViewerIndex((i) => (i === null ? i : Math.max(0, i - 1)))}
+              disabled={(viewerIndex ?? 0) <= 0}
+              className="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center hover:bg-white/5 transition-colors disabled:opacity-25"
+              style={{ color: 'var(--text-secondary)' }}
+              aria-label="Previous drink"
+            >
+              <ChevronLeft size={24} />
+            </button>
+
+            <div className="flex-1 min-w-0 flex flex-col items-center px-2">
+              <CanImage
+                src={viewerItem.review?.image_url || viewerItem.seltzer?.image_url || null}
+                alt={viewerItem.seltzer_name}
+                className="w-full max-w-xs aspect-square rounded-2xl"
+                loading="eager"
+                fallback={
+                  <div className="w-full h-full flex items-center justify-center text-lg font-bold text-center px-4" style={{ background: `${TIER_COLORS[expandedTier]}22`, color: TIER_COLORS[expandedTier] }}>
+                    {viewerItem.seltzer_name}
+                  </div>
+                }
+              />
+              <div className="mt-4 text-center max-w-xs">
+                <h2 className="text-xl font-extrabold" style={{ fontFamily: 'var(--font-display)', color: 'var(--text-primary)' }}>
+                  {viewerItem.seltzer_name}
+                </h2>
+                {viewerItem.brand && (
+                  <p className="text-sm mt-0.5" style={{ color: 'var(--text-muted)' }}>{viewerItem.brand}</p>
+                )}
+                <p className="text-sm mt-2" style={{ color: 'var(--text-secondary)' }}>
+                  <Star size={13} className="inline -mt-0.5" style={{ color: TIER_COLORS[expandedTier] }} />{' '}
+                  {viewerItem.rating.toFixed(1)}
+                  {viewerItem.rating_contributions && Object.keys(viewerItem.rating_contributions).length > 1 && (
+                    <span style={{ color: 'var(--cyan-400)' }}> · avg of {Object.keys(viewerItem.rating_contributions).length}</span>
+                  )}
+                </p>
+                {viewerItem.note && (
+                  <p className="text-sm mt-2 italic" style={{ color: 'var(--text-secondary)' }}>“{viewerItem.note}”</p>
+                )}
+                {viewerItem.seltzer_id && (
+                  <Link
+                    href={`/drink/${viewerItem.seltzer_id}`}
+                    onClick={() => { setViewerIndex(null); setExpandedTier(null); }}
+                    className="inline-flex items-center gap-1.5 mt-4 text-xs font-semibold px-3 py-2 rounded-full transition-colors hover:bg-white/5"
+                    style={{ background: 'rgba(34,211,238,0.08)', border: '1px solid rgba(34,211,238,0.2)', color: 'var(--cyan-400)' }}
+                  >
+                    View all reviews <ExternalLink size={12} />
+                  </Link>
+                )}
+              </div>
+            </div>
+
+            <button
+              onClick={() => setViewerIndex((i) => (i === null ? i : Math.min(viewerItems.length - 1, i + 1)))}
+              disabled={(viewerIndex ?? 0) >= viewerItems.length - 1}
+              className="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center hover:bg-white/5 transition-colors disabled:opacity-25"
+              style={{ color: 'var(--text-secondary)' }}
+              aria-label="Next drink"
+            >
+              <ChevronRight size={24} />
+            </button>
+          </div>
+
+          {/* Dots */}
+          <div className="flex-shrink-0 flex items-center justify-center gap-1.5 py-4 flex-wrap px-4" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 16px)' }}>
+            {viewerItems.map((_, i) => (
+              <button
+                key={i}
+                onClick={() => setViewerIndex(i)}
+                className="rounded-full transition-all"
+                style={{
+                  width: i === viewerIndex ? 18 : 6,
+                  height: 6,
+                  background: i === viewerIndex ? TIER_COLORS[expandedTier] : 'rgba(148,163,184,0.35)',
+                }}
+                aria-label={`Go to drink ${i + 1}`}
+              />
+            ))}
           </div>
         </div>
       )}

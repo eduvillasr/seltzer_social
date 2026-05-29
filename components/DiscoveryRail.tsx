@@ -20,6 +20,7 @@ import {
   Flame, UserPlus, UserMinus, ArrowRight, Droplets, Trophy,
 } from 'lucide-react';
 import { Avatar } from './Avatar';
+import { CanImage } from './CanImage';
 import { FounderBadge, FOUNDERS, BetaTesterBadge, BETA_TESTERS } from './FounderBadge';
 import { showToast } from './Toast';
 import {
@@ -97,13 +98,16 @@ export function DiscoveryRail({ currentUserId, compact }: DiscoveryRailProps) {
                 className="snap-start flex-shrink-0 w-36 rounded-2xl p-3 transition-transform hover:scale-[1.02]"
                 style={{ background: 'rgba(15,20,36,0.6)', border: '1px solid var(--border-subtle)' }}
               >
-                {d.latestImage ? (
-                  <img src={d.latestImage} alt={d.seltzer_name} className="w-full h-24 object-cover rounded-lg mb-2" loading="lazy" />
-                ) : (
-                  <div className="w-full h-24 rounded-lg mb-2 flex items-center justify-center" style={{ background: 'rgba(34,211,238,0.06)' }}>
-                    <Droplets size={22} style={{ color: 'var(--text-muted)' }} />
-                  </div>
-                )}
+                <CanImage
+                  src={d.latestImage}
+                  alt={d.seltzer_name}
+                  className="w-full h-24 rounded-lg mb-2"
+                  fallback={
+                    <div className="w-full h-full flex items-center justify-center" style={{ background: 'rgba(34,211,238,0.06)' }}>
+                      <Droplets size={22} style={{ color: 'var(--text-muted)' }} />
+                    </div>
+                  }
+                />
                 <p className="text-xs font-bold truncate" style={{ color: 'var(--text-primary)' }}>{d.seltzer_name}</p>
                 {d.brand && <p className="text-[10px] truncate" style={{ color: 'var(--text-muted)' }}>{d.brand}</p>}
                 <div className="flex items-center gap-1 mt-1.5">

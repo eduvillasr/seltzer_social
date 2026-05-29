@@ -13,6 +13,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { Navigation } from '@/components/Navigation';
+import { CanImage } from '@/components/CanImage';
 import { TopHeader } from '@/components/TopHeader';
 import { CanLoader } from '@/components/CanLoader';
 import { StarRating } from '@/components/StarRating';
@@ -256,11 +257,10 @@ function DrinkRowCard({ row }: { row: DrinkRow }) {
       style={{ padding: '12px' }}
     >
       {row.image_url ? (
-        <img
+        <CanImage
           src={row.image_url}
           alt={row.name}
-          loading="lazy"
-          className="w-14 h-16 rounded-lg object-cover flex-shrink-0"
+          className="w-14 h-16 rounded-lg flex-shrink-0"
           style={{ border: '1px solid var(--border-subtle)' }}
         />
       ) : (

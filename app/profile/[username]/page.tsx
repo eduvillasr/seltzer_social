@@ -7,6 +7,7 @@ import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { Review, SharedTierList, User } from '@/types';
 import { Navigation } from '@/components/Navigation';
+import { CanImage } from '@/components/CanImage';
 import { TopHeader } from '@/components/TopHeader';
 import { ReviewCard } from '@/components/ReviewCard';
 import { Avatar } from '@/components/Avatar';
@@ -51,6 +52,7 @@ export default function ProfilePage({ params }: ProfilePageProps) {
   const [subscribedLists, setSubscribedLists] = useState<SharedTierList[]>([]);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [isFollowing, setIsFollowing] = useState(false);
+  const [followBusy, setFollowBusy] = useState(false);
   const [followerCount, setFollowerCount] = useState(0);
   const [followingCount, setFollowingCount] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -142,22 +144,28 @@ export default function ProfilePage({ params }: ProfilePageProps) {
   }
 
   async function handleFollowToggle() {
-    if (!currentUserId || !user) return;
-    const cache = await import('@/lib/cache');
-    if (isFollowing) {
-      await unfollowUser(currentUserId, user.id);
-      setIsFollowing(false);
-      setFollowerCount((c) => Math.max(0, c - 1));
-      showToast('Unfollowed', 'info', `@${user.username}`);
-    } else {
-      await followUser(currentUserId, user.id);
-      setIsFollowing(true);
-      setFollowerCount((c) => c + 1);
-      showToast('Following', 'success', `@${user.username}`);
+    if (!currentUserId || !user || followBusy) return;
+    setFollowBusy(true);
+    try {
+      const cache = await import('@/lib/cache');
+      if (isFollowing) {
+        await unfollowUser(currentUserId, user.id);
+        setIsFollowing(false);
+        setFollowerCount((c) => Math.max(0, c - 1));
+        showToast('Unfollowed', 'info', `@${user.username}`);
+      } else {
+        await followUser(currentUserId, user.id);
+        setIsFollowing(true);
+        setFollowerCount((c) => c + 1);
+        showToast('Following', 'success', `@${user.username}`);
+      }
+      // Invalidate any cached snapshots that depend on this relationship.
+      // Trailing colon so we don't also clobber e.g. `profile:alice2:...`.
+      cache.invalidate(`profile:${user.username}:`);
+      cache.invalidate(`feed:${currentUserId}`);
+    } finally {
+      setFollowBusy(false);
     }
-    // Invalidate any cached snapshots that depend on this relationship.
-    cache.invalidate(`profile:${user.username}`);
-    cache.invalidate(`feed:${currentUserId}`);
   }
 
   // ── derived ─────────────────────────────────────────────────
@@ -293,7 +301,7 @@ export default function ProfilePage({ params }: ProfilePageProps) {
 
   const ptr = usePullToRefresh(async () => {
     const cache = await import('@/lib/cache');
-    cache.invalidate(`profile:${params.username}`);
+    cache.invalidate(`profile:${params.username}:`);
     await loadProfile();
   });
 
@@ -402,7 +410,7 @@ export default function ProfilePage({ params }: ProfilePageProps) {
               </>
             ) : currentUserId ? (
               <>
-                <button onClick={handleFollowToggle} className={isFollowing ? 'btn-secondary flex-1 justify-center' : 'btn-primary flex-1 justify-center'} style={{ padding: '10px', fontSize: '12px' }}>
+                <button onClick={handleFollowToggle} disabled={followBusy} className={isFollowing ? 'btn-secondary flex-1 justify-center' : 'btn-primary flex-1 justify-center'} style={{ padding: '10px', fontSize: '12px', opacity: followBusy ? 0.6 : 1 }}>
                   {isFollowing ? <><UserMinus size={13} /> Unfollow</> : <><UserPlus size={13} /> Follow</>}
                 </button>
                 <Link
@@ -445,7 +453,7 @@ export default function ProfilePage({ params }: ProfilePageProps) {
               {/* image with floating tier badge */}
               <div className="relative flex-shrink-0">
                 {topRated.image_url ? (
-                  <img src={topRated.image_url} alt={topRated.seltzer_name} className="w-16 h-16 rounded-xl object-cover" style={{ border: '1px solid var(--border-subtle)' }} />
+                  <CanImage src={topRated.image_url} alt={topRated.seltzer_name} className="w-16 h-16 rounded-xl" style={{ border: '1px solid var(--border-subtle)' }} />
                 ) : (
                   <div className="w-16 h-16 rounded-xl flex items-center justify-center" style={{ background: `${tierColor}1a`, border: `1px solid ${tierColor}33` }}>
                     <Droplets size={22} style={{ color: tierColor }} />

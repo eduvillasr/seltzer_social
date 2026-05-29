@@ -39,6 +39,32 @@ export function normalizeBrandAndName(
   return { brand: normalizeBrand(brand), name: normalizeName(name) };
 }
 
+/**
+ * Standardize a flavor name *relative to its brand*. Run after normalizeName.
+ *   - strips ®, ™, © glyphs
+ *   - removes a leading repeat of the brand baked into the flavor name
+ *     ("White Claw Black Cherry" with brand "White Claw" → "Black Cherry")
+ * This collapses the common duplicate where one reviewer prefixes the brand
+ * into the name and another doesn't.
+ */
+export function standardizeName(brand: string, name: string): string {
+  let n = normalizeName(name).replace(/[®™©]/g, '');
+  n = collapseAndTrim(n);
+  const b = normalizeBrand(brand);
+  if (b) {
+    const bl = b.toLowerCase();
+    if (n.toLowerCase().startsWith(bl + ' ')) {
+      n = n.slice(b.length).trim();
+    }
+  }
+  return n || normalizeName(name); // never return empty if the name was just the brand
+}
+
+/** Tokens of length >= 2 from a normalized string, lowercased. */
+export function nameTokens(s: string): string[] {
+  return s.toLowerCase().split(' ').map((t) => t.trim()).filter((t) => t.length >= 2);
+}
+
 /** Returns a list of human-readable problems, or [] if the name is valid. */
 export function validateName(name: string): string[] {
   const issues: string[] = [];

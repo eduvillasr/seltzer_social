@@ -11,6 +11,7 @@ import { BackHeader } from '@/components/BackHeader';
 import { PullIndicator, pullContentStyle } from '@/components/PullIndicator';
 import { usePullToRefresh } from '@/hooks/usePullToRefresh';
 import { ReviewCard } from '@/components/ReviewCard';
+import { CanImage } from '@/components/CanImage';
 import { CanLoader } from '@/components/CanLoader';
 import { StarRating } from '@/components/StarRating';
 import { showToast } from '@/components/Toast';
@@ -172,10 +173,10 @@ export default function DrinkPage({ params }: { params: { id: string } }) {
             {/* Canonical can image — clickable to upload a new one if you're a curator */}
             {drink.image_url && (
               <div className="relative flex-shrink-0">
-                <img
+                <CanImage
                   src={drink.image_url}
                   alt={drink.name}
-                  className="w-16 h-20 rounded-lg object-cover"
+                  className="w-16 h-20 rounded-lg"
                   style={{ border: '1px solid var(--border-subtle)' }}
                 />
                 {canCurate && (
@@ -257,7 +258,7 @@ export default function DrinkPage({ params }: { params: { id: string } }) {
                   style={{ border: '1px solid var(--border-subtle)' }}
                   title={p.user?.username ? `By @${p.user.username}` : undefined}
                 >
-                  <img src={p.image_url} alt="" loading="lazy" className="w-full h-full object-cover" />
+                  <CanImage src={p.image_url} alt="" className="w-full h-full" />
                 </button>
               ))}
             </div>
@@ -312,13 +313,16 @@ export default function DrinkPage({ params }: { params: { id: string } }) {
                   className="snap-start flex-shrink-0 w-32 rounded-2xl p-2.5 transition-transform hover:scale-[1.02]"
                   style={{ background: 'rgba(15,20,36,0.6)', border: '1px solid var(--border-subtle)' }}
                 >
-                  {d.image_url ? (
-                    <img src={d.image_url} alt={d.name} loading="lazy" className="w-full h-20 object-cover rounded-lg mb-2" />
-                  ) : (
-                    <div className="w-full h-20 rounded-lg mb-2 flex items-center justify-center" style={{ background: 'rgba(34,211,238,0.06)' }}>
-                      <Droplets size={18} style={{ color: 'var(--text-muted)' }} />
-                    </div>
-                  )}
+                  <CanImage
+                    src={d.image_url}
+                    alt={d.name}
+                    className="w-full h-20 rounded-lg mb-2"
+                    fallback={
+                      <div className="w-full h-full flex items-center justify-center" style={{ background: 'rgba(34,211,238,0.06)' }}>
+                        <Droplets size={18} style={{ color: 'var(--text-muted)' }} />
+                      </div>
+                    }
+                  />
                   <p className="text-xs font-bold truncate" style={{ color: 'var(--text-primary)' }}>{d.name}</p>
                   {d.count > 0 && (
                     <p className="text-[10px] mt-0.5 tabular-nums" style={{ color: 'var(--amber-400)', fontWeight: 600 }}>

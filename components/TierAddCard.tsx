@@ -6,6 +6,7 @@
 import Link from 'next/link';
 import { ListPlus, Droplets } from 'lucide-react';
 import { Avatar } from './Avatar';
+import { CanImage } from './CanImage';
 import { FounderBadge, FOUNDERS, BetaTesterBadge, BETA_TESTERS } from './FounderBadge';
 import { SharedTierListItem } from '@/types';
 
@@ -34,21 +35,21 @@ export function TierAddCard({ activity }: { activity: SharedTierListItem }) {
       <div className="flex items-stretch gap-3 p-3">
         {/* Drink thumbnail with tier badge */}
         <div className="relative flex-shrink-0">
-          {imageUrl ? (
-            <img
-              src={imageUrl}
-              alt={activity.seltzer_name}
-              className="w-14 h-14 rounded-xl object-cover"
-              style={{ border: '1px solid var(--border-subtle)' }}
-            />
-          ) : (
-            <div
-              className="w-14 h-14 rounded-xl flex items-center justify-center"
-              style={{ background: `${tierColor}1f`, border: `1px solid ${tierColor}33` }}
-            >
-              <Droplets size={20} style={{ color: tierColor }} />
-            </div>
-          )}
+          <CanImage
+            src={imageUrl}
+            alt={activity.seltzer_name}
+            className="w-14 h-14 rounded-xl"
+            padded={false}
+            style={{ border: '1px solid var(--border-subtle)' }}
+            fallback={
+              <div
+                className="w-full h-full flex items-center justify-center"
+                style={{ background: `${tierColor}1f` }}
+              >
+                <Droplets size={20} style={{ color: tierColor }} />
+              </div>
+            }
+          />
           <span
             className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-extrabold"
             style={{

@@ -11,6 +11,7 @@ import { Review, SharedTierListSuggestion } from '@/types';
 import { Navigation } from '@/components/Navigation';
 import { TopHeader } from '@/components/TopHeader';
 import { CommentSection } from '@/components/CommentSection';
+import { CanImage } from '@/components/CanImage';
 import { RatingInput } from '@/components/RatingInput';
 import { CanLoader } from '@/components/CanLoader';
 import { reviewHeadline, reviewDrinkLabel, hasCustomTitle } from '@/lib/reviewDisplay';
@@ -262,7 +263,7 @@ export default function ReviewPage({ params }: ReviewPageProps) {
           )}
 
           {review.image_url && (
-            <img src={review.image_url} alt={review.seltzer_name} className="w-full rounded-xl object-cover max-h-80 mb-5" />
+            <CanImage src={review.image_url} alt={review.seltzer_name} className="w-full h-80 rounded-xl mb-5" loading="eager" />
           )}
 
           <div className="flex items-center gap-1 pt-4" style={{ borderTop: '1px solid var(--border-subtle)' }}>

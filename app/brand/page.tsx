@@ -14,6 +14,7 @@ import { Navigation } from '@/components/Navigation';
 import { TopHeader } from '@/components/TopHeader';
 import { CanLoader } from '@/components/CanLoader';
 import { getAllBrandsWithStats } from '@/lib/supabase';
+import { FirstTimeTip } from '@/components/FirstTimeTip';
 import { Search, X, Tag, ArrowUpDown, ArrowRight, Droplets } from 'lucide-react';
 
 type SortMode = 'drinks' | 'rating' | 'name' | 'reviews';
@@ -78,6 +79,12 @@ export default function BrandsIndexPage() {
             {loading ? 'Loading…' : `${brands.length} brands · ${brands.reduce((s, b) => s + b.drinkCount, 0)} drinks total`}
           </p>
         </div>
+
+        <FirstTimeTip
+          tipId="brand-index-sort"
+          title="Sort or filter to dig in"
+          body="Default is most drinks. Switch to highest rated to find sleepers, or type a partial name to filter."
+        />
 
         {/* Search bar */}
         <div className="relative">

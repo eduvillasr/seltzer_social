@@ -408,16 +408,53 @@ export async function getRecentImagesForSeltzer(seltzerId: string, limit: number
 }
 
 /**
+ * Returns canonical drinks that look like near-duplicates of (brand, name),
+ * ranked by flavor-name token overlap. Used by /create to surface a
+ * "Did you mean…?" suggestion before a reviewer adds a brand-new drink —
+ * catching cases like adding "1877 by HEB · Original" when "1877 · Original"
+ * already exists. Empty result means no close match.
+ */
+export async function findSimilarSeltzers(brand: string, name: string) {
+  const { standardizeName, nameTokens } = await import('./normalizeName');
+  const cleanName = standardizeName(brand, name);
+  if (!cleanName) return { data: [] as any[], error: null };
+  const want = nameTokens(cleanName);
+  if (want.length === 0) return { data: [] as any[], error: null };
+  // Probe the DB with the longest token to keep the candidate set small,
+  // then rank client-side by token-set overlap.
+  const probe = [...want].sort((a, b) => b.length - a.length)[0];
+  const { data, error } = await supabase
+    .from('seltzers')
+    .select('id, brand, name, image_url')
+    .ilike('name', `%${probe}%`)
+    .limit(40);
+  if (error) return { data: [] as any[], error };
+  const wantSet = new Set(want);
+  const scored = (data || [])
+    .map((s: any) => {
+      const have = new Set(nameTokens(String(s.name || '')));
+      let overlap = 0;
+      wantSet.forEach((t) => { if (have.has(t)) overlap += 1; });
+      const denom = Math.max(wantSet.size, have.size, 1);
+      return { s, score: overlap / denom };
+    })
+    .filter((x) => x.score >= 0.6)
+    .sort((a, b) => b.score - a.score);
+  return { data: scored.map((x) => x.s) as any[], error: null };
+}
+
+/**
  * Find a seltzer by case-insensitive (brand, name) or create a new one.
  * Returns the canonical row so callers can use seltzer_id.
  */
 export async function findOrCreateSeltzer(brand: string, name: string, createdBy?: string) {
   // Always normalize through the shared canonical-form rules so we don't
   // create "AHA Lime + Watermelon" alongside "AHA Lime Watermelon", etc.
-  // (See lib/normalizeName.ts for the rules.)
-  const { normalizeBrand, normalizeName } = await import('./normalizeName');
+  // standardizeName additionally strips a leading brand repeat in the name
+  // and ®/™ glyphs. (See lib/normalizeName.ts for the rules.)
+  const { normalizeBrand, standardizeName } = await import('./normalizeName');
   const cleanBrand = normalizeBrand(brand);
-  const cleanName  = normalizeName(name);
+  const cleanName  = standardizeName(brand, name);
   if (!cleanBrand || !cleanName) return { data: null, error: new Error('Brand and name required') };
 
   // Look up existing
@@ -559,6 +596,63 @@ export async function getAchievementStats(userId: string, isFounder: boolean, is
     isFounder,
     isBetaTester,
   };
+}
+
+/** Single batched query returning the user's onboarding-checklist state.
+ *  Used by <GettingStarted /> on the feed. Returns booleans for each
+ *  of the five "do this to get started" items, plus a top-level
+ *  dismissed flag so the card can hide itself permanently.
+ */
+export async function getOnboardingChecklist(userId: string): Promise<{
+  username: string;
+  hasAvatar: boolean;
+  follows3Plus: boolean;
+  hasReview: boolean;
+  hasTierList: boolean;
+  hasTriedIt: boolean;
+  completed: number;
+  total: number;
+  dismissed: boolean;
+}> {
+  // Six small reads in parallel — none touch large tables.
+  const [
+    { data: profile },
+    { count: followCount },
+    { count: reviewCount },
+    { count: ownLists },
+    { count: subscribedLists },
+    { count: triedCount },
+  ] = await Promise.all([
+    supabase.from('users').select('username, avatar_url, onboarding_dismissed').eq('id', userId).maybeSingle(),
+    supabase.from('follows').select('follower_id', { count: 'exact', head: true }).eq('follower_id', userId),
+    supabase.from('reviews').select('id', { count: 'exact', head: true }).eq('user_id', userId),
+    supabase.from('shared_tier_lists').select('id', { count: 'exact', head: true })
+      .or(`owner_id.eq.${userId},partner_id.eq.${userId}`),
+    supabase.from('shared_tier_list_subscriptions').select('list_id', { count: 'exact', head: true }).eq('user_id', userId),
+    supabase.from('tried_it').select('id', { count: 'exact', head: true }).eq('user_id', userId),
+  ]);
+
+  const username     = (profile as any)?.username ?? '';
+  const hasAvatar    = !!(profile as any)?.avatar_url;
+  const follows3Plus = (followCount ?? 0) >= 3;
+  const hasReview    = (reviewCount ?? 0) > 0;
+  const hasTierList  = ((ownLists ?? 0) + (subscribedLists ?? 0)) > 0;
+  const hasTriedIt   = (triedCount ?? 0) > 0;
+  const dismissed    = !!(profile as any)?.onboarding_dismissed;
+
+  const flags = [hasAvatar, follows3Plus, hasReview, hasTierList, hasTriedIt];
+  const completed = flags.filter(Boolean).length;
+
+  return { username, hasAvatar, follows3Plus, hasReview, hasTierList, hasTriedIt, completed, total: flags.length, dismissed };
+}
+
+/** Flip users.onboarding_dismissed = true so the checklist card hides for good. */
+export async function dismissOnboardingChecklist(userId: string) {
+  const { error } = await supabase
+    .from('users')
+    .update({ onboarding_dismissed: true })
+    .eq('id', userId);
+  return { error };
 }
 
 /** Save the user's pinned achievement IDs. Caps at 3 entries. */
@@ -788,6 +882,60 @@ export async function getSmartFeed(userId: string, limit: number = 50) {
 }
 
 /**
+ * "For You" feed: recommended reviews from people the user does NOT follow,
+ * so the feed surfaces fresh voices. v1 ranking is popularity + recency —
+ * recent reviews scored by likes/comments with a recency decay (half-life
+ * ~7 days). No new tables; counts are aggregated client-side from a recent
+ * candidate pool.
+ */
+export async function getForYouFeed(userId: string, limit: number = 30) {
+  const { data: follows } = await supabase
+    .from('follows')
+    .select('following_id')
+    .eq('follower_id', userId);
+  const excludeIds = new Set<string>([userId, ...((follows?.map((f) => f.following_id) as string[]) || [])]);
+
+  // Candidate pool: recent reviews, overfetched so ranking has something to chew on.
+  const since = new Date(Date.now() - 45 * 24 * 60 * 60 * 1000).toISOString();
+  const { data: candidates, error } = await supabase
+    .from('reviews')
+    .select('*, user:users(*), seltzer:seltzers(*)')
+    .gte('created_at', since)
+    .order('created_at', { ascending: false })
+    .limit(200);
+  if (error) return { data: [], error };
+
+  const pool = ((candidates as any[]) || []).filter((r) => !excludeIds.has(r.user_id));
+  if (pool.length === 0) return { data: [], error: null };
+
+  const ids = pool.map((r) => r.id);
+  const [{ data: likeRows }, { data: commentRows }] = await Promise.all([
+    supabase.from('likes').select('review_id').in('review_id', ids),
+    supabase.from('comments').select('review_id').in('review_id', ids),
+  ]);
+  const likeCounts: Record<string, number> = {};
+  for (const row of ((likeRows || []) as { review_id: string }[])) {
+    likeCounts[row.review_id] = (likeCounts[row.review_id] || 0) + 1;
+  }
+  const commentCounts: Record<string, number> = {};
+  for (const row of ((commentRows || []) as { review_id: string }[])) {
+    commentCounts[row.review_id] = (commentCounts[row.review_id] || 0) + 1;
+  }
+
+  const now = Date.now();
+  const scored = pool.map((r) => {
+    const likes = likeCounts[r.id] || 0;
+    const comments = commentCounts[r.id] || 0;
+    const ageDays = Math.max(0, (now - new Date(r.created_at).getTime()) / 86_400_000);
+    const recency = Math.exp(-ageDays / 7); // 0..1, half-life ~7d
+    const engagement = likes * 2 + comments * 3 + (r.rating >= 4 ? 1 : 0);
+    return { review: r, score: engagement + recency * 4 };
+  });
+  scored.sort((a, b) => b.score - a.score);
+  return { data: scored.slice(0, limit).map((s) => s.review), error: null };
+}
+
+/**
  * Returns up to N other drinks from the same brand, excluding the given
  * drink. Used by the "More from this brand" rail on /drink/[id].
  */
@@ -943,14 +1091,24 @@ export async function uploadCanonicalSeltzerImage(
 }
 
 /**
- * Returns the list of canonical drinks flagged for curator review,
- * newest first. Used by /curator/queue.
+ * Returns the list of canonical drinks for the curator queue, ordered
+ * by brand/name. Used by /curator/queue.
+ *
+ * scope='needs_review' (default) returns only drinks flagged as low
+ * quality; scope='all' returns the whole catalog so a curator can
+ * improve any image, not just flagged ones.
  */
-export async function getSeltzersNeedingReview(limit = 200) {
-  const { data, error } = await supabase
+export async function getSeltzersNeedingReview(
+  limit = 200,
+  scope: 'needs_review' | 'all' = 'needs_review',
+) {
+  let query = supabase
     .from('seltzers')
-    .select('id, brand, name, image_url, image_quality_flag, created_at')
-    .eq('image_quality_flag', 'needs_review')
+    .select('id, brand, name, image_url, image_quality_flag, created_at');
+  if (scope === 'needs_review') {
+    query = query.eq('image_quality_flag', 'needs_review');
+  }
+  const { data, error } = await query
     .order('brand', { ascending: true })
     .order('name', { ascending: true })
     .limit(limit);
