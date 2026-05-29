@@ -39,6 +39,7 @@ export interface AchievementStats {
   reviewCount: number;
   uniqueBrands: number;
   avgRating: number;
+  lowRatingCount: number; // reviews rated <= 2.0 (for the "critic" achievement)
   totalLikesReceived: number;
   totalCommentsReceived: number;
   totalTriedItReceived: number;
@@ -167,10 +168,11 @@ export const ACHIEVEMENTS: Achievement[] = [
   {
     id: 'harsh_critic',
     name: 'Hard to Please',
-    description: 'Average rating below 3.0 (10+ reviews)',
+    description: 'Rated 5 drinks 2.0 or lower',
     tier: 'silver',
     icon: Target,
-    evaluate: (s) => s.reviewCount >= 10 && s.avgRating < 3.0,
+    evaluate: (s) => s.lowRatingCount >= 5,
+    progress: (s) => [Math.min(s.lowRatingCount, 5), 5],
   },
   {
     id: 'generous',

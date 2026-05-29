@@ -7,6 +7,7 @@ import { PWARegistrar } from '@/components/PWARegistrar';
 import { PushRegistrar } from '@/components/PushRegistrar';
 import { InstallPrompt } from '@/components/InstallPrompt';
 import { RouterRefresher } from '@/components/RouterRefresher';
+import { TermsGate } from '@/components/TermsGate';
 
 export const metadata: Metadata = {
   title: 'Seltzer Social — Rate. Review. Discover.',
@@ -49,6 +50,7 @@ export default function RootLayout({
         <InstallPrompt />
         <PWARegistrar />
         <PushRegistrar />
+        <TermsGate />
         <RouterRefresher />
       </body>
     </html>

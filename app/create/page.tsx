@@ -6,17 +6,20 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
-  ArrowLeft, Droplets, Search, Check, Plus, Upload, X, ListPlus, ArrowRight, CheckCircle2,
+  ArrowLeft, Droplets, Search, Check, Plus, Upload, X, ListPlus, ArrowRight, CheckCircle2, ScanLine,
 } from 'lucide-react';
 import { Navigation } from '@/components/Navigation';
 import { CanImage } from '@/components/CanImage';
 import { RatingInput } from '@/components/RatingInput';
+import { BarcodeScanner } from '@/components/BarcodeScanner';
 import { showToast } from '@/components/Toast';
 import {
   createReview, supabase, searchSeltzers, uploadReviewImage,
   getSharedTierLists, createSharedTierListSuggestion, findOrCreateSeltzer,
   addSharedTierListItem, getRecentImagesForSeltzer, findSimilarSeltzers,
+  findSeltzerByBarcode, attachBarcodeToSeltzer,
 } from '@/lib/supabase';
+import { scanBarcodeNative, looksLikeBarcode } from '@/lib/barcode';
 import { AuthUser, SharedTierList, Seltzer } from '@/types';
 
 const DEFAULT_BRANDS = [
@@ -44,6 +47,10 @@ export default function CreateReview() {
   const [newName, setNewName]         = useState('');
   // near-duplicate suggestions while adding a new drink ("Did you mean…?")
   const [similarDrinks, setSimilarDrinks] = useState<Seltzer[]>([]);
+  // barcode scanning: web fallback modal visibility + a scanned UPC waiting to
+  // be attached to a newly created drink.
+  const [showScanner, setShowScanner] = useState(false);
+  const [scannedUpc, setScannedUpc] = useState<string | null>(null);
 
   // brands collected from existing seltzers + defaults
   const [availableBrands, setAvailableBrands] = useState<string[]>(DEFAULT_BRANDS);
@@ -178,6 +185,34 @@ export default function CreateReview() {
     if (!reviewImage && s.image_url) setImagePreviewUrl(s.image_url);
   }
 
+  // ─── barcode scan ────────────────────────────────────────────
+  // Native path scans full-screen; web path opens the in-page camera modal.
+  async function handleScanClick() {
+    const res = await scanBarcodeNative();
+    if (res.ok) { resolveBarcode(res.value); return; }
+    if (res.reason === 'unsupported') { setShowScanner(true); return; } // web fallback
+    if (res.reason === 'denied') { showToast('Camera access denied', 'error', 'Allow camera to scan barcodes.'); return; }
+    if (res.reason === 'error') { showToast('Could not scan', 'error'); return; }
+    // 'cancelled' → do nothing
+  }
+
+  // Look the scanned code up against the catalog. Found → select it. Not found
+  // → open the new-drink form and remember the code so it's saved on publish.
+  async function resolveBarcode(code: string) {
+    setShowScanner(false);
+    const upc = code.trim();
+    if (!looksLikeBarcode(upc)) { showToast("That didn't look like a barcode", 'error'); return; }
+    const { data } = await findSeltzerByBarcode(upc);
+    if (data) {
+      selectSeltzer(data as Seltzer);
+      showToast('Found it', 'success', `${(data as Seltzer).brand} · ${(data as Seltzer).name}`);
+    } else {
+      setScannedUpc(upc);
+      startAddNew();
+      showToast('New drink', 'info', 'No match for that barcode — add it and we’ll remember it.');
+    }
+  }
+
   function startAddNew() {
     setShowNewForm(true);
     setPickerOpen(false);
@@ -233,6 +268,9 @@ export default function CreateReview() {
           return;
         }
         seltzer = created as Seltzer;
+        // If this drink was reached by scanning a barcode, remember it on the
+        // canonical row so future scans resolve instantly.
+        if (scannedUpc) { await attachBarcodeToSeltzer(created.id, scannedUpc); setScannedUpc(null); }
         setAllSeltzers((prev) => prev.some((p) => p.id === created.id) ? prev : [created as Seltzer, ...prev]);
         setPickedSeltzer(created as Seltzer);
         setShowNewForm(false);
@@ -439,6 +477,9 @@ export default function CreateReview() {
 
   return (
     <>
+      {showScanner && (
+        <BarcodeScanner onDetected={resolveBarcode} onClose={() => setShowScanner(false)} />
+      )}
       <Navigation />
       <main className="max-w-md mx-auto px-4 pt-20 pb-32">
         <Link
@@ -610,9 +651,20 @@ export default function CreateReview() {
                     onChange={(e) => { setDrinkQuery(e.target.value); setPickerOpen(true); }}
                     onFocus={() => setPickerOpen(true)}
                     placeholder="Search drinks…"
-                    className="input-field pl-10"
+                    className="input-field pl-10 pr-11"
                     autoFocus
                   />
+                  <button
+                    type="button"
+                    onMouseDown={(ev) => ev.preventDefault()}
+                    onClick={handleScanClick}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-lg flex items-center justify-center transition-colors hover:bg-white/5"
+                    style={{ color: 'var(--cyan-400)', background: 'rgba(34,211,238,0.08)' }}
+                    title="Scan barcode"
+                    aria-label="Scan barcode"
+                  >
+                    <ScanLine size={16} />
+                  </button>
 
                   {pickerOpen && (
                     <div

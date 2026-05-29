@@ -152,9 +152,11 @@ export function GettingStarted({ userId }: Props) {
         />
       </div>
 
-      {/* Step rows */}
+      {/* Step rows — only the ones still outstanding. Completed steps drop
+          off the list entirely (rather than lingering with a strikethrough)
+          so finishing one, e.g. adding a profile photo, makes its tip vanish. */}
       <ul className="space-y-1">
-        {rows.map((row) => (
+        {rows.filter((row) => !row.done).map((row) => (
           <li key={row.title}>
             <Link
               href={row.href}

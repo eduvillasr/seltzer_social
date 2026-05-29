@@ -12,6 +12,7 @@ import { FounderBadge, FOUNDERS, BetaTesterBadge, BETA_TESTERS } from './Founder
 import { StarRating } from './StarRating';
 import { reviewHeadline, reviewDrinkLabel, hasCustomTitle } from '@/lib/reviewDisplay';
 import { MentionText } from './MentionText';
+import { ContentMenu } from './ContentMenu';
 import { showToast } from './Toast';
 import { createLike, deleteLike, getUserLike, getLikes, createTriedIt, getUserTriedIt, getTriedItStats, deleteReview, getCommentCount } from '@/lib/supabase';
 
@@ -146,7 +147,7 @@ export function ReviewCard({ review, currentUserId, onDelete }: ReviewCardProps)
           <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{timeAgo}</p>
         </div>
         <div className="badge-amber"><Star size={10} className="star-filled" />{review.rating.toFixed(1)}</div>
-        {currentUserId === review.user?.id && (
+        {isOwnReview ? (
           <button
             onClick={handleDelete}
             className="action-btn"
@@ -156,6 +157,15 @@ export function ReviewCard({ review, currentUserId, onDelete }: ReviewCardProps)
             <Trash2 size={13} />
             {confirmDelete && <span style={{ fontSize: '11px' }}>Confirm?</span>}
           </button>
+        ) : (
+          <ContentMenu
+            currentUserId={currentUserId}
+            targetType="review"
+            targetId={review.id}
+            targetUserId={review.user?.id}
+            targetUsername={review.user?.username}
+            onBlocked={() => setDeleted(true)}
+          />
         )}
       </div>
 

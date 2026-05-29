@@ -8,6 +8,7 @@ import { Send, Trash2, CornerDownRight, X } from 'lucide-react';
 import { Comment } from '@/types';
 import { createComment, getComments, deleteComment, createNotification, getUserIdsByUsernames, supabase } from '@/lib/supabase';
 import { FounderBadge, FOUNDERS, BetaTesterBadge, BETA_TESTERS } from './FounderBadge';
+import { ContentMenu } from './ContentMenu';
 
 const REACTIONS = ['👍', '❤️', '😂', '😮', '🔥', '💧'];
 
@@ -84,8 +85,12 @@ export function CommentSection({ reviewId, reviewSlug, currentUsername, currentU
     return { topLevel: tops, repliesByParent: repliesMap };
   }, [comments]);
 
+  function handleBlockedUser(blockedUserId: string) {
+    setComments((prev) => prev.filter((c) => c.user_id !== blockedUserId));
+  }
+
   async function loadComments() {
-    const { data } = await getComments(reviewId);
+    const { data } = await getComments(reviewId, currentUserId);
     setComments(data || []);
     if (data && data.length > 0) {
       await loadReactions(data.map((c: Comment) => c.id));
@@ -287,6 +292,7 @@ export function CommentSection({ reviewId, reviewSlug, currentUsername, currentU
                   currentUserId={currentUserId}
                   reviewOwnerId={reviewOwnerId}
                   startReply={startReply}
+                  onBlocked={handleBlockedUser}
                 />
 
                 {/* Replies indented under the parent */}
@@ -305,6 +311,7 @@ export function CommentSection({ reviewId, reviewSlug, currentUsername, currentU
                         currentUserId={currentUserId}
                         reviewOwnerId={reviewOwnerId}
                         startReply={startReply}
+                        onBlocked={handleBlockedUser}
                       />
                     ))}
                   </div>
@@ -367,11 +374,12 @@ interface CommentItemProps {
   currentUserId?: string;
   reviewOwnerId?: string;
   startReply: (commentId: string, replyToUsername?: string) => void;
+  onBlocked: (blockedUserId: string) => void;
 }
 
 function CommentItem({
   comment, isReply, reactions, reactionPicker, setReactionPicker,
-  handleReaction, handleDeleteComment, currentUserId, reviewOwnerId, startReply,
+  handleReaction, handleDeleteComment, currentUserId, reviewOwnerId, startReply, onBlocked,
 }: CommentItemProps) {
   const initial = comment.user?.username?.charAt(0)?.toUpperCase() || '?';
   const canDelete = currentUserId === comment.user_id || currentUserId === reviewOwnerId;
@@ -414,7 +422,7 @@ function CommentItem({
                     😊
                   </button>
                 )}
-                {canDelete && (
+                {canDelete ? (
                   <button
                     onClick={() => handleDeleteComment(comment.id)}
                     className="action-btn"
@@ -423,6 +431,16 @@ function CommentItem({
                   >
                     <Trash2 size={12} />
                   </button>
+                ) : (
+                  <ContentMenu
+                    currentUserId={currentUserId}
+                    targetType="comment"
+                    targetId={comment.id}
+                    targetUserId={comment.user_id}
+                    targetUsername={comment.user?.username}
+                    onBlocked={() => onBlocked(comment.user_id)}
+                    size={13}
+                  />
                 )}
               </div>
             </div>

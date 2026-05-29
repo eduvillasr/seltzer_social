@@ -550,6 +550,7 @@ export async function getAchievementStats(userId: string, isFounder: boolean, is
   const reviewCount = reviewRows.length;
   const uniqueBrands = new Set(reviewRows.map((r) => (r.brand ?? '').trim().toLowerCase()).filter(Boolean)).size;
   const avgRating = reviewCount === 0 ? 0 : reviewRows.reduce((s, r) => s + r.rating, 0) / reviewCount;
+  const lowRatingCount = reviewRows.filter((r) => r.rating <= 2.0).length;
   const hasFiveStarReview = reviewRows.some((r) => r.rating >= 5);
   const hasFreshReview = reviewRows.some((r) => r.created_at >= since7d);
 
@@ -585,6 +586,7 @@ export async function getAchievementStats(userId: string, isFounder: boolean, is
     reviewCount,
     uniqueBrands,
     avgRating,
+    lowRatingCount,
     totalLikesReceived,
     totalCommentsReceived,
     totalTriedItReceived,
@@ -868,7 +870,8 @@ export async function getSmartFeed(userId: string, limit: number = 50) {
     .select('following_id')
     .eq('follower_id', userId);
 
-  const followedIds = follows?.map((f) => f.following_id) || [];
+  const blocked = new Set(await getBlockedUserIds(userId));
+  const followedIds = (follows?.map((f) => f.following_id) || []).filter((id) => !blocked.has(id));
   const allIds = [...followedIds, userId]; // include own posts
 
   const { data, error } = await supabase
@@ -893,7 +896,8 @@ export async function getForYouFeed(userId: string, limit: number = 30) {
     .from('follows')
     .select('following_id')
     .eq('follower_id', userId);
-  const excludeIds = new Set<string>([userId, ...((follows?.map((f) => f.following_id) as string[]) || [])]);
+  const blockedIds = await getBlockedUserIds(userId);
+  const excludeIds = new Set<string>([userId, ...((follows?.map((f) => f.following_id) as string[]) || []), ...blockedIds]);
 
   // Candidate pool: recent reviews, overfetched so ranking has something to chew on.
   const since = new Date(Date.now() - 45 * 24 * 60 * 60 * 1000).toISOString();
@@ -905,7 +909,19 @@ export async function getForYouFeed(userId: string, limit: number = 30) {
     .limit(200);
   if (error) return { data: [], error };
 
-  const pool = ((candidates as any[]) || []).filter((r) => !excludeIds.has(r.user_id));
+  let pool = ((candidates as any[]) || []).filter((r) => !excludeIds.has(r.user_id));
+
+  // Fallback: low-activity apps (or brand-new users) may have nothing in the
+  // last 45 days. Rather than show an empty For-You, widen to the most recent
+  // reviews all-time so everyone always gets recommendations.
+  if (pool.length === 0) {
+    const { data: anytime } = await supabase
+      .from('reviews')
+      .select('*, user:users(*), seltzer:seltzers(*)')
+      .order('created_at', { ascending: false })
+      .limit(200);
+    pool = ((anytime as any[]) || []).filter((r) => !excludeIds.has(r.user_id));
+  }
   if (pool.length === 0) return { data: [], error: null };
 
   const ids = pool.map((r) => r.id);
@@ -1298,9 +1314,12 @@ async function notifyOnReply(actorId: string, reviewId: string, parentId: string
     link: `/review/${reviewId}`,
   }]).then(() => {});
 }
-export async function getComments(reviewId: string) {
+export async function getComments(reviewId: string, viewerId?: string) {
   const { data, error } = await supabase.from('comments').select('*, user:users(*)').eq('review_id', reviewId).order('created_at', { ascending: true });
-  return { data, error };
+  if (error || !viewerId || !data) return { data, error };
+  // Hide comments from users the viewer has blocked.
+  const blocked = new Set(await getBlockedUserIds(viewerId));
+  return { data: data.filter((c: any) => !blocked.has(c.user_id)), error };
 }
 
 export async function getCommentCount(reviewId: string) {
@@ -2240,4 +2259,151 @@ export async function searchSharedTierLists(query: string) {
 
   const { data, error } = await req;
   return { data: data || [], error };
+}
+
+// ─── MODERATION: blocks ──────────────────────────────────────────
+// Block hides the blocked user's content from the blocker's feeds and
+// comment threads. RLS lets a user manage only their own block rows.
+
+/** UUIDs the given user has blocked. Cached per call site, cheap to refetch. */
+export async function getBlockedUserIds(userId: string): Promise<string[]> {
+  if (!userId) return [];
+  const { data } = await supabase
+    .from('blocks')
+    .select('blocked_id')
+    .eq('blocker_id', userId);
+  return (data || []).map((r: { blocked_id: string }) => r.blocked_id);
+}
+
+export async function blockUser(blockerId: string, blockedId: string) {
+  if (blockerId === blockedId) return { error: new Error('cannot block yourself') };
+  const { error } = await supabase
+    .from('blocks')
+    .upsert({ blocker_id: blockerId, blocked_id: blockedId }, { onConflict: 'blocker_id,blocked_id' });
+  return { error };
+}
+
+export async function unblockUser(blockerId: string, blockedId: string) {
+  const { error } = await supabase
+    .from('blocks')
+    .delete()
+    .eq('blocker_id', blockerId)
+    .eq('blocked_id', blockedId);
+  return { error };
+}
+
+export async function isUserBlocked(blockerId: string, blockedId: string): Promise<boolean> {
+  if (!blockerId || !blockedId) return false;
+  const { data } = await supabase
+    .from('blocks')
+    .select('id')
+    .eq('blocker_id', blockerId)
+    .eq('blocked_id', blockedId)
+    .maybeSingle();
+  return !!data;
+}
+
+// ─── MODERATION: reports ─────────────────────────────────────────
+export type ReportTargetType = 'review' | 'comment' | 'user';
+
+/** File a report. Re-reporting the same target is an idempotent upsert. */
+export async function reportContent(opts: {
+  reporterId: string;
+  targetType: ReportTargetType;
+  targetId: string;
+  targetUserId?: string | null;
+  reason: string;
+}) {
+  const { error } = await supabase.from('reports').upsert(
+    {
+      reporter_id: opts.reporterId,
+      target_type: opts.targetType,
+      target_id: opts.targetId,
+      target_user_id: opts.targetUserId ?? null,
+      reason: opts.reason.slice(0, 500) || 'Reported',
+      status: 'open',
+    },
+    { onConflict: 'reporter_id,target_type,target_id' },
+  );
+  return { error };
+}
+
+/** Curator-only: open reports, newest first. RLS enforces curator access. */
+export async function getOpenReports(limit = 100) {
+  const { data, error } = await supabase
+    .from('reports')
+    .select('*, reporter:users!reports_reporter_id_fkey(id, username), target_user:users!reports_target_user_id_fkey(id, username)')
+    .eq('status', 'open')
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  return { data: data || [], error };
+}
+
+export async function resolveReport(reportId: string, curatorId: string, status: 'resolved' | 'dismissed') {
+  const { error } = await supabase
+    .from('reports')
+    .update({ status, resolved_at: new Date().toISOString(), resolved_by: curatorId })
+    .eq('id', reportId);
+  return { error };
+}
+
+/** Curator-only hard delete of reported content. */
+export async function moderatorDeleteReview(reviewId: string) {
+  return supabase.from('reviews').delete().eq('id', reviewId);
+}
+export async function moderatorDeleteComment(commentId: string) {
+  return supabase.from('comments').delete().eq('id', commentId);
+}
+
+// ─── TERMS / EULA ────────────────────────────────────────────────
+export async function acceptTerms(userId: string) {
+  const { error } = await supabase
+    .from('users')
+    .update({ terms_accepted_at: new Date().toISOString() })
+    .eq('id', userId);
+  return { error };
+}
+
+export async function hasAcceptedTerms(userId: string): Promise<boolean> {
+  if (!userId) return false;
+  const { data } = await supabase
+    .from('users')
+    .select('terms_accepted_at')
+    .eq('id', userId)
+    .maybeSingle();
+  return !!data?.terms_accepted_at;
+}
+
+// ─── ACCOUNT DELETION ────────────────────────────────────────────
+// Calls the `delete-account` Edge Function (service role) which purges
+// storage and deletes auth.users (cascading every owned table).
+export async function deleteMyAccount() {
+  const { data, error } = await supabase.functions.invoke('delete-account', { body: {} });
+  if (error) return { error };
+  return { error: (data as any)?.error ? new Error((data as any).error) : null };
+}
+
+// ─── BARCODE ─────────────────────────────────────────────────────
+/** Look up a canonical drink by its scanned UPC/EAN. */
+export async function findSeltzerByBarcode(upc: string) {
+  const clean = upc.trim();
+  if (!clean) return { data: null, error: null };
+  const { data, error } = await supabase
+    .from('seltzers')
+    .select('*')
+    .eq('upc', clean)
+    .maybeSingle();
+  return { data, error };
+}
+
+/** Attach a barcode to a drink if it doesn't already have one. Best-effort. */
+export async function attachBarcodeToSeltzer(seltzerId: string, upc: string) {
+  const clean = upc.trim();
+  if (!clean) return { error: null };
+  const { error } = await supabase
+    .from('seltzers')
+    .update({ upc: clean })
+    .eq('id', seltzerId)
+    .is('upc', null);
+  return { error };
 }

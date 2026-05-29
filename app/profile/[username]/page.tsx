@@ -28,6 +28,7 @@ import {
   Star, Trophy, GitCompare, Award, Search, X, BarChart3,
 } from 'lucide-react';
 import { AchievementBadge } from '@/components/AchievementBadge';
+import { ContentMenu } from '@/components/ContentMenu';
 import { ACHIEVEMENTS } from '@/lib/achievements';
 
 interface ProfilePageProps {
@@ -421,6 +422,17 @@ export default function ProfilePage({ params }: ProfilePageProps) {
                 >
                   <GitCompare size={13} /> Compare
                 </Link>
+                <div className="btn-secondary justify-center" style={{ padding: '10px 12px' }}>
+                  <ContentMenu
+                    currentUserId={currentUserId ?? undefined}
+                    targetType="user"
+                    targetId={user.id}
+                    targetUserId={user.id}
+                    targetUsername={user.username}
+                    onBlocked={() => { showToast('User blocked'); window.location.href = '/'; }}
+                    size={15}
+                  />
+                </div>
               </>
             ) : null}
           </div>

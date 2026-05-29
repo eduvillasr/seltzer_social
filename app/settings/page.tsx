@@ -8,9 +8,10 @@ import { useRouter } from 'next/navigation';
 import { Navigation } from '@/components/Navigation';
 import { TopHeader } from '@/components/TopHeader';
 import { Avatar } from '@/components/Avatar';
+import { AvatarCropper } from '@/components/AvatarCropper';
 import { showToast } from '@/components/Toast';
-import { ensureUserProfile, supabase, uploadAvatar, updateUserProfile } from '@/lib/supabase';
-import { ArrowLeft, LogOut, Bell, Shield, HelpCircle, Info, ChevronRight, Droplets, Camera, Check, X, Upload, Sparkles, ImagePlus } from 'lucide-react';
+import { ensureUserProfile, supabase, uploadAvatar, updateUserProfile, deleteMyAccount } from '@/lib/supabase';
+import { ArrowLeft, LogOut, Bell, Shield, HelpCircle, Info, ChevronRight, Droplets, Camera, Check, X, Upload, Sparkles, ImagePlus, FileText, ScrollText, Trash2, AlertTriangle, ShieldAlert } from 'lucide-react';
 import { CURRENT_VERSION, hasUnseenRelease } from '@/lib/changelog';
 
 export default function SettingsPage() {
@@ -25,11 +26,14 @@ export default function SettingsPage() {
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  // staged avatar preview before commit
+  // raw file awaiting crop, then staged (cropped) preview before commit
+  const [cropFile, setCropFile] = useState<File | null>(null);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [pendingPreview, setPendingPreview] = useState<string>('');
   const [hasUnseen, setHasUnseen] = useState(false);
   const [canCurate, setCanCurate] = useState(false);
+  const [showDelete, setShowDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => { setHasUnseen(hasUnseenRelease()); }, []);
 
@@ -52,6 +56,8 @@ export default function SettingsPage() {
   // ─── avatar staging + commit ─────────────────────────────────
   function pickAvatar(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
+    // reset the input so re-picking the same file still fires onChange
+    e.target.value = '';
     if (!file) return;
     if (!file.type.startsWith('image/')) {
       showToast('Pick an image file', 'error');
@@ -61,9 +67,15 @@ export default function SettingsPage() {
       showToast('Image too large', 'error', 'Pick something under 5MB');
       return;
     }
-    setPendingFile(file);
+    // Open the cropper; staging happens once the user confirms the crop.
+    setCropFile(file);
+  }
+
+  function handleCropped(cropped: File) {
+    setCropFile(null);
+    setPendingFile(cropped);
     if (pendingPreview) URL.revokeObjectURL(pendingPreview);
-    setPendingPreview(URL.createObjectURL(file));
+    setPendingPreview(URL.createObjectURL(cropped));
   }
 
   function discardPending() {
@@ -108,6 +120,23 @@ export default function SettingsPage() {
     router.push('/');
   }
 
+  async function handleDeleteAccount() {
+    setDeleting(true);
+    // Detach this device from push before the account (and its tokens) vanish.
+    const { unregisterPushNotifications } = await import('@/lib/push');
+    await unregisterPushNotifications().catch(() => {});
+    const { error } = await deleteMyAccount();
+    if (error) {
+      setDeleting(false);
+      showToast('Could not delete account', 'error', error.message);
+      return;
+    }
+    await supabase.auth.signOut().catch(() => {});
+    const cache = await import('@/lib/cache');
+    cache.clearCache();
+    router.push('/');
+  }
+
   if (loading) {
     return (
       <>
@@ -123,6 +152,13 @@ export default function SettingsPage() {
 
   return (
     <>
+      {cropFile && (
+        <AvatarCropper
+          file={cropFile}
+          onCancel={() => setCropFile(null)}
+          onCropped={handleCropped}
+        />
+      )}
       <Navigation />
       <TopHeader title="Settings" back="/feed" />
       <main className="max-w-md mx-auto px-4 with-top-header pb-32">
@@ -257,6 +293,11 @@ export default function SettingsPage() {
                 label="Improve drink images"
                 href="/curator/queue"
               />
+              <SettingItem
+                icon={<ShieldAlert size={18} />}
+                label="Moderation reports"
+                href="/curator/reports"
+              />
             </div>
             <p className="text-[11px] mt-2 px-1" style={{ color: 'var(--text-muted)' }}>
               You can replace canonical drink photos. Every change is logged.
@@ -279,6 +320,15 @@ export default function SettingsPage() {
           </div>
         </div>
 
+        {/* Legal */}
+        <div className="mb-5">
+          <p className="text-xs uppercase tracking-wider mb-3 px-1" style={{ color: 'var(--text-muted)' }}>Legal</p>
+          <div className="rounded-2xl overflow-hidden" style={{ background: 'rgba(15, 20, 36, 0.6)', border: '1px solid rgba(255,255,255,0.06)' }}>
+            <SettingItem icon={<ScrollText size={18} />} label="Terms of Service" href="/terms" />
+            <SettingItem icon={<FileText size={18} />} label="Privacy Policy" href="/privacy" />
+          </div>
+        </div>
+
         <button
           onClick={handleLogout}
           className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl font-semibold text-sm transition-all"
@@ -287,8 +337,45 @@ export default function SettingsPage() {
           <LogOut size={16} /> Sign Out
         </button>
 
+        {/* Danger zone — permanent account deletion (App Store requirement) */}
+        <button
+          onClick={() => setShowDelete(true)}
+          className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl font-medium text-xs mt-3 transition-all"
+          style={{ background: 'transparent', border: '1px solid rgba(244, 63, 94, 0.18)', color: 'rgba(251,113,133,0.85)' }}
+        >
+          <Trash2 size={14} /> Delete account
+        </button>
+
         <p className="text-center text-xs mt-6" style={{ color: 'var(--text-muted)' }}>Seltzer Social v1.0</p>
       </main>
+
+      {showDelete && (
+        <div className="fixed inset-0 z-[90] flex items-center justify-center p-4" style={{ background: 'rgba(5,8,16,0.86)', backdropFilter: 'blur(6px)' }}>
+          <div className="w-full max-w-sm rounded-3xl p-5" style={{ background: 'var(--bg-secondary, #0f1424)', border: '1px solid rgba(244,63,94,0.25)' }}>
+            <div className="w-11 h-11 rounded-2xl flex items-center justify-center mb-3" style={{ background: 'rgba(244,63,94,0.12)' }}>
+              <AlertTriangle size={20} style={{ color: '#fb7185' }} />
+            </div>
+            <p className="text-base font-bold" style={{ color: 'var(--text-primary)' }}>Delete your account?</p>
+            <p className="text-sm mt-2" style={{ color: 'var(--text-secondary)' }}>
+              This permanently removes your profile, reviews, comments, follows, and photos.
+              This cannot be undone.
+            </p>
+            <div className="flex items-center gap-2 mt-5">
+              <button onClick={() => setShowDelete(false)} disabled={deleting} className="btn-secondary flex-1" style={{ padding: '10px' }}>
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteAccount}
+                disabled={deleting}
+                className="flex-1 flex items-center justify-center gap-2 rounded-xl font-semibold text-sm"
+                style={{ padding: '10px', background: '#e11d48', color: 'white' }}
+              >
+                <Trash2 size={14} /> {deleting ? 'Deleting…' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }
