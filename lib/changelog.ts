@@ -20,7 +20,7 @@ export interface Release {
   changes: ChangeEntry[];
 }
 
-export const CURRENT_VERSION = '0.15.2';
+export const CURRENT_VERSION = '0.16.0';
 
 /** localStorage key for "last version the user opened the changelog at". */
 export const SEEN_KEY = 'seltzer:last-seen-version';
@@ -32,6 +32,38 @@ export function hasUnseenRelease(): boolean {
 }
 
 export const RELEASES: Release[] = [
+  {
+    version: '0.16.0',
+    date: '2026-05-29',
+    headline: 'Scan a barcode, and a safer community',
+    changes: [
+      {
+        kind: 'new',
+        title: 'Scan a barcode to find or add a drink',
+        detail: 'On the Create screen, tap the scan button in the search box and point your camera at the barcode on a can or pack. If it\'s already in the catalog you jump straight to it; if it\'s new, we start an add for you and remember the barcode so the next person who scans it lands on the right drink instantly. (Barcode scanning runs on the installed app; in a browser it falls back to manual entry.)',
+      },
+      {
+        kind: 'new',
+        title: 'Report and block',
+        detail: 'Every review, comment, and profile now has a "⋯" menu to report content or block someone. Block and you stop seeing their reviews and comments across your feeds. Reports go to a moderation queue our curators work through.',
+      },
+      {
+        kind: 'new',
+        title: 'Delete your account in the app',
+        detail: 'Settings → Delete account permanently removes your profile, reviews, photos, and everything tied to your account. No email required — it\'s one confirm tap and it\'s gone.',
+      },
+      {
+        kind: 'new',
+        title: 'Privacy Policy & Terms',
+        detail: 'Readable Privacy Policy and Terms (with our zero-tolerance policy for objectionable content) now live at /privacy and /terms, linked from Settings. New here? You\'ll agree to them once before diving in.',
+      },
+      {
+        kind: 'fixed',
+        title: 'Your profile photo actually sticks now',
+        detail: 'A saved avatar could silently fail to persist while still looking uploaded — which made the "add a profile photo" tip keep coming back. Saving an avatar now confirms it landed, and tells you if something went wrong.',
+      },
+    ],
+  },
   {
     version: '0.15.2',
     date: '2026-05-18',

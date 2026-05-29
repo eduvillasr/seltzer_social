@@ -25,8 +25,10 @@ import {
 } from '@/lib/supabase';
 import {
   ArrowLeft, Calendar, Droplets, UserPlus, UserMinus, List, Settings, ListPlus,
-  Star, Trophy, GitCompare, Award, Search, X, BarChart3,
+  Star, Trophy, GitCompare, Award, Search, X, BarChart3, LayoutGrid,
 } from 'lucide-react';
+import { StarRating } from '@/components/StarRating';
+import { reviewHeadline, reviewDrinkLabel } from '@/lib/reviewDisplay';
 import { AchievementBadge } from '@/components/AchievementBadge';
 import { ContentMenu } from '@/components/ContentMenu';
 import { ACHIEVEMENTS } from '@/lib/achievements';
@@ -58,6 +60,8 @@ export default function ProfilePage({ params }: ProfilePageProps) {
   const [followingCount, setFollowingCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState<'lists' | 'reviews'>('reviews');
+  // Reviews tab layout: full list cards vs. a compact 2-up grid you can scan.
+  const [reviewLayout, setReviewLayout] = useState<'list' | 'grid'>('list');
   // Brand/drink-name filter on the Reviews tab. Empty string = no filter.
   // Initial value may be seeded from a ?brand= query param (used when
   // jumping in from the stats page brand explorer).
@@ -728,14 +732,49 @@ export default function ProfilePage({ params }: ProfilePageProps) {
               </div>
             ) : (
               <>
-                {reviewQuery && (
-                  <p className="text-[11px] px-1" style={{ color: 'var(--text-muted)' }}>
-                    {filteredReviews.length} of {reviews.length} reviews
+                <div className="flex items-center justify-between px-1">
+                  <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
+                    {reviewQuery
+                      ? `${filteredReviews.length} of ${reviews.length} reviews`
+                      : `${reviews.length} ${reviews.length === 1 ? 'review' : 'reviews'}`}
                   </p>
-                )}
-                <div className="space-y-4 stagger-children">
-                  {filteredReviews.map((review) => (<ReviewCard key={review.id} review={review} currentUserId={currentUserId || undefined} />))}
+                  <div className="inline-flex rounded-full p-0.5" style={{ background: 'rgba(10,14,26,0.5)', border: '1px solid var(--border-subtle)' }}>
+                    <button
+                      onClick={() => setReviewLayout('list')}
+                      className="w-7 h-7 rounded-full flex items-center justify-center transition-colors"
+                      style={reviewLayout === 'list'
+                        ? { background: 'var(--cyan-400)', color: '#0a0e1a' }
+                        : { background: 'transparent', color: 'var(--text-muted)' }}
+                      aria-label="List view"
+                      aria-pressed={reviewLayout === 'list'}
+                      title="List view"
+                    >
+                      <List size={14} />
+                    </button>
+                    <button
+                      onClick={() => setReviewLayout('grid')}
+                      className="w-7 h-7 rounded-full flex items-center justify-center transition-colors"
+                      style={reviewLayout === 'grid'
+                        ? { background: 'var(--cyan-400)', color: '#0a0e1a' }
+                        : { background: 'transparent', color: 'var(--text-muted)' }}
+                      aria-label="Grid view"
+                      aria-pressed={reviewLayout === 'grid'}
+                      title="Grid view"
+                    >
+                      <LayoutGrid size={14} />
+                    </button>
+                  </div>
                 </div>
+
+                {reviewLayout === 'grid' ? (
+                  <div className="grid grid-cols-2 gap-3 stagger-children">
+                    {filteredReviews.map((review) => (<ReviewGridTile key={review.id} review={review} />))}
+                  </div>
+                ) : (
+                  <div className="space-y-4 stagger-children">
+                    {filteredReviews.map((review) => (<ReviewCard key={review.id} review={review} currentUserId={currentUserId || undefined} />))}
+                  </div>
+                )}
               </>
             )}
           </div>
@@ -751,6 +790,40 @@ function Stat({ label, value, color }: { label: string; value: number; color: st
       <p className="text-base font-extrabold" style={{ color }}>{value}</p>
       <p className="text-[10px] mt-0.5" style={{ color: 'var(--text-muted)' }}>{label}</p>
     </div>
+  );
+}
+
+// Compact review tile for the Reviews-tab grid layout. Tapping it opens the
+// full review, so it stays a lightweight, link-only card (no like/comment
+// actions — those live on the list view and the review page).
+function ReviewGridTile({ review }: { review: Review }) {
+  const img = review.image_url || review.seltzer?.image_url || null;
+  const label = reviewDrinkLabel(review);
+  const headline = reviewHeadline(review);
+  return (
+    <Link
+      href={`/review/${review.id}`}
+      className="rounded-2xl overflow-hidden transition-transform duration-300 hover:scale-[1.02] flex flex-col"
+      style={{ background: 'rgba(15,20,36,0.5)', border: '1px solid var(--border-subtle)' }}
+    >
+      <div className="relative">
+        <CanImage src={img} alt={review.seltzer_name} className="w-full aspect-square" />
+        <div
+          className="absolute top-2 right-2 flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold"
+          style={{ background: 'rgba(5,8,16,0.78)', color: '#fff', backdropFilter: 'blur(4px)' }}
+        >
+          <Star size={11} className="fill-current" style={{ color: 'var(--amber-400)' }} />
+          {review.rating.toFixed(1)}
+        </div>
+      </div>
+      <div className="p-2.5 flex-1 min-w-0">
+        <p className="text-xs font-semibold truncate" style={{ color: 'var(--text-primary)' }}>{headline}</p>
+        {label && label !== headline && (
+          <p className="text-[10px] truncate mt-0.5" style={{ color: 'var(--text-muted)' }}>{label}</p>
+        )}
+        <div className="mt-1.5"><StarRating value={review.rating} size={11} /></div>
+      </div>
+    </Link>
   );
 }
 

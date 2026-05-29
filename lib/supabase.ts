@@ -180,8 +180,16 @@ export async function uploadAvatar(userId: string, file: File): Promise<{ url: s
 
   const { data: urlData } = supabase.storage.from(bucket).getPublicUrl(data.path);
 
-  // Update user profile
-  await supabase.from('users').update({ avatar_url: urlData.publicUrl }).eq('id', userId);
+  // Persist to the profile. This column is the single source of truth for the
+  // avatar everywhere (nav, profile, onboarding checklist), so a failed write
+  // must surface as a failure — otherwise the UI shows the photo from local
+  // state while the DB stays null, and prompts like "add a profile photo" keep
+  // reappearing on reload.
+  const { error: updateError } = await supabase
+    .from('users')
+    .update({ avatar_url: urlData.publicUrl })
+    .eq('id', userId);
+  if (updateError) return { url: null, error: updateError };
 
   return { url: urlData.publicUrl, error: null };
 }
