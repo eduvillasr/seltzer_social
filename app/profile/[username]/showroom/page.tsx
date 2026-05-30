@@ -17,7 +17,7 @@ import { ShowroomCase } from '@/components/ShowroomCase';
 import { TrophyMedallion } from '@/components/Trophy';
 import { showToast } from '@/components/Toast';
 import { getUserByUsername, supabase, getAchievementStats, setShowroomLayout } from '@/lib/supabase';
-import { evaluateAchievements, type AchievementStats } from '@/lib/achievements';
+import { evaluateAchievements, type AchievementStats, type Achievement } from '@/lib/achievements';
 import { evaluateTrophies, TROPHIES, RARITY_META } from '@/lib/trophies';
 import { FOUNDERS, BETA_TESTERS } from '@/components/FounderBadge';
 import { haptic } from '@/lib/haptics';
@@ -28,7 +28,8 @@ export default function ShowroomPage({ params }: { params: { username: string } 
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [stats, setStats] = useState<AchievementStats | null>(null);
   const [unlockedIds, setUnlockedIds] = useState<Set<string>>(new Set());
-  const [layout, setLayout] = useState<Record<string, string>>({});
+  const [achUnlocked, setAchUnlocked] = useState<Achievement[]>([]);
+  const [layout, setLayout] = useState<Record<string, any>>({});
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
 
@@ -49,9 +50,16 @@ export default function ShowroomPage({ params }: { params: { username: string } 
       target.id, FOUNDERS.has(target.username), BETA_TESTERS.has(target.username)
     );
     setStats(s);
-    setUnlockedIds(new Set(evaluateAchievements(s).unlocked.map((a) => a.id)));
+    const ev = evaluateAchievements(s);
+    setAchUnlocked(ev.unlocked);
+    setUnlockedIds(new Set(ev.unlocked.map((a) => a.id)));
     setLoading(false);
   }
+
+  // Normalize the saved layout. New shape: { podiums, wall }. Legacy shape was a
+  // flat { slotId: trophyId } map — treat that as podiums.
+  const initialPodiums: Record<string, string> = (layout?.podiums ?? (layout?.wall ? {} : layout)) || {};
+  const initialWall: Record<string, string> = layout?.wall ?? {};
 
   const result = useMemo(() => {
     if (!stats) return null;
@@ -69,7 +77,7 @@ export default function ShowroomPage({ params }: { params: { username: string } 
   const total = TROPHIES.length;
   const isOwn = !!currentUserId && currentUserId === user.id;
 
-  async function handleSave(next: Record<string, string>) {
+  async function handleSave(next: { podiums: Record<string, string>; wall: Record<string, string> }) {
     if (!user) return;
     const { error } = await setShowroomLayout(user.id, next);
     if (error) {
@@ -126,17 +134,20 @@ export default function ShowroomPage({ params }: { params: { username: string } 
           </div>
         </div>
 
-        {isOwn && earnedCount > 0 && (
+        {isOwn && (earnedCount > 0 || achUnlocked.length > 0) && (
           <p className="text-xs flex items-center gap-1.5" style={{ color: 'var(--text-secondary)' }}>
             <Hand size={12} style={{ color: 'var(--cyan-400)' }} />
-            Drag your trophies around the shelves, then hit Save.
+            Drag trophies onto podiums and achievements onto the wall, then Save.
           </p>
         )}
 
-        {/* The physical case */}
+        {/* The museum room */}
         <ShowroomCase
-          earned={result.earned}
-          initialLayout={layout}
+          earnedTrophies={result.earned}
+          earnedAchievements={achUnlocked}
+          initialPodiums={initialPodiums}
+          initialWall={initialWall}
+          preferredWall={(user as any).showcase_achievements ?? []}
           isOwner={isOwn}
           onSave={handleSave}
         />

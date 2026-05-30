@@ -18,6 +18,9 @@ import { AchievementStats, ACHIEVEMENTS } from './achievements';
 
 export type TrophyRarity = 'rare' | 'epic' | 'legendary' | 'mythic';
 
+// The physical silhouette of the trophy in the showroom.
+export type TrophyShape = 'cup' | 'star' | 'obelisk';
+
 // Rarity controls the shine: color, glow strength, and the metallic gradient
 // stops used by the Trophy component. Mythic gets a multi-stop iridescent sweep.
 export const RARITY_META: Record<TrophyRarity, {
@@ -42,6 +45,8 @@ export interface Trophy {
   description: string;      // how it's earned
   rarity: TrophyRarity;
   icon: LucideIcon;
+  /** Physical trophy silhouette (defaults to 'cup'). */
+  shape?: TrophyShape;
   /** Marks a one-of-a-kind prestige trophy — gets extra shine + sparkles. */
   special?: boolean;
   evaluate: (s: AchievementStats, unlockedIds: Set<string>) => boolean;
@@ -67,6 +72,7 @@ export const TROPHIES: Trophy[] = [
     description: 'Write 100 reviews',
     rarity: 'rare',
     icon: TrophyIcon,
+    shape: 'cup',
     evaluate: (s) => s.reviewCount >= 100,
     progress: (s) => [Math.min(s.reviewCount, 100), 100],
   },
@@ -77,6 +83,7 @@ export const TROPHIES: Trophy[] = [
     description: 'Review 25 different brands',
     rarity: 'epic',
     icon: Compass,
+    shape: 'obelisk',
     evaluate: (s) => s.uniqueBrands >= 25,
     progress: (s) => [Math.min(s.uniqueBrands, 25), 25],
   },
@@ -87,6 +94,7 @@ export const TROPHIES: Trophy[] = [
     description: 'Earn 500 likes across your reviews',
     rarity: 'legendary',
     icon: Heart,
+    shape: 'star',
     evaluate: (s) => s.totalLikesReceived >= 500,
     progress: (s) => [Math.min(s.totalLikesReceived, 500), 500],
   },
@@ -99,6 +107,7 @@ export const TROPHIES: Trophy[] = [
     description: 'Joined as a founder or beta tester in the pre-release era',
     rarity: 'mythic',
     icon: Rocket,
+    shape: 'star',
     special: true,
     evaluate: (s) => s.isFounder || s.isBetaTester,
   },
@@ -111,6 +120,7 @@ export const TROPHIES: Trophy[] = [
     description: 'Your shared tier lists reached 100 subscribers',
     rarity: 'legendary',
     icon: HeartHandshake,
+    shape: 'cup',
     evaluate: (s) => s.tierListSubscribers >= 100,
     progress: (s) => [Math.min(s.tierListSubscribers, 100), 100],
   },
@@ -121,6 +131,7 @@ export const TROPHIES: Trophy[] = [
     description: '50+ list subscribers, 15+ approved suggestions, and 5+ tier lists',
     rarity: 'mythic',
     icon: Award,
+    shape: 'cup',
     evaluate: (s) => s.tierListSubscribers >= 50 && s.approvedSuggestions >= 15 && s.tierListsAsMember >= 5,
     progress: (s) => [
       countMet([s.tierListSubscribers >= 50, s.approvedSuggestions >= 15, s.tierListsAsMember >= 5]),
@@ -136,6 +147,7 @@ export const TROPHIES: Trophy[] = [
     description: 'Refer 5 people who join Seltzer Social',
     rarity: 'epic',
     icon: Megaphone,
+    shape: 'star',
     evaluate: (s) => s.referralsMade >= 5,
     progress: (s) => [Math.min(s.referralsMade, 5), 5],
   },
@@ -148,6 +160,7 @@ export const TROPHIES: Trophy[] = [
     description: 'Unlock every achievement',
     rarity: 'mythic',
     icon: Gem,
+    shape: 'obelisk',
     evaluate: (_s, ids) => ids.size >= TOTAL_ACHIEVEMENTS,
     progress: (_s, ids) => [Math.min(ids.size, TOTAL_ACHIEVEMENTS), TOTAL_ACHIEVEMENTS],
   },

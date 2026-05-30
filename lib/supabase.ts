@@ -762,11 +762,12 @@ export async function setShowcaseAchievements(userId: string, ids: string[]) {
 }
 
 /**
- * Persist a user's trophy-showroom arrangement: a map of pedestal slot id →
- * trophy id. Stored as jsonb on users.showroom_layout (see
- * supabase_showroom_layout.sql). Returns the update error (or null).
+ * Persist a user's showroom arrangement. Shape:
+ *   { podiums: { [slotId]: trophyId }, wall: { [frameId]: achievementId } }
+ * Stored as jsonb on users.showroom_layout (see supabase_showroom_layout.sql).
+ * Returns the update error (or null).
  */
-export async function setShowroomLayout(userId: string, layout: Record<string, string>) {
+export async function setShowroomLayout(userId: string, layout: Record<string, any>) {
   const { error } = await supabase
     .from('users')
     .update({ showroom_layout: layout })
