@@ -11,7 +11,7 @@
 // evaluate(stats, unlockedIds) returning true when earned.
 
 import {
-  Trophy as TrophyIcon, Compass, Heart, Crown, HeartHandshake, Award, Megaphone, Gem,
+  Trophy as TrophyIcon, Compass, Heart, HeartHandshake, Award, Megaphone, Gem, Rocket,
   type LucideIcon,
 } from 'lucide-react';
 import { AchievementStats, ACHIEVEMENTS } from './achievements';
@@ -42,6 +42,8 @@ export interface Trophy {
   description: string;      // how it's earned
   rarity: TrophyRarity;
   icon: LucideIcon;
+  /** Marks a one-of-a-kind prestige trophy — gets extra shine + sparkles. */
+  special?: boolean;
   evaluate: (s: AchievementStats, unlockedIds: Set<string>) => boolean;
   /** Optional progress getter — returns [current, target]. */
   progress?: (s: AchievementStats, unlockedIds: Set<string>) => [number, number];
@@ -88,15 +90,17 @@ export const TROPHIES: Trophy[] = [
     evaluate: (s) => s.totalLikesReceived >= 500,
     progress: (s) => [Math.min(s.totalLikesReceived, 500), 500],
   },
+  // The one-of-a-kind pre-release trophy — every founder and beta tester gets
+  // the exact same trophy for being here before launch. Extra shine + sparkles.
   {
-    id: 'cult_leader',
-    name: 'Cult Leader',
-    tagline: 'A thousand strong.',
-    description: 'Reach 1,000 followers',
+    id: 'pioneer',
+    name: 'Pioneer',
+    tagline: 'Here before the fizz settled.',
+    description: 'Joined as a founder or beta tester in the pre-release era',
     rarity: 'mythic',
-    icon: Crown,
-    evaluate: (s) => s.followers >= 1000,
-    progress: (s) => [Math.min(s.followers, 1000), 1000],
+    icon: Rocket,
+    special: true,
+    evaluate: (s) => s.isFounder || s.isBetaTester,
   },
 
   // Community — only earned by being part of the community (shared tier lists).

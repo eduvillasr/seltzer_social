@@ -40,7 +40,7 @@ export const RELEASES: Release[] = [
       {
         kind: 'new',
         title: 'Trophy Showroom',
-        detail: 'Every profile now has a Trophy Showroom — a physical display cabinet where you drag your trophies onto glass shelves and arrange them however you like, then save. Visitors see your arrangement. Trophies are a small, rare set above achievements (only 8 to chase) across four rarities — earn them by reviewing, getting likes, building a following, being part of the community, and referring friends. Open it from any profile via the gold "Trophy Showroom" card.',
+        detail: 'Every profile now has a Trophy Showroom — a museum gallery where your trophies stand tall on spotlit podiums. Drag them between podiums to arrange your exhibit however you like, then save; visitors see your arrangement. Trophies are a small, rare set above achievements (just 8 to chase) across four rarities — earn them by reviewing, getting likes, being part of the community, and referring friends. Founders and beta testers all share a one-of-a-kind, extra-shiny "Pioneer" trophy for being here before launch. Open it from any profile via the gold "Trophy Showroom" card.',
       },
       {
         kind: 'new',
