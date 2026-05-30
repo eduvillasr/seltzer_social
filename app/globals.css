@@ -410,3 +410,17 @@ a { color:inherit; text-decoration:none; }
   background: rgba(255, 240, 210, 0.9);
   animation: dustDrift linear infinite;
 }
+
+/* Fizz bubbles rising off a seltzer-can trophy */
+@keyframes fizzRise {
+  0%   { transform: translateY(0) scale(0.7); opacity: 0; }
+  20%  { opacity: 0.9; }
+  80%  { opacity: 0.6; }
+  100% { transform: translateY(-34px) scale(1.05); opacity: 0; }
+}
+.fizz-bubble {
+  position: absolute; border-radius: 50%;
+  background: rgba(255, 246, 220, 0.95);
+  box-shadow: 0 0 4px rgba(255, 240, 200, 0.7);
+  animation: fizzRise ease-in-out infinite;
+}

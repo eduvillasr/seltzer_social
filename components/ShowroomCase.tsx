@@ -14,7 +14,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Trophy, RARITY_META } from '@/lib/trophies';
-import { Achievement } from '@/lib/achievements';
+import { Achievement, TIER_META } from '@/lib/achievements';
 import { TrophyArt } from './TrophyArt';
 import { AchievementBadge } from './AchievementBadge';
 import { haptic } from '@/lib/haptics';
@@ -254,7 +254,12 @@ export function ShowroomCase({
             const ach = wall[slot] ? achById[wall[slot]] : null;
             const pad = hero ? 5 : 3;
             return (
-              <div key={slot} className="absolute" style={pos}>
+              <div key={slot} className="absolute flex flex-col items-center" style={pos}>
+                {ach && (
+                  <p className="text-[7px] font-extrabold uppercase tracking-wider mb-0.5" style={{ color: '#e9c873', textShadow: '0 1px 2px rgba(0,0,0,0.7)' }}>
+                    {TIER_META[ach.tier].label}
+                  </p>
+                )}
                 <div
                   ref={(el) => { frameRefs.current[slot] = el; }}
                   style={{ padding: pad, borderRadius: 4, background: ach ? 'linear-gradient(160deg, #f0d28a, #8a6a2c)' : 'rgba(233,200,122,0.22)', boxShadow: ach ? `0 5px 12px rgba(0,0,0,0.5)${hero ? ', 0 0 16px rgba(233,200,122,0.4)' : ''}` : 'none' }}
@@ -315,14 +320,14 @@ export function ShowroomCase({
             </svg>
           </div>
 
-          {/* topiary (left) + decorative urn (right) */}
-          <div className="absolute pointer-events-none" style={{ left: 8, bottom: 6, filter: 'drop-shadow(0 5px 7px rgba(0,0,0,0.5))' }}>
+          {/* topiary (left) + decorative urn (right) — front outer corners, above podiums */}
+          <div className="absolute pointer-events-none" style={{ left: 2, bottom: 4, zIndex: 30, filter: 'drop-shadow(0 5px 7px rgba(0,0,0,0.5))' }}>
             <div style={{ width: 26, height: 26, borderRadius: '50%', margin: '0 auto', background: 'radial-gradient(circle at 35% 28%, #5cc463, #2e7d32)', boxShadow: 'inset -3px -3px 6px rgba(0,0,0,0.3)' }} />
             <div style={{ width: 34, height: 32, borderRadius: '50%', margin: '-7px auto 0', background: 'radial-gradient(circle at 35% 28%, #5cc463, #2e7d32)', boxShadow: 'inset -3px -3px 6px rgba(0,0,0,0.3)' }} />
             <div style={{ width: 5, height: 9, margin: '0 auto', background: '#6d4c2f' }} />
             <div style={{ width: 26, height: 15, margin: '0 auto', background: 'linear-gradient(180deg, #cf8a44, #8a4f23)', clipPath: 'polygon(10% 0,90% 0,78% 100%,22% 100%)' }} />
           </div>
-          <div className="absolute pointer-events-none" style={{ right: 10, bottom: 6, filter: 'drop-shadow(0 5px 7px rgba(0,0,0,0.5))' }}>
+          <div className="absolute pointer-events-none" style={{ right: 2, bottom: 4, zIndex: 30, filter: 'drop-shadow(0 5px 7px rgba(0,0,0,0.5))' }}>
             <div style={{ width: 14, height: 6, margin: '0 auto 1px', borderRadius: 3, background: '#7a5a28' }} />
             <div style={{ width: 36, height: 46, background: 'linear-gradient(180deg, #d2a85e, #7a5a28)', borderRadius: '50% 50% 32% 32% / 38% 38% 62% 62%', border: '2px solid #5e451c', boxShadow: 'inset -4px -4px 8px rgba(0,0,0,0.3)' }} />
             <div style={{ width: 22, height: 6, margin: '-2px auto 0', borderRadius: 2, background: '#7a5a28' }} />
@@ -378,6 +383,12 @@ export function ShowroomCase({
                 {/* deep shadow under the podium */}
                 <div className="absolute pointer-events-none" style={{ bottom: -14, left: '50%', transform: 'translateX(-50%)', width: capW + (hero ? 40 : 18), height: 16, borderRadius: '50%', background: 'radial-gradient(ellipse at center, rgba(0,0,0,0.5), transparent 72%)', filter: 'blur(3px)' }} />
                 {hero && <div className="absolute pointer-events-none" style={{ bottom: -12, left: '50%', transform: 'translateX(-50%)', width: capW + 40, height: 18, borderRadius: '50%', background: 'radial-gradient(ellipse at center, rgba(233,200,122,0.3), transparent 70%)' }} />}
+                {/* faint floor reflection of the hero trophy */}
+                {hero && trophy && (
+                  <div className="absolute pointer-events-none" style={{ top: '100%', left: '50%', transform: 'translateX(-50%) scaleY(-1)', opacity: 0.13, filter: 'blur(1px)', WebkitMaskImage: 'linear-gradient(to bottom, #000, transparent 62%)', maskImage: 'linear-gradient(to bottom, #000, transparent 62%)' }}>
+                    <TrophyArt trophy={trophy} earned height={Math.round(trophyH * 0.58)} />
+                  </div>
+                )}
               </div>
             );
           })}
