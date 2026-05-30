@@ -761,6 +761,19 @@ export async function setShowcaseAchievements(userId: string, ids: string[]) {
   return { data, error };
 }
 
+/**
+ * Persist a user's trophy-showroom arrangement: a map of pedestal slot id →
+ * trophy id. Stored as jsonb on users.showroom_layout (see
+ * supabase_showroom_layout.sql). Returns the update error (or null).
+ */
+export async function setShowroomLayout(userId: string, layout: Record<string, string>) {
+  const { error } = await supabase
+    .from('users')
+    .update({ showroom_layout: layout })
+    .eq('id', userId);
+  return { error };
+}
+
 // ─── DISCOVER / TRENDING ─────────────────────────────────────────
 // All client-side aggregation — small dataset for beta, no need for a view yet.
 

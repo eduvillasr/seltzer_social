@@ -1,25 +1,24 @@
 // app/profile/[username]/showroom/page.tsx
 //
-// Public trophy showroom for any user. Trophies are computed from the same
-// stats as achievements (see lib/trophies), so anyone can view anyone's
-// showroom — no ownership required. Earned trophies shine; locked ones show as
-// silhouettes with progress to entice. The rarest earned trophy is featured as
-// a centerpiece.
+// Public trophy showroom for any user — a physical, draggable display case.
+// The owner arranges their earned trophies on the shelves (drag + Save);
+// visitors see the saved arrangement. Trophies compute from the same stats as
+// achievements, so any visitor can render anyone's showroom. The arrangement
+// persists to users.showroom_layout (see supabase_showroom_layout.sql).
 
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Sparkles, Share2 } from 'lucide-react';
+import { Sparkles, Share2, Hand } from 'lucide-react';
 import { Navigation } from '@/components/Navigation';
 import { BackHeader } from '@/components/BackHeader';
 import { CanLoader } from '@/components/CanLoader';
-import { TrophyCard, TrophyMedallion } from '@/components/Trophy';
+import { ShowroomCase } from '@/components/ShowroomCase';
+import { TrophyMedallion } from '@/components/Trophy';
 import { showToast } from '@/components/Toast';
-import { getUserByUsername, supabase, getAchievementStats } from '@/lib/supabase';
+import { getUserByUsername, supabase, getAchievementStats, setShowroomLayout } from '@/lib/supabase';
 import { evaluateAchievements, type AchievementStats } from '@/lib/achievements';
-import {
-  TROPHIES, evaluateTrophies, RARITY_META, RARITY_ORDER, type Trophy, type TrophyRarity,
-} from '@/lib/trophies';
+import { evaluateTrophies, TROPHIES, RARITY_META } from '@/lib/trophies';
 import { FOUNDERS, BETA_TESTERS } from '@/components/FounderBadge';
 import { haptic } from '@/lib/haptics';
 import { User } from '@/types';
@@ -29,6 +28,7 @@ export default function ShowroomPage({ params }: { params: { username: string } 
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [stats, setStats] = useState<AchievementStats | null>(null);
   const [unlockedIds, setUnlockedIds] = useState<Set<string>>(new Set());
+  const [layout, setLayout] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
 
@@ -44,6 +44,7 @@ export default function ShowroomPage({ params }: { params: { username: string } 
     if (!target) { setNotFound(true); setLoading(false); return; }
 
     setUser(target as User);
+    setLayout(((target as any).showroom_layout as Record<string, string>) || {});
     const s = await getAchievementStats(
       target.id, FOUNDERS.has(target.username), BETA_TESTERS.has(target.username)
     );
@@ -64,14 +65,20 @@ export default function ShowroomPage({ params }: { params: { username: string } 
     return (<><Navigation /><main className="max-w-md mx-auto px-4 pt-20 pb-32 text-center"><p style={{ color: 'var(--text-secondary)' }}>User not found</p></main></>);
   }
 
-  const earnedSet = new Set(result.earned.map((t) => t.id));
   const earnedCount = result.earned.length;
   const total = TROPHIES.length;
   const isOwn = !!currentUserId && currentUserId === user.id;
 
-  // Rarest earned trophy = centerpiece.
-  const centerpiece: Trophy | null =
-    RARITY_ORDER.map((rar) => result.earned.find((t) => t.rarity === rar)).find(Boolean) ?? null;
+  async function handleSave(next: Record<string, string>) {
+    if (!user) return;
+    const { error } = await setShowroomLayout(user.id, next);
+    if (error) {
+      showToast('Could not save showroom', 'error', error.message);
+      return;
+    }
+    setLayout(next);
+    showToast('Showroom saved 🏆', 'success');
+  }
 
   async function handleShare() {
     const url = `${window.location.origin}/profile/${params.username}/showroom`;
@@ -85,103 +92,96 @@ export default function ShowroomPage({ params }: { params: { username: string } 
   return (
     <>
       <Navigation />
-      <main className="max-w-md mx-auto px-4 pt-12 pb-32 space-y-5">
+      <main className="max-w-md mx-auto px-4 pt-12 pb-32 space-y-4">
         <BackHeader href={`/profile/${params.username}`} label="Back to profile" />
 
-        {/* Hero / centerpiece */}
-        <div
-          className="relative rounded-3xl overflow-hidden p-6 text-center animate-fade-in-up"
-          style={{
-            background: 'radial-gradient(ellipse 90% 70% at 50% 0%, rgba(167,139,250,0.16), transparent 60%), linear-gradient(160deg, rgba(34,211,238,0.06), rgba(15,20,36,0.5))',
-            border: '1px solid var(--border-subtle)',
-          }}
-        >
-          <div className="flex items-center justify-center gap-2 mb-3">
-            <Sparkles size={12} style={{ color: 'var(--violet-400)' }} />
-            <p className="text-[10px] font-bold uppercase tracking-[0.22em]" style={{ color: 'var(--violet-400)' }}>
-              Trophy Showroom
-            </p>
+        {/* Header */}
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <div className="flex items-center gap-1.5">
+              <Sparkles size={12} style={{ color: 'var(--violet-400)' }} />
+              <p className="text-[10px] font-bold uppercase tracking-[0.22em]" style={{ color: 'var(--violet-400)' }}>
+                Trophy Showroom
+              </p>
+            </div>
+            <h1 className="text-xl font-extrabold mt-0.5 truncate" style={{ fontFamily: 'var(--font-display)' }}>
+              @{user.username}
+            </h1>
           </div>
-
-          {centerpiece ? (
-            <div className="flex flex-col items-center">
-              <div className="badge-reveal">
-                <TrophyMedallion trophy={centerpiece} earned size={104} />
-              </div>
-              <p className="text-lg font-extrabold mt-3" style={{ fontFamily: 'var(--font-display)', color: 'var(--text-primary)' }}>
-                {centerpiece.name}
-              </p>
-              <p className="text-xs mt-0.5" style={{ color: RARITY_META[centerpiece.rarity].color }}>
-                {RARITY_META[centerpiece.rarity].label} · @{user.username}
-              </p>
-            </div>
-          ) : (
-            <div className="flex flex-col items-center py-2">
-              <TrophyMedallion trophy={TROPHIES[0]} earned={false} size={88} />
-              <p className="text-sm font-bold mt-3" style={{ color: 'var(--text-secondary)' }}>
-                {isOwn ? 'Your shelf is waiting' : `@${user.username}'s shelf is empty`}
-              </p>
-              <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
-                {isOwn ? 'Trophies are rare — keep reviewing to earn your first.' : 'No trophies earned yet.'}
-              </p>
-            </div>
-          )}
-
-          <div className="flex items-center justify-center gap-2 mt-4">
+          <div className="flex items-center gap-2 flex-shrink-0">
             <span
-              className="text-sm font-extrabold px-3 py-1 rounded-full"
+              className="text-xs font-extrabold px-2.5 py-1 rounded-full"
               style={{ background: 'rgba(167,139,250,0.14)', color: 'var(--violet-400)' }}
             >
-              {earnedCount} / {total} trophies
+              {earnedCount}/{total}
             </span>
             <button
               onClick={() => { haptic('light'); handleShare(); }}
               className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-white/5 transition-colors"
               style={{ border: '1px solid var(--border-subtle)', color: 'var(--text-tertiary)' }}
               aria-label="Share showroom"
-              title="Share this showroom"
             >
               <Share2 size={14} />
             </button>
           </div>
         </div>
 
-        {/* Rarity legend */}
-        <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1.5">
-          {RARITY_ORDER.map((rar) => (
-            <span key={rar} className="inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide" style={{ color: RARITY_META[rar].color }}>
-              <span className="w-2 h-2 rounded-full" style={{ background: RARITY_META[rar].color, boxShadow: `0 0 6px ${RARITY_META[rar].color}` }} />
-              {RARITY_META[rar].label}
-            </span>
-          ))}
-        </div>
+        {isOwn && earnedCount > 0 && (
+          <p className="text-xs flex items-center gap-1.5" style={{ color: 'var(--text-secondary)' }}>
+            <Hand size={12} style={{ color: 'var(--cyan-400)' }} />
+            Drag your trophies around the shelves, then hit Save.
+          </p>
+        )}
 
-        {/* Trophies grouped by rarity (rarest first) */}
-        {RARITY_ORDER.map((rar: TrophyRarity) => {
-          const inRarity = TROPHIES.filter((t) => t.rarity === rar);
-          if (inRarity.length === 0) return null;
-          const meta = RARITY_META[rar];
-          const earnedInRarity = inRarity.filter((t) => earnedSet.has(t.id)).length;
-          return (
-            <section key={rar} className="space-y-3">
-              <div className="flex items-center justify-between px-1">
-                <h2 className="text-xs font-bold uppercase tracking-[0.18em]" style={{ color: meta.color }}>
-                  {meta.label}
-                </h2>
-                <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
-                  {earnedInRarity} / {inRarity.length}
-                </span>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                {inRarity.map((t) => {
-                  const earned = earnedSet.has(t.id);
-                  const progress = !earned ? t.progress?.(stats!, unlockedIds) : undefined;
-                  return <TrophyCard key={t.id} trophy={t} earned={earned} progress={progress} />;
-                })}
-              </div>
-            </section>
-          );
-        })}
+        {/* The physical case */}
+        <ShowroomCase
+          earned={result.earned}
+          initialLayout={layout}
+          isOwner={isOwn}
+          onSave={handleSave}
+        />
+
+        {/* Still to earn — compact, not a grid (keeps the case the star) */}
+        {result.locked.length > 0 && (
+          <div className="pt-2">
+            <p className="text-xs font-bold uppercase tracking-[0.18em] mb-2 px-1" style={{ color: 'var(--text-muted)' }}>
+              Still to earn
+            </p>
+            <div className="space-y-2">
+              {result.locked.map((t) => {
+                const r = RARITY_META[t.rarity];
+                const prog = t.progress?.(stats!, unlockedIds);
+                const pct = prog && prog[1] > 0 ? Math.min(100, (prog[0] / prog[1]) * 100) : 0;
+                return (
+                  <div
+                    key={t.id}
+                    className="flex items-center gap-3 rounded-2xl p-2.5"
+                    style={{ background: 'rgba(15,20,36,0.45)', border: '1px solid var(--border-subtle)' }}
+                  >
+                    <TrophyMedallion trophy={t} earned={false} size={40} />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-bold truncate" style={{ color: 'var(--text-secondary)' }}>{t.name}</p>
+                        <span className="text-[9px] font-bold uppercase tracking-wide flex-shrink-0" style={{ color: r.color }}>{r.label}</span>
+                      </div>
+                      <p className="text-[11px] truncate" style={{ color: 'var(--text-muted)' }}>{t.description}</p>
+                      {prog && (
+                        <div className="mt-1.5 h-1 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.06)' }}>
+                          <div className="h-full rounded-full" style={{ width: `${pct}%`, background: `linear-gradient(90deg, ${r.gradient.join(', ')})` }} />
+                        </div>
+                      )}
+                    </div>
+                    {prog && (
+                      <span className="text-[10px] tabular-nums flex-shrink-0" style={{ color: 'var(--text-muted)' }}>
+                        {prog[0].toLocaleString()}/{prog[1].toLocaleString()}
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </main>
     </>
   );

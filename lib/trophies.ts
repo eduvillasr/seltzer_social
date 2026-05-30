@@ -11,8 +11,7 @@
 // evaluate(stats, unlockedIds) returning true when earned.
 
 import {
-  Trophy as TrophyIcon, Compass, Heart, Sparkles, Crown, Medal, Award, Gem,
-  Target, ListChecks, Users, Vote, CheckCheck, HeartHandshake, UserPlus, Megaphone,
+  Trophy as TrophyIcon, Compass, Heart, Crown, HeartHandshake, Award, Megaphone, Gem,
   type LucideIcon,
 } from 'lucide-react';
 import { AchievementStats, ACHIEVEMENTS } from './achievements';
@@ -55,6 +54,9 @@ function countMet(conds: boolean[]): number {
   return conds.filter(Boolean).length;
 }
 
+// A deliberately small, iconic set — trophies should feel rare and special,
+// not be a second achievements grid. Eight total, spread across rarities and
+// across solo / community / referral paths.
 export const TROPHIES: Trophy[] = [
   {
     id: 'centurion',
@@ -87,16 +89,6 @@ export const TROPHIES: Trophy[] = [
     progress: (s) => [Math.min(s.totalLikesReceived, 500), 500],
   },
   {
-    id: 'tastemaker',
-    name: 'Tastemaker',
-    tagline: 'People drink what you say.',
-    description: '50 people tried a drink because of you',
-    rarity: 'epic',
-    icon: Sparkles,
-    evaluate: (s) => s.totalTriedItReceived >= 50,
-    progress: (s) => [Math.min(s.totalTriedItReceived, 50), 50],
-  },
-  {
     id: 'cult_leader',
     name: 'Cult Leader',
     tagline: 'A thousand strong.',
@@ -106,71 +98,8 @@ export const TROPHIES: Trophy[] = [
     evaluate: (s) => s.followers >= 1000,
     progress: (s) => [Math.min(s.followers, 1000), 1000],
   },
-  {
-    id: 'master_curator',
-    name: 'Master Curator',
-    tagline: 'Rankings are your art form.',
-    description: 'Be a member of 5 shared tier lists',
-    rarity: 'epic',
-    icon: ListChecks,
-    evaluate: (s) => s.tierListsAsMember >= 5,
-    progress: (s) => [Math.min(s.tierListsAsMember, 5), 5],
-  },
-  {
-    id: 'triple_threat',
-    name: 'Triple Threat',
-    tagline: 'Prolific, beloved, and followed.',
-    description: '50+ reviews, 100+ likes, and 50+ followers',
-    rarity: 'legendary',
-    icon: Medal,
-    evaluate: (s) => s.reviewCount >= 50 && s.totalLikesReceived >= 100 && s.followers >= 50,
-    progress: (s) => [countMet([s.reviewCount >= 50, s.totalLikesReceived >= 100, s.followers >= 50]), 3],
-  },
-  {
-    id: 'the_skeptic',
-    name: 'The Skeptic',
-    tagline: 'Hard to impress. Impossible to fool.',
-    description: '25+ reviews with an average rating of 2.5 or lower',
-    rarity: 'epic',
-    icon: Target,
-    evaluate: (s) => s.reviewCount >= 25 && s.avgRating <= 2.5,
-    // Progress toward the review-count gate; the average condition is noted in the description.
-    progress: (s) => [Math.min(s.reviewCount, 25), 25],
-  },
-  {
-    id: 'decorated',
-    name: 'Decorated',
-    tagline: 'A wall of honors.',
-    description: 'Unlock 15 achievements',
-    rarity: 'legendary',
-    icon: Award,
-    evaluate: (_s, ids) => ids.size >= 15,
-    progress: (_s, ids) => [Math.min(ids.size, 15), 15],
-  },
-  {
-    id: 'completionist',
-    name: 'The Completionist',
-    tagline: 'Nothing left to earn.',
-    description: 'Unlock every achievement',
-    rarity: 'mythic',
-    icon: Gem,
-    evaluate: (_s, ids) => ids.size >= TOTAL_ACHIEVEMENTS,
-    progress: (_s, ids) => [Math.min(ids.size, TOTAL_ACHIEVEMENTS), TOTAL_ACHIEVEMENTS],
-  },
 
-  // ─── Community trophies — earned only by being part of the community ───
-  // (built around shared tier lists: subscribers to your lists, suggestions of
-  // yours approved onto others' lists, and votes you cast.)
-  {
-    id: 'curated_for_crowd',
-    name: 'Curated for the Crowd',
-    tagline: 'People follow your rankings.',
-    description: 'Your shared tier lists reached 25 subscribers',
-    rarity: 'epic',
-    icon: Users,
-    evaluate: (s) => s.tierListSubscribers >= 25,
-    progress: (s) => [Math.min(s.tierListSubscribers, 25), 25],
-  },
+  // Community — only earned by being part of the community (shared tier lists).
   {
     id: 'beloved_curator',
     name: 'Beloved Curator',
@@ -182,32 +111,12 @@ export const TROPHIES: Trophy[] = [
     progress: (s) => [Math.min(s.tierListSubscribers, 100), 100],
   },
   {
-    id: 'voice_of_people',
-    name: 'Voice of the People',
-    tagline: 'You show up and weigh in.',
-    description: 'Cast 25 votes on tier-list suggestions',
-    rarity: 'rare',
-    icon: Vote,
-    evaluate: (s) => s.tierListVotesCast >= 25,
-    progress: (s) => [Math.min(s.tierListVotesCast, 25), 25],
-  },
-  {
-    id: 'stamp_of_approval',
-    name: 'Stamp of Approval',
-    tagline: 'Your picks make the cut.',
-    description: 'Get 10 of your suggestions approved onto lists',
-    rarity: 'epic',
-    icon: CheckCheck,
-    evaluate: (s) => s.approvedSuggestions >= 10,
-    progress: (s) => [Math.min(s.approvedSuggestions, 10), 10],
-  },
-  {
     id: 'community_pillar',
     name: 'Community Pillar',
     tagline: 'The community runs through you.',
     description: '50+ list subscribers, 15+ approved suggestions, and 5+ tier lists',
     rarity: 'mythic',
-    icon: Crown,
+    icon: Award,
     evaluate: (s) => s.tierListSubscribers >= 50 && s.approvedSuggestions >= 15 && s.tierListsAsMember >= 5,
     progress: (s) => [
       countMet([s.tierListSubscribers >= 50, s.approvedSuggestions >= 15, s.tierListsAsMember >= 5]),
@@ -215,36 +124,28 @@ export const TROPHIES: Trophy[] = [
     ],
   },
 
-  // ─── Referral trophies — grow the community ───
-  {
-    id: 'recruiter',
-    name: 'Recruiter',
-    tagline: 'You brought someone in.',
-    description: 'Refer 1 person who joins Seltzer Social',
-    rarity: 'rare',
-    icon: UserPlus,
-    evaluate: (s) => s.referralsMade >= 1,
-    progress: (s) => [Math.min(s.referralsMade, 1), 1],
-  },
+  // Referral — grow the community.
   {
     id: 'ambassador',
     name: 'Ambassador',
     tagline: 'You’re spreading the fizz.',
-    description: 'Refer 5 people who join',
+    description: 'Refer 5 people who join Seltzer Social',
     rarity: 'epic',
     icon: Megaphone,
     evaluate: (s) => s.referralsMade >= 5,
     progress: (s) => [Math.min(s.referralsMade, 5), 5],
   },
+
+  // Collection capstone — the rarest of all.
   {
-    id: 'evangelist',
-    name: 'Evangelist',
-    tagline: 'A one-person growth engine.',
-    description: 'Refer 25 people who join',
-    rarity: 'legendary',
-    icon: Crown,
-    evaluate: (s) => s.referralsMade >= 25,
-    progress: (s) => [Math.min(s.referralsMade, 25), 25],
+    id: 'completionist',
+    name: 'The Completionist',
+    tagline: 'Nothing left to earn.',
+    description: 'Unlock every achievement',
+    rarity: 'mythic',
+    icon: Gem,
+    evaluate: (_s, ids) => ids.size >= TOTAL_ACHIEVEMENTS,
+    progress: (_s, ids) => [Math.min(ids.size, TOTAL_ACHIEVEMENTS), TOTAL_ACHIEVEMENTS],
   },
 ];
 

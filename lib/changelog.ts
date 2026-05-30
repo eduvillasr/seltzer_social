@@ -40,7 +40,7 @@ export const RELEASES: Release[] = [
       {
         kind: 'new',
         title: 'Trophy Showroom',
-        detail: 'Every profile now has a Trophy Showroom — a shiny public shelf of rare trophies across four rarities (Rare, Epic, Legendary, Mythic). Trophies are the prestige layer above achievements: high bars like 100 reviews or 500 likes, combos like Triple Threat, personality awards like The Skeptic, and collection capstones like The Completionist. Locked ones show as silhouettes with a progress bar so you can see what to chase. Open it from any profile via the gold "Trophy Showroom" card.',
+        detail: 'Every profile now has a Trophy Showroom — a physical display cabinet where you drag your trophies onto glass shelves and arrange them however you like, then save. Visitors see your arrangement. Trophies are a small, rare set above achievements (only 8 to chase) across four rarities — earn them by reviewing, getting likes, building a following, being part of the community, and referring friends. Open it from any profile via the gold "Trophy Showroom" card.',
       },
       {
         kind: 'new',
