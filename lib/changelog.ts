@@ -20,7 +20,7 @@ export interface Release {
   changes: ChangeEntry[];
 }
 
-export const CURRENT_VERSION = '0.16.0';
+export const CURRENT_VERSION = '0.17.0';
 
 /** localStorage key for "last version the user opened the changelog at". */
 export const SEEN_KEY = 'seltzer:last-seen-version';
@@ -32,6 +32,48 @@ export function hasUnseenRelease(): boolean {
 }
 
 export const RELEASES: Release[] = [
+  {
+    version: '0.17.0',
+    date: '2026-05-29',
+    headline: 'Trophy Showroom + a shinier, more native app',
+    changes: [
+      {
+        kind: 'new',
+        title: 'Trophy Showroom',
+        detail: 'Every profile now has a Trophy Showroom — a shiny public shelf of rare trophies across four rarities (Rare, Epic, Legendary, Mythic). Trophies are the prestige layer above achievements: high bars like 100 reviews or 500 likes, combos like Triple Threat, personality awards like The Skeptic, and collection capstones like The Completionist. Locked ones show as silhouettes with a progress bar so you can see what to chase. Open it from any profile via the gold "Trophy Showroom" card.',
+      },
+      {
+        kind: 'new',
+        title: 'Community trophies',
+        detail: 'Some trophies can only be earned by being part of the community — built around shared tier lists: subscribers to your lists (Curated for the Crowd, Beloved Curator), suggestions of yours approved onto other lists (Stamp of Approval), votes you cast (Voice of the People), and the Mythic Community Pillar for doing it all.',
+      },
+      {
+        kind: 'new',
+        title: 'Invite friends + referral trophies',
+        detail: 'Settings → Invite friends gives you a personal link. Anyone who joins through it is credited to you — refer 1, 5, or 25 people to unlock the Recruiter, Ambassador, and Evangelist trophies.',
+      },
+      {
+        kind: 'new',
+        title: 'Unlock celebrations',
+        detail: 'Earn an achievement or a trophy and you now get a confetti + badge-reveal moment (with a little haptic buzz on your phone) instead of it quietly appearing.',
+      },
+      {
+        kind: 'improved',
+        title: 'Haptic feedback',
+        detail: 'The installed app now gives subtle haptic taps as you like a review, mark a drink tried, switch tabs, and place drinks in a tier — small touches that make it feel native.',
+      },
+      {
+        kind: 'improved',
+        title: 'A more polished, app-like feel',
+        detail: 'A redesigned single-screen welcome, a heart-burst when you like, animated count-ups on profile and compare stats, and a glossier tier list — including a gold shimmer on the S-tier.',
+      },
+      {
+        kind: 'fixed',
+        title: 'Steadier bottom navigation',
+        detail: 'The floating bottom nav no longer lags or jitters while you scroll on phones.',
+      },
+    ],
+  },
   {
     version: '0.16.0',
     date: '2026-05-29',
