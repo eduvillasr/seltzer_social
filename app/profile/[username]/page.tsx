@@ -94,6 +94,7 @@ export default function ProfilePage({ params }: ProfilePageProps) {
   const [view, setView] = useState<'lists' | 'reviews'>('reviews');
   // Reviews tab layout: full list cards vs. a compact 2-up grid you can scan.
   const [reviewLayout, setReviewLayout] = useState<'list' | 'grid'>('list');
+  const [reviewSort, setReviewSort] = useState<'newest' | 'oldest' | 'highest' | 'lowest'>('newest');
   // Brand/drink-name filter on the Reviews tab. Empty string = no filter.
   // Initial value may be seeded from a ?brand= query param (used when
   // jumping in from the stats page brand explorer).
@@ -220,6 +221,18 @@ export default function ProfilePage({ params }: ProfilePageProps) {
       return brand.includes(q) || name.includes(q) || title.includes(q);
     });
   }, [reviews, reviewQuery]);
+
+  const sortedReviews = useMemo(() => {
+    const arr = [...filteredReviews];
+    const byNewest = (a: Review, b: Review) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    switch (reviewSort) {
+      case 'newest':  arr.sort(byNewest); break;
+      case 'oldest':  arr.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()); break;
+      case 'highest': arr.sort((a, b) => b.rating - a.rating || byNewest(a, b)); break;
+      case 'lowest':  arr.sort((a, b) => a.rating - b.rating || byNewest(a, b)); break;
+    }
+    return arr;
+  }, [filteredReviews, reviewSort]);
 
   const topRated = useMemo<Review | null>(() => {
     if (reviews.length === 0) return null;
@@ -628,16 +641,16 @@ export default function ProfilePage({ params }: ProfilePageProps) {
               </div>
             )}
 
-            <div className="flex items-center justify-between gap-2 mt-3 pt-3" style={{ borderTop: '1px solid var(--border-subtle)' }}>
-              <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
-                {taste.uniqueBrands} {taste.uniqueBrands === 1 ? 'brand' : 'brands'} explored
+            <div className="mt-3 pt-3" style={{ borderTop: '1px solid var(--border-subtle)' }}>
+              <p className="text-[10px] mb-2 text-center" style={{ color: 'var(--text-muted)' }}>
+                {taste.uniqueBrands} {taste.uniqueBrands === 1 ? 'brand' : 'brands'} explored · catalog completion, histograms &amp; more
               </p>
               <Link
                 href={`/profile/${user.username}/stats`}
-                className="text-[11px] font-semibold inline-flex items-center gap-1 hover:underline"
-                style={{ color: 'var(--cyan-400)' }}
+                className="flex items-center justify-center gap-2 w-full rounded-xl py-2.5 text-xs font-bold transition-transform hover:scale-[1.01] active:scale-95"
+                style={{ background: 'linear-gradient(135deg, var(--cyan-400), var(--cyan-600))', color: '#fff', boxShadow: '0 0 16px rgba(6,182,212,0.25)' }}
               >
-                <BarChart3 size={11} /> Detailed stats →
+                <BarChart3 size={14} /> View full analytics <ChevronRight size={14} />
               </Link>
             </div>
           </div>
@@ -771,12 +784,26 @@ export default function ProfilePage({ params }: ProfilePageProps) {
               </div>
             ) : (
               <>
-                <div className="flex items-center justify-between px-1">
-                  <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
+                <div className="flex items-center justify-between gap-2 px-1">
+                  <p className="text-[11px] flex-shrink-0" style={{ color: 'var(--text-muted)' }}>
                     {reviewQuery
                       ? `${filteredReviews.length} of ${reviews.length} reviews`
                       : `${reviews.length} ${reviews.length === 1 ? 'review' : 'reviews'}`}
                   </p>
+                  <div className="flex items-center gap-2">
+                  {/* sort */}
+                  <select
+                    value={reviewSort}
+                    onChange={(e) => setReviewSort(e.target.value as typeof reviewSort)}
+                    className="bg-transparent text-[11px] font-semibold outline-none rounded-full px-2.5 py-1"
+                    style={{ color: 'var(--text-primary)', border: '1px solid var(--border-subtle)', background: 'rgba(10,14,26,0.5)' }}
+                    aria-label="Sort reviews"
+                  >
+                    <option value="newest" style={{ background: '#0a0e1a' }}>Newest</option>
+                    <option value="oldest" style={{ background: '#0a0e1a' }}>Oldest</option>
+                    <option value="highest" style={{ background: '#0a0e1a' }}>Highest rated</option>
+                    <option value="lowest" style={{ background: '#0a0e1a' }}>Lowest rated</option>
+                  </select>
                   <div className="inline-flex rounded-full p-0.5" style={{ background: 'rgba(10,14,26,0.5)', border: '1px solid var(--border-subtle)' }}>
                     <button
                       onClick={() => setReviewLayout('list')}
@@ -803,15 +830,16 @@ export default function ProfilePage({ params }: ProfilePageProps) {
                       <LayoutGrid size={14} />
                     </button>
                   </div>
+                  </div>
                 </div>
 
                 {reviewLayout === 'grid' ? (
                   <div className="grid grid-cols-2 gap-3 stagger-children">
-                    {filteredReviews.map((review) => (<ReviewGridTile key={review.id} review={review} />))}
+                    {sortedReviews.map((review) => (<ReviewGridTile key={review.id} review={review} />))}
                   </div>
                 ) : (
                   <div className="space-y-4 stagger-children">
-                    {filteredReviews.map((review) => (<ReviewCard key={review.id} review={review} currentUserId={currentUserId || undefined} />))}
+                    {sortedReviews.map((review) => (<ReviewCard key={review.id} review={review} currentUserId={currentUserId || undefined} />))}
                   </div>
                 )}
               </>

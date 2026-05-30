@@ -559,6 +559,7 @@ export async function getAchievementStats(userId: string, isFounder: boolean, is
   const uniqueBrands = new Set(reviewRows.map((r) => (r.brand ?? '').trim().toLowerCase()).filter(Boolean)).size;
   const avgRating = reviewCount === 0 ? 0 : reviewRows.reduce((s, r) => s + r.rating, 0) / reviewCount;
   const lowRatingCount = reviewRows.filter((r) => r.rating <= 2.0).length;
+  const highRatingCount = reviewRows.filter((r) => r.rating >= 4.0).length;
   const hasFiveStarReview = reviewRows.some((r) => r.rating >= 5);
   const hasFreshReview = reviewRows.some((r) => r.created_at >= since7d);
 
@@ -624,6 +625,7 @@ export async function getAchievementStats(userId: string, isFounder: boolean, is
     uniqueBrands,
     avgRating,
     lowRatingCount,
+    highRatingCount,
     totalLikesReceived,
     totalCommentsReceived,
     totalTriedItReceived,

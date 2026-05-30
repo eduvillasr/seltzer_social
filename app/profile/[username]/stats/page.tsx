@@ -33,6 +33,24 @@ import {
   Compass, Layers, ArrowUpDown, Trophy,
 } from 'lucide-react';
 
+// Flavor families for the taste fingerprint — match keywords in a drink name.
+const FLAVOR_FAMILIES: { family: string; color: string; keywords: string[] }[] = [
+  { family: 'Citrus',       color: '#fbbf24', keywords: ['lemon', 'lime', 'orange', 'grapefruit', 'citrus', 'yuzu', 'tangerine', 'pamplemousse', 'clementine'] },
+  { family: 'Berry',        color: '#f472b6', keywords: ['berry', 'strawberry', 'raspberry', 'blackberry', 'blueberry', 'cranberry', 'acai', 'açai'] },
+  { family: 'Tropical',     color: '#34d399', keywords: ['mango', 'pineapple', 'coconut', 'passion', 'guava', 'kiwi', 'peach', 'apricot', 'dragon'] },
+  { family: 'Melon',        color: '#a3e635', keywords: ['watermelon', 'melon', 'cantaloupe', 'honeydew'] },
+  { family: 'Cherry',       color: '#fb7185', keywords: ['cherry'] },
+  { family: 'Apple & Pear', color: '#86efac', keywords: ['apple', 'pear'] },
+  { family: 'Cola & Spice', color: '#c084fc', keywords: ['cola', 'root beer', 'ginger', 'cream', 'vanilla', 'chai'] },
+  { family: 'Botanical',    color: '#2dd4bf', keywords: ['cucumber', 'mint', 'basil', 'lavender', 'hibiscus', 'elderflower', 'rose', 'lemongrass'] },
+];
+const FLAVOR_COLOR: Record<string, string> = Object.fromEntries(FLAVOR_FAMILIES.map((f) => [f.family, f.color]));
+function flavorFamilyOf(name: string): string | null {
+  const n = (name || '').toLowerCase();
+  for (const f of FLAVOR_FAMILIES) if (f.keywords.some((k) => n.includes(k))) return f.family;
+  return null;
+}
+
 type SortMode = 'explored' | 'count' | 'avg' | 'name';
 
 interface BrandRow {
@@ -60,6 +78,7 @@ export default function StatsPage({ params }: { params: { username: string } }) 
   const [catalogSize, setCatalogSize] = useState(0);
   const [globalAvg, setGlobalAvg] = useState(3.5);
   const [sortMode, setSortMode] = useState<SortMode>('explored');
+  const [showAllBrands, setShowAllBrands] = useState(false);
 
   useEffect(() => { boot(); /* eslint-disable-line */ }, [params.username]);
 
@@ -179,7 +198,18 @@ export default function StatsPage({ params }: { params: { username: string } }) 
     // Generosity delta vs global
     const generosityDelta = personalAvg - globalAvg;
 
+    // Flavor fingerprint — which families this palate gravitates toward.
+    const flavorCounts: Record<string, number> = {};
+    for (const d of data) {
+      const fam = flavorFamilyOf(d.seltzer_name);
+      if (fam) flavorCounts[fam] = (flavorCounts[fam] || 0) + 1;
+    }
+    const flavorFamilies = Object.entries(flavorCounts)
+      .sort((a, b) => b[1] - a[1])
+      .map(([family, count]) => ({ family, count }));
+
     return {
+      flavorFamilies,
       personalAvg,
       globalAvg,
       generosityDelta,
@@ -334,7 +364,29 @@ export default function StatsPage({ params }: { params: { username: string } }) 
           </div>
         </div>
 
-        {/* ─── Per-brand explorer ─── */}
+        {/* ─── Flavor fingerprint ─── */}
+        {metrics.flavorFamilies.length > 0 && (
+          <div className="rounded-3xl p-4" style={{ background: 'rgba(15,20,36,0.5)', border: '1px solid var(--border-subtle)' }}>
+            <span className="text-[10px] font-bold uppercase tracking-[0.18em]" style={{ color: '#34d399' }}>
+              Flavor fingerprint
+            </span>
+            <div className="flex h-4 rounded-full overflow-hidden mt-3" style={{ background: 'rgba(148,163,184,0.08)' }}>
+              {metrics.flavorFamilies.map((f) => (
+                <div key={f.family} title={`${f.family} · ${f.count}`} style={{ width: `${(f.count / metrics.reviewCount) * 100}%`, background: FLAVOR_COLOR[f.family] || '#94a3b8' }} />
+              ))}
+            </div>
+            <div className="flex flex-wrap gap-x-3 gap-y-1.5 mt-3">
+              {metrics.flavorFamilies.map((f) => (
+                <span key={f.family} className="inline-flex items-center gap-1 text-[11px]" style={{ color: 'var(--text-secondary)' }}>
+                  <span className="w-2.5 h-2.5 rounded-full" style={{ background: FLAVOR_COLOR[f.family] }} />
+                  {f.family} <span className="tabular-nums" style={{ color: 'var(--text-muted)' }}>· {f.count}</span>
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ─── Per-brand explorer (collapsible) ─── */}
         <div
           className="rounded-3xl overflow-hidden"
           style={{ background: 'rgba(15,20,36,0.5)', border: '1px solid var(--border-subtle)' }}
@@ -347,10 +399,20 @@ export default function StatsPage({ params }: { params: { username: string } }) 
           </div>
 
           <div className="divide-y" style={{ borderColor: 'var(--border-subtle)' }}>
-            {sortedBrands.map((b) => (
+            {(showAllBrands ? sortedBrands : sortedBrands.slice(0, 5)).map((b) => (
               <BrandStatRow key={b.brand} row={b} username={user.username} />
             ))}
           </div>
+
+          {sortedBrands.length > 5 && (
+            <button
+              onClick={() => setShowAllBrands((v) => !v)}
+              className="w-full text-center text-[11px] font-bold py-3 transition-colors hover:bg-white/[0.03]"
+              style={{ color: 'var(--cyan-400)', borderTop: '1px solid var(--border-subtle)' }}
+            >
+              {showAllBrands ? 'Show less' : `Show all ${sortedBrands.length} brands ↓`}
+            </button>
+          )}
         </div>
 
         {/* ─── Fun extras ─── */}

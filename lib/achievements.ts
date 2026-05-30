@@ -40,6 +40,7 @@ export interface AchievementStats {
   uniqueBrands: number;
   avgRating: number;
   lowRatingCount: number; // reviews rated <= 2.0 (for the "critic" achievement)
+  highRatingCount: number; // reviews rated >= 4.0 (for "Glass Half Full")
   totalLikesReceived: number;
   totalCommentsReceived: number;
   totalTriedItReceived: number;
@@ -181,10 +182,11 @@ export const ACHIEVEMENTS: Achievement[] = [
   {
     id: 'generous',
     name: 'Glass Half Full',
-    description: 'Average rating above 4.0 (10+ reviews)',
+    description: 'Rate 10 drinks 4.0 or higher',
     tier: 'silver',
     icon: Heart,
-    evaluate: (s) => s.reviewCount >= 10 && s.avgRating >= 4.0,
+    evaluate: (s) => s.highRatingCount >= 10,
+    progress: (s) => [Math.min(s.highRatingCount, 10), 10],
   },
   {
     id: 'on_streak',
