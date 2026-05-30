@@ -59,6 +59,20 @@ function Column({ side }: { side: 'left' | 'right' }) {
   );
 }
 
+// A little bookshelf for the corridor depth — colorful spines on dark shelves.
+function Bookshelf({ scale = 1 }: { scale?: number }) {
+  const books = ['#b4533a', '#3a6ab4', '#c9a13a', '#4a9e5e', '#8a4fb0'];
+  return (
+    <div style={{ transform: `scale(${scale})`, transformOrigin: 'bottom left', width: 40, background: '#23170c', border: '2px solid #46301a', borderRadius: 2, padding: 2, boxShadow: '0 4px 10px rgba(0,0,0,0.6)' }}>
+      {[0, 1, 2].map((shelf) => (
+        <div key={shelf} style={{ display: 'flex', alignItems: 'flex-end', gap: 1, height: 15, borderBottom: '2px solid #46301a' }}>
+          {books.map((c, i) => <div key={i} style={{ flex: 1, height: 9 + ((i + shelf) % 3) * 3, background: c, borderRadius: '1px 1px 0 0' }} />)}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function ShowroomCase({
   earnedTrophies,
   earnedAchievements,
@@ -244,6 +258,26 @@ export function ShowroomCase({
           {/* central arched alcove behind hero */}
           <div className="absolute pointer-events-none" style={{ left: '50%', transform: 'translateX(-50%)', top: '13%', width: '50%', height: '64%', borderRadius: '50% 50% 8px 8px / 42% 42% 4px 4px', background: 'linear-gradient(180deg, rgba(38,24,60,0.92), rgba(16,10,30,0.96))', border: '3px solid #c08a2e', boxShadow: '0 0 32px rgba(192,138,46,0.32), inset 0 12px 40px rgba(0,0,0,0.55)' }} />
 
+          {/* receding gallery corridor inside the arch — depth, with art + a bookshelf */}
+          <div className="absolute pointer-events-none overflow-hidden" style={{ left: '50%', transform: 'translateX(-50%)', top: '15%', width: '44%', height: '58%', borderRadius: '50% 50% 6px 6px / 40% 40% 4px 4px' }}>
+            {/* corridor left wall (receding) with a framed painting */}
+            <div className="absolute" style={{ left: 0, top: '8%', width: '33%', height: '74%', background: 'linear-gradient(90deg, #2a1c48, #1a1230)', clipPath: 'polygon(0 0, 100% 16%, 100% 84%, 0 100%)' }}>
+              <div className="absolute" style={{ left: '12%', top: '36%', width: 17, height: 14, background: 'radial-gradient(circle at 38% 32%, #7a5aa8, #241636)', border: '1.5px solid #9c7a30' }} />
+            </div>
+            {/* corridor right wall (receding) with a framed painting */}
+            <div className="absolute" style={{ right: 0, top: '8%', width: '33%', height: '74%', background: 'linear-gradient(270deg, #2a1c48, #1a1230)', clipPath: 'polygon(0 16%, 100% 0, 100% 100%, 0 84%)' }}>
+              <div className="absolute" style={{ right: '12%', top: '36%', width: 17, height: 14, background: 'radial-gradient(circle at 38% 32%, #4f88a8, #16222e)', border: '1.5px solid #9c7a30' }} />
+            </div>
+            {/* far back wall: warm doorway glow + bookshelf + a small painting */}
+            <div className="absolute overflow-hidden" style={{ left: '50%', top: '28%', transform: 'translateX(-50%)', width: '40%', height: '44%', background: 'linear-gradient(180deg, #241838, #14102a)', boxShadow: '0 0 18px rgba(255,200,120,0.14)' }}>
+              <div className="absolute inset-0" style={{ background: 'radial-gradient(ellipse at 50% 38%, rgba(255,200,120,0.18), transparent 70%)' }} />
+              <div className="absolute" style={{ left: 3, bottom: 2 }}><Bookshelf scale={0.46} /></div>
+              <div className="absolute" style={{ right: '14%', top: '16%', width: 12, height: 15, background: 'radial-gradient(circle at 40% 32%, #a85f7a, #221428)', border: '1px solid #9c7a30' }} />
+            </div>
+            {/* corridor floor (receding checker strip) */}
+            <div className="absolute" style={{ left: '50%', bottom: 0, transform: 'translateX(-50%)', width: '66%', height: '32%', clipPath: 'polygon(26% 0, 74% 0, 100% 100%, 0 100%)', backgroundColor: '#7a6444', backgroundImage: 'linear-gradient(45deg, #5a4632 25%, transparent 25% 75%, #5a4632 75%)', backgroundSize: '13px 13px' }} />
+          </div>
+
           {/* signage */}
           <div className="absolute left-1/2 -translate-x-1/2" style={{ top: 9, padding: '4px 16px', borderRadius: 5, background: 'linear-gradient(180deg, #f1d68f, #9c7a30)', boxShadow: '0 3px 8px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.6)' }}>
             <p className="text-[11px] font-extrabold tracking-[0.24em]" style={{ color: '#2a1c06', fontFamily: 'var(--font-display)' }}>HALL OF FAME</p>
@@ -262,11 +296,25 @@ export function ShowroomCase({
                 )}
                 <div
                   ref={(el) => { frameRefs.current[slot] = el; }}
-                  style={{ padding: pad, borderRadius: 4, background: ach ? 'linear-gradient(160deg, #f0d28a, #8a6a2c)' : 'rgba(233,200,122,0.22)', boxShadow: ach ? `0 5px 12px rgba(0,0,0,0.5)${hero ? ', 0 0 16px rgba(233,200,122,0.4)' : ''}` : 'none' }}
+                  className="relative"
+                  style={{ padding: pad + 2, borderRadius: 4, background: ach ? 'linear-gradient(160deg, #f4d98f, #7e5a1e)' : 'rgba(233,200,122,0.22)', boxShadow: ach ? `0 6px 14px rgba(0,0,0,0.55)${hero ? ', 0 0 18px rgba(233,200,122,0.45)' : ''}` : 'none' }}
                 >
-                  <div className="flex items-center justify-center" style={{ width: size, height: size, borderRadius: 2, background: 'linear-gradient(160deg, #1a1530, #0c0a18)', boxShadow: 'inset 0 0 12px rgba(0,0,0,0.6)', outline: hero ? '1.5px solid rgba(255,235,180,0.5)' : 'none', outlineOffset: hero ? -3 : 0 }}>
+                  {/* gilt corner ornaments */}
+                  {ach && (
+                    <>
+                      <span className="absolute" style={{ width: 5, height: 5, borderRadius: 1, background: '#fbe6b0', left: -1, top: -1 }} />
+                      <span className="absolute" style={{ width: 5, height: 5, borderRadius: 1, background: '#fbe6b0', right: -1, top: -1 }} />
+                      <span className="absolute" style={{ width: 5, height: 5, borderRadius: 1, background: '#fbe6b0', left: -1, bottom: -1 }} />
+                      <span className="absolute" style={{ width: 5, height: 5, borderRadius: 1, background: '#fbe6b0', right: -1, bottom: -1 }} />
+                    </>
+                  )}
+                  {/* canvas with a painterly, tier-tinted backdrop + inner gilt border */}
+                  <div className="relative flex items-center justify-center overflow-hidden" style={{ width: size, height: size, borderRadius: 2, background: '#0c0a18', boxShadow: 'inset 0 0 12px rgba(0,0,0,0.7)', outline: '1px solid rgba(233,200,122,0.55)', outlineOffset: -3 }}>
+                    {ach && (
+                      <div className="absolute inset-0" style={{ background: `radial-gradient(circle at 30% 28%, ${TIER_META[ach.tier].color}dd, transparent 55%), radial-gradient(circle at 74% 74%, ${TIER_META[ach.tier].color}88, transparent 52%), linear-gradient(160deg, #2a2348, #120e22)` }} />
+                    )}
                     {ach ? (
-                      <div onPointerDown={(e) => startDrag('achievement', ach.id, { zone: 'wall', slotId: slot }, e)} style={{ touchAction: isOwner ? 'none' : 'auto', cursor: isOwner ? 'grab' : 'default', opacity: draggingId === ach.id ? 0.2 : 1 }}>
+                      <div className="relative" onPointerDown={(e) => startDrag('achievement', ach.id, { zone: 'wall', slotId: slot }, e)} style={{ touchAction: isOwner ? 'none' : 'auto', cursor: isOwner ? 'grab' : 'default', opacity: draggingId === ach.id ? 0.2 : 1 }}>
                         <AchievementBadge achievement={ach} unlocked size={hero ? 'md' : 'sm'} />
                       </div>
                     ) : (
@@ -275,8 +323,8 @@ export function ShowroomCase({
                   </div>
                 </div>
                 {ach && (
-                  <div className="mx-auto" style={{ marginTop: 3, padding: '1px 5px', borderRadius: 2, background: 'linear-gradient(180deg, #b07a3a, #6e4a1e)', maxWidth: size + 12, boxShadow: '0 1px 2px rgba(0,0,0,0.5)' }}>
-                    <p className="text-[7px] font-bold truncate text-center" style={{ color: '#f0d6a8' }}>{ach.name}</p>
+                  <div className="mx-auto" style={{ marginTop: 3, padding: '1.5px 6px', borderRadius: 2, background: 'linear-gradient(180deg, #f0d28a, #8a6a2c)', maxWidth: size + 16, boxShadow: '0 2px 4px rgba(0,0,0,0.5)' }}>
+                    <p className="text-[7px] font-extrabold truncate text-center" style={{ color: '#2a1c06' }}>{ach.name}</p>
                   </div>
                 )}
               </div>
@@ -373,25 +421,36 @@ export function ShowroomCase({
                     <div className="pointer-events-none" style={{ width: colW * 0.86, height: 9, borderRadius: '50%', background: `radial-gradient(ellipse at center, ${hexA(color, 0.65)}, transparent 70%)`, marginBottom: -2, position: 'relative', zIndex: 1 }} />
                   </>
                 )}
-                {/* blocky ivory marble plinth with stepped platform */}
-                <div className="relative z-[1]" style={{ width: colW, height: colH, borderRadius: 3, background: 'linear-gradient(180deg, #f6f1e6 0%, #e4dac6 42%, #c2b496 100%)', boxShadow: `inset 0 2px 0 rgba(255,255,255,0.85), 0 16px 28px rgba(0,0,0,0.6)${hero ? ', 0 0 22px rgba(233,200,122,0.3)' : ''}` }}>
+                {/* elaborate ivory plinth — gold bands, surface highlight + shadow, stepped tiers */}
+                <div className="relative z-[1]" style={{ width: colW, height: colH, borderRadius: 3, background: 'linear-gradient(105deg, #fbf6ec 0%, #ece2cd 32%, #cbbd9c 72%, #b3a484 100%)', boxShadow: `inset 0 2px 0 rgba(255,255,255,0.9), inset -6px 0 10px rgba(0,0,0,0.18), 0 16px 28px rgba(0,0,0,0.6)${hero ? ', 0 0 24px rgba(233,200,122,0.32)' : ''}` }}>
                   {/* squared cap */}
-                  <div className="absolute" style={{ top: -7, left: '50%', transform: 'translateX(-50%)', width: capW, height: 9, borderRadius: 2, background: '#f6f1e6', boxShadow: '0 2px 5px rgba(0,0,0,0.4)', border: hero ? '1.5px solid rgba(233,200,122,0.85)' : '1px solid rgba(0,0,0,0.12)' }} />
-                  {/* stepped base platform */}
-                  <div className="absolute" style={{ bottom: -9, left: '50%', transform: 'translateX(-50%)', width: capW + (hero ? 14 : 7), height: 12, borderRadius: 2, background: 'linear-gradient(180deg, #e4dac6, #b3a484)', boxShadow: '0 9px 18px rgba(0,0,0,0.6)' }} />
+                  <div className="absolute" style={{ top: -7, left: '50%', transform: 'translateX(-50%)', width: capW, height: 9, borderRadius: 2, background: 'linear-gradient(180deg, #fbf6ec, #d8cbae)', boxShadow: '0 2px 5px rgba(0,0,0,0.4)', border: hero ? '1.5px solid rgba(233,200,122,0.85)' : '1px solid rgba(110,78,18,0.25)' }} />
+                  {/* gold accent bands */}
+                  <div className="absolute left-0 right-0" style={{ top: 5, height: 3, background: 'linear-gradient(180deg, #e9c873, #9c7a30)' }} />
+                  <div className="absolute left-0 right-0" style={{ bottom: 6, height: 3, background: 'linear-gradient(180deg, #e9c873, #9c7a30)' }} />
+                  {/* surface highlight */}
+                  <div className="absolute" style={{ top: 8, left: 4, width: 5, bottom: 10, borderRadius: 2, background: 'rgba(255,255,255,0.5)' }} />
+                  {/* hero corner ornaments */}
+                  {hero && (
+                    <>
+                      <div className="absolute" style={{ top: -3, left: -3, width: 8, height: 8, borderRadius: '50%', background: 'radial-gradient(circle at 35% 30%, #fbe6b0, #b08a30)', boxShadow: '0 0 5px rgba(241,214,143,0.6)' }} />
+                      <div className="absolute" style={{ top: -3, right: -3, width: 8, height: 8, borderRadius: '50%', background: 'radial-gradient(circle at 35% 30%, #fbe6b0, #b08a30)', boxShadow: '0 0 5px rgba(241,214,143,0.6)' }} />
+                    </>
+                  )}
+                  {/* stepped base platforms */}
+                  <div className="absolute" style={{ bottom: -9, left: '50%', transform: 'translateX(-50%)', width: capW + (hero ? 16 : 8), height: 12, borderRadius: 2, background: 'linear-gradient(180deg, #e4dac6, #b3a484)', boxShadow: '0 9px 18px rgba(0,0,0,0.6)' }} />
+                  {hero && <div className="absolute" style={{ bottom: -17, left: '50%', transform: 'translateX(-50%)', width: capW + 30, height: 11, borderRadius: 2, background: 'linear-gradient(180deg, #d8cbae, #a08c63)', boxShadow: '0 8px 16px rgba(0,0,0,0.6)' }} />}
                 </div>
                 {/* deep shadow under the podium */}
                 <div className="absolute pointer-events-none" style={{ bottom: -14, left: '50%', transform: 'translateX(-50%)', width: capW + (hero ? 40 : 18), height: 16, borderRadius: '50%', background: 'radial-gradient(ellipse at center, rgba(0,0,0,0.5), transparent 72%)', filter: 'blur(3px)' }} />
                 {hero && <div className="absolute pointer-events-none" style={{ bottom: -12, left: '50%', transform: 'translateX(-50%)', width: capW + 40, height: 18, borderRadius: '50%', background: 'radial-gradient(ellipse at center, rgba(233,200,122,0.3), transparent 70%)' }} />}
-                {/* faint floor reflection of the hero trophy */}
-                {hero && trophy && (
-                  <div className="absolute pointer-events-none" style={{ top: '100%', left: '50%', transform: 'translateX(-50%) scaleY(-1)', opacity: 0.13, filter: 'blur(1px)', WebkitMaskImage: 'linear-gradient(to bottom, #000, transparent 62%)', maskImage: 'linear-gradient(to bottom, #000, transparent 62%)' }}>
-                    <TrophyArt trophy={trophy} earned height={Math.round(trophyH * 0.58)} />
-                  </div>
-                )}
               </div>
             );
           })}
+
+          {/* atmospheric vignette + warm key light */}
+          <div className="absolute inset-0 pointer-events-none" style={{ boxShadow: 'inset 0 0 64px 20px rgba(0,0,0,0.58)', borderRadius: 21 }} />
+          <div className="absolute pointer-events-none" style={{ left: '50%', top: 0, transform: 'translateX(-50%)', width: '64%', height: '72%', background: 'radial-gradient(ellipse at 50% 0%, rgba(255,220,160,0.10), transparent 66%)' }} />
         </div>
       </div>
 
