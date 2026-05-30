@@ -9,6 +9,7 @@ import { InstallPrompt } from '@/components/InstallPrompt';
 import { RouterRefresher } from '@/components/RouterRefresher';
 import { TermsGate } from '@/components/TermsGate';
 import { AchievementWatcher } from '@/components/AchievementWatcher';
+import { Navigation } from '@/components/Navigation';
 
 export const metadata: Metadata = {
   title: 'Seltzer Social — Rate. Review. Discover.',
@@ -47,6 +48,10 @@ export default function RootLayout({
     <html lang="en">
       <body>
         {children}
+        {/* Bottom nav lives here (not per-page) so it's a direct child of
+            <body> — guaranteed viewport-fixed, never trapped inside a page's
+            transformed/pull-to-refresh wrapper. Renders null when logged out. */}
+        <Navigation />
         <ToastHost />
         <InstallPrompt />
         <PWARegistrar />

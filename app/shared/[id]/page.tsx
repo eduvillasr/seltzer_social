@@ -8,7 +8,6 @@ import {
   ExternalLink, Inbox, LayoutGrid, List as ListIcon, MoreHorizontal, Pencil, Plus,
   Search, Share2, Star, Trash2, UserPlus, X, AlertTriangle,
 } from 'lucide-react';
-import { Navigation } from '@/components/Navigation';
 import { CanImage } from '@/components/CanImage';
 import { BackHeader } from '@/components/BackHeader';
 import { RatingInput } from '@/components/RatingInput';
@@ -203,7 +202,7 @@ export default function SharedListPage({ params }: { params: { id: string } }) {
   }, [viewerIndex, viewerItems.length]);
 
   if (!list) {
-    return <><Navigation /><main className="max-w-md mx-auto px-4 pt-10 pb-32"><CanLoader /></main></>;
+    return <><main className="max-w-md mx-auto px-4 pt-10 pb-32"><CanLoader /></main></>;
   }
 
   const isActiveEditor = editors.some(e => e.user_id === userId && e.status === 'active');
@@ -453,7 +452,6 @@ export default function SharedListPage({ params }: { params: { id: string } }) {
   // ─── render ──────────────────────────────────────────────────
   return (
     <>
-      <Navigation />
       <main className="max-w-md mx-auto px-4 pt-10 pb-32 space-y-4">
 
         {/* Back (sticky) */}

@@ -7,7 +7,6 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ReviewCard } from '@/components/ReviewCard';
 import { TierAddCard } from '@/components/TierAddCard';
-import { Navigation } from '@/components/Navigation';
 import { Review, AuthUser, SharedTierListItem } from '@/types';
 import { getSmartFeed, getForYouFeed, getFollowingCount, getSubscribedSharedTierActivities, supabase } from '@/lib/supabase';
 import { Plus, Droplets, Search, Sparkles, ListPlus, RotateCcw, Flame, UserPlus, Users } from 'lucide-react';
@@ -185,7 +184,6 @@ export default function FeedPage() {
 
   return (
     <>
-      <Navigation />
 
       {/* Pull-to-refresh indicator (mobile) */}
       <div

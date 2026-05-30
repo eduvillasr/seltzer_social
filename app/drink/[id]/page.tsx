@@ -6,7 +6,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, Droplets, Users, ImagePlus, Check, X } from 'lucide-react';
-import { Navigation } from '@/components/Navigation';
 import { BackHeader } from '@/components/BackHeader';
 import { PullIndicator, pullContentStyle } from '@/components/PullIndicator';
 import { usePullToRefresh } from '@/hooks/usePullToRefresh';
@@ -137,13 +136,12 @@ export default function DrinkPage({ params }: { params: { id: string } }) {
   const ptr = usePullToRefresh(async () => { await boot(); });
 
   if (loading) {
-    return (<><Navigation /><main className="max-w-md mx-auto px-4 pt-12 pb-32"><CanLoader /></main></>);
+    return (<><main className="max-w-md mx-auto px-4 pt-12 pb-32"><CanLoader /></main></>);
   }
 
   if (!drink) {
     return (
       <>
-        <Navigation />
         <main className="max-w-md mx-auto px-4 pt-20 pb-32 text-center">
           <p style={{ color: 'var(--text-secondary)' }}>Drink not found.</p>
         </main>
@@ -155,7 +153,6 @@ export default function DrinkPage({ params }: { params: { id: string } }) {
 
   return (
     <>
-      <Navigation />
       <PullIndicator ptr={ptr} />
       <main {...ptr.bind} style={pullContentStyle(ptr)} className="max-w-md mx-auto px-4 pt-12 pb-32 space-y-5">
         <BackHeader href="/trending" />

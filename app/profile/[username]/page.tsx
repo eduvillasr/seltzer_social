@@ -6,7 +6,6 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { Review, SharedTierList, User } from '@/types';
-import { Navigation } from '@/components/Navigation';
 import { CanImage } from '@/components/CanImage';
 import { TopHeader } from '@/components/TopHeader';
 import { ReviewCard } from '@/components/ReviewCard';
@@ -25,7 +24,7 @@ import {
 } from '@/lib/supabase';
 import {
   ArrowLeft, Calendar, Droplets, UserPlus, UserMinus, List, Settings, ListPlus,
-  Star, Trophy, GitCompare, Award, Search, X, BarChart3, LayoutGrid, ChevronRight,
+  Star, Trophy, GitCompare, Award, Search, X, BarChart3, LayoutGrid, ChevronRight, Share2,
 } from 'lucide-react';
 import { StarRating } from '@/components/StarRating';
 import { CountUp } from '@/components/CountUp';
@@ -46,6 +45,38 @@ const TIER_COLORS: Record<string, string> = {
 function ratingToTier(v: number) {
   if (v >= 4.5) return 'S'; if (v >= 4) return 'A'; if (v >= 3) return 'B';
   if (v >= 2)   return 'C'; if (v >= 1) return 'D'; return 'F';
+}
+
+// Seltzer rank — a title derived from how many reviews you've written
+// (mirrors the reviewer achievement ladder). Shown under the username.
+const RANKS: { min: number; title: string }[] = [
+  { min: 250, title: 'Cellar Master' },
+  { min: 100, title: 'Sommelier' },
+  { min: 50,  title: 'Connoisseur' },
+  { min: 10,  title: 'Regular' },
+  { min: 1,   title: 'First Sip' },
+  { min: 0,   title: 'Newcomer' },
+];
+function seltzerRank(reviewCount: number): string {
+  return (RANKS.find((r) => reviewCount >= r.min) ?? RANKS[RANKS.length - 1]).title;
+}
+
+// Flavor families for the taste fingerprint — match keywords in a drink name.
+const FLAVOR_FAMILIES: { family: string; color: string; keywords: string[] }[] = [
+  { family: 'Citrus',       color: '#fbbf24', keywords: ['lemon', 'lime', 'orange', 'grapefruit', 'citrus', 'yuzu', 'tangerine', 'pamplemousse', 'clementine'] },
+  { family: 'Berry',        color: '#f472b6', keywords: ['berry', 'strawberry', 'raspberry', 'blackberry', 'blueberry', 'cranberry', 'acai', 'açai'] },
+  { family: 'Tropical',     color: '#34d399', keywords: ['mango', 'pineapple', 'coconut', 'passion', 'guava', 'kiwi', 'peach', 'apricot', 'dragon'] },
+  { family: 'Melon',        color: '#a3e635', keywords: ['watermelon', 'melon', 'cantaloupe', 'honeydew'] },
+  { family: 'Cherry',       color: '#fb7185', keywords: ['cherry'] },
+  { family: 'Apple & Pear', color: '#86efac', keywords: ['apple', 'pear'] },
+  { family: 'Cola & Spice', color: '#c084fc', keywords: ['cola', 'root beer', 'ginger', 'cream', 'vanilla', 'chai'] },
+  { family: 'Botanical',    color: '#2dd4bf', keywords: ['cucumber', 'mint', 'basil', 'lavender', 'hibiscus', 'elderflower', 'rose', 'lemongrass'] },
+];
+const FLAVOR_COLOR: Record<string, string> = Object.fromEntries(FLAVOR_FAMILIES.map((f) => [f.family, f.color]));
+function flavorFamilyOf(name: string): string | null {
+  const n = (name || '').toLowerCase();
+  for (const f of FLAVOR_FAMILIES) if (f.keywords.some((k) => n.includes(k))) return f.family;
+  return null;
 }
 
 export default function ProfilePage({ params }: ProfilePageProps) {
@@ -197,11 +228,6 @@ export default function ProfilePage({ params }: ProfilePageProps) {
     ))[0];
   }, [reviews]);
 
-  const avgRating = useMemo(() => {
-    if (reviews.length === 0) return 0;
-    return reviews.reduce((s, r) => s + r.rating, 0) / reviews.length;
-  }, [reviews]);
-
   const topBrands = useMemo(() => {
     const counts: Record<string, number> = {};
     for (const r of reviews) {
@@ -270,6 +296,16 @@ export default function ProfilePage({ params }: ProfilePageProps) {
     // Variety — unique brands across reviews + tried-its
     const uniqueBrands = brandEntries.length;
 
+    // Flavor fingerprint — which flavor families this palate gravitates toward.
+    const flavorCounts: Record<string, number> = {};
+    for (const d of all) {
+      const fam = flavorFamilyOf(d.seltzer_name);
+      if (fam) flavorCounts[fam] = (flavorCounts[fam] || 0) + 1;
+    }
+    const flavorFamilies = Object.entries(flavorCounts)
+      .sort((a, b) => b[1] - a[1])
+      .map(([family, count]) => ({ family, count }));
+
     // Generosity label
     const generosityLabel =
       generosityScore >= 0.65 ? 'Generous' :
@@ -302,6 +338,7 @@ export default function ProfilePage({ params }: ProfilePageProps) {
       harshCount,
       generousCount,
       mean,
+      flavorFamilies,
     };
   }, [reviews, triedIts]);
 
@@ -312,21 +349,29 @@ export default function ProfilePage({ params }: ProfilePageProps) {
   });
 
   if (loading) {
-    return (<><Navigation /><main className="max-w-md mx-auto px-4 pt-20 pb-32"><CanLoader /></main></>);
+    return (<><main className="max-w-md mx-auto px-4 pt-20 pb-32"><CanLoader /></main></>);
   }
 
   if (!user) {
-    return (<><Navigation /><main className="max-w-md mx-auto px-4 pt-20 pb-32 text-center"><p style={{ color: 'var(--text-secondary)' }}>User not found</p></main></>);
+    return (<><main className="max-w-md mx-auto px-4 pt-20 pb-32 text-center"><p style={{ color: 'var(--text-secondary)' }}>User not found</p></main></>);
   }
 
   const isOwnProfile = currentUserId === user.id;
-  const allListsCount = activeLists.length + subscribedLists.length;
   const tier = topRated ? ratingToTier(topRated.rating) : 'B';
   const tierColor = TIER_COLORS[tier];
+  const rank = seltzerRank(reviews.length);
+
+  async function handleShareProfile() {
+    const url = `${window.location.origin}/profile/${user?.username}`;
+    if (typeof navigator !== 'undefined' && (navigator as any).share) {
+      try { await (navigator as any).share({ title: `@${user?.username} on Seltzer Social`, url }); return; } catch { /* cancelled */ }
+    }
+    try { await navigator.clipboard.writeText(url); showToast('Profile link copied 🔗', 'success'); }
+    catch { showToast('Could not copy', 'error', url); }
+  }
 
   return (
     <>
-      <Navigation />
       <PullIndicator ptr={ptr} />
       <TopHeader title={`@${user.username}`} back="/feed" />
       <main {...ptr.bind} style={pullContentStyle(ptr)} className="max-w-md mx-auto px-4 with-top-header pb-32 space-y-5">
@@ -347,89 +392,74 @@ export default function ProfilePage({ params }: ProfilePageProps) {
           <div className="pointer-events-none absolute -top-12 -right-10 w-44 h-44 rounded-full" style={{ background: `radial-gradient(closest-side, ${tierColor}33, transparent)` }} />
           <div className="pointer-events-none absolute -bottom-16 -left-8 w-40 h-40 rounded-full" style={{ background: 'radial-gradient(closest-side, rgba(167,139,250,0.12), transparent)' }} />
 
-          <div className="relative flex items-start gap-4">
-            <div className="relative flex-shrink-0">
-              <div style={{ filter: `drop-shadow(0 8px 24px ${tierColor}40)` }}>
-                <Avatar username={user.username} avatarUrl={user.avatar_url} size={84} />
-              </div>
+          {/* tier-tinted cover banner */}
+          <div className="relative -mx-5 -mt-5 overflow-hidden" style={{ height: 66, background: `linear-gradient(120deg, ${tierColor}66, ${tierColor}22 55%, rgba(15,20,36,0))` }}>
+            <div className="absolute inset-0" style={{ backgroundImage: 'radial-gradient(rgba(255,255,255,0.07) 1px, transparent 1.6px)', backgroundSize: '14px 14px' }} />
+            <div className="absolute inset-0" style={{ background: 'linear-gradient(180deg, transparent 40%, rgba(15,20,36,0.55))' }} />
+          </div>
+
+          <div className="relative flex items-end gap-4" style={{ marginTop: -36 }}>
+            <div className="relative flex-shrink-0 rounded-full" style={{ padding: 3, background: 'var(--bg-primary)', boxShadow: `0 8px 24px ${tierColor}44` }}>
+              <Avatar username={user.username} avatarUrl={user.avatar_url} size={84} />
             </div>
-            <div className="flex-1 min-w-0">
+            <div className="flex-1 min-w-0 pb-1">
               <h1 className="text-xl font-extrabold flex items-center gap-2 flex-wrap leading-tight" style={{ fontFamily: 'var(--font-display)', color: 'var(--text-primary)' }}>
                 @{user.username}
                 {FOUNDERS.has(user.username) && <FounderBadge />}
                 {BETA_TESTERS.has(user.username) && !FOUNDERS.has(user.username) && <BetaTesterBadge />}
               </h1>
+              {/* seltzer rank */}
+              <span
+                className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-full text-[10px] font-bold"
+                style={{ background: `${tierColor}1f`, border: `1px solid ${tierColor}55`, color: tierColor }}
+              >
+                <Star size={9} className="fill-current" /> {rank}
+              </span>
               {user.bio && <p className="text-sm mt-1.5 leading-snug" style={{ color: 'var(--text-secondary)' }}>{user.bio}</p>}
-              <p className="text-[11px] mt-2 flex items-center gap-1" style={{ color: 'var(--text-muted)' }}>
+              <p className="text-[11px] mt-1.5 flex items-center gap-1" style={{ color: 'var(--text-muted)' }}>
                 <Calendar size={10} /> Joined {new Date(user.created_at).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
               </p>
             </div>
           </div>
 
-          {/* Pinned achievements (Battlefield-style dog tags) */}
+          {/* Trophies & Honors — one entry into the showroom (trophies + achievements) */}
           {(() => {
             const pins = (user.showcase_achievements ?? [])
               .map((id) => ACHIEVEMENTS.find((a) => a.id === id))
               .filter((a): a is NonNullable<typeof a> => !!a);
-            if (pins.length === 0) {
-              return (
-                <Link
-                  href={`/profile/${user.username}/achievements`}
-                  className="relative mt-4 inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold transition-colors hover:bg-white/5"
-                  style={{ background: 'rgba(34,211,238,0.06)', border: '1px solid rgba(34,211,238,0.18)', color: 'var(--cyan-400)' }}
-                >
-                  <Award size={12} />
-                  {isOwnProfile ? 'Earn achievements' : 'No badges yet'} →
-                </Link>
-              );
-            }
             return (
-              <Link
-                href={`/profile/${user.username}/achievements`}
-                className="relative mt-4 flex items-center gap-3 rounded-2xl p-2.5 transition-colors hover:bg-white/5"
-                style={{ background: 'rgba(15,20,36,0.4)', border: '1px solid var(--border-subtle)' }}
-              >
-                <div className="flex gap-3 items-center">
-                  {pins.map((a) => <AchievementBadge key={a.id} achievement={a} size="sm" />)}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-[10px] font-bold uppercase tracking-[0.18em]" style={{ color: 'var(--text-muted)' }}>
-                    Honors
-                  </p>
-                  <p className="text-xs truncate" style={{ color: 'var(--text-primary)' }}>
-                    {pins.map((a) => a.name).join(' · ')}
-                  </p>
-                </div>
-                <Award size={14} style={{ color: 'var(--text-muted)' }} />
-              </Link>
+              <>
+                <Link
+                  href={`/profile/${user.username}/showroom`}
+                  className="shine-sweep relative mt-4 flex items-center gap-3 rounded-2xl p-3 overflow-hidden transition-transform hover:scale-[1.01]"
+                  style={{ background: 'linear-gradient(135deg, rgba(167,139,250,0.16), rgba(34,211,238,0.10))', border: '1px solid rgba(167,139,250,0.30)' }}
+                >
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: 'linear-gradient(150deg, #fde68a, #f59e0b)', boxShadow: '0 0 16px rgba(245,158,11,0.4)' }}>
+                    <Trophy size={20} color="#fff" strokeWidth={2.2} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[10px] font-bold uppercase tracking-[0.18em]" style={{ color: 'var(--violet-400)' }}>Trophies &amp; Honors</p>
+                    {pins.length > 0 ? (
+                      <div className="flex items-center gap-2 mt-1">
+                        <div className="flex gap-1.5 flex-shrink-0">{pins.map((a) => <AchievementBadge key={a.id} achievement={a} size="sm" />)}</div>
+                        <p className="text-xs truncate" style={{ color: 'var(--text-secondary)' }}>{isOwnProfile ? 'Your showcase' : 'Visit the case'}</p>
+                      </div>
+                    ) : (
+                      <p className="text-xs truncate mt-0.5" style={{ color: 'var(--text-primary)' }}>
+                        {isOwnProfile ? 'Build your trophy case' : `See @${user.username}'s case`}
+                      </p>
+                    )}
+                  </div>
+                  <ChevronRight size={16} style={{ color: 'var(--text-muted)' }} />
+                </Link>
+                {isOwnProfile && (
+                  <Link href={`/profile/${user.username}/achievements`} className="block text-center text-[11px] mt-2 hover:underline" style={{ color: 'var(--text-muted)' }}>
+                    <Award size={10} className="inline mr-1 mb-0.5" />Manage badges &amp; all achievements →
+                  </Link>
+                )}
+              </>
             );
           })()}
-
-          {/* Trophy Showroom — public; anyone can view this user's trophies */}
-          <Link
-            href={`/profile/${user.username}/showroom`}
-            className="shine-sweep relative mt-3 flex items-center gap-3 rounded-2xl p-3 overflow-hidden transition-transform hover:scale-[1.01]"
-            style={{
-              background: 'linear-gradient(135deg, rgba(167,139,250,0.16), rgba(34,211,238,0.10))',
-              border: '1px solid rgba(167,139,250,0.30)',
-            }}
-          >
-            <div
-              className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
-              style={{ background: 'linear-gradient(150deg, #fde68a, #f59e0b)', boxShadow: '0 0 16px rgba(245,158,11,0.4)' }}
-            >
-              <Trophy size={18} color="#fff" strokeWidth={2.2} />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-[10px] font-bold uppercase tracking-[0.18em]" style={{ color: 'var(--violet-400)' }}>
-                Trophy Showroom
-              </p>
-              <p className="text-xs truncate" style={{ color: 'var(--text-primary)' }}>
-                {isOwnProfile ? 'Show off your rarest trophies' : `See @${user.username}'s rarest trophies`}
-              </p>
-            </div>
-            <ChevronRight size={16} style={{ color: 'var(--text-muted)' }} />
-          </Link>
 
           {/* Action row */}
           <div className="relative flex gap-2 mt-4">
@@ -438,6 +468,9 @@ export default function ProfilePage({ params }: ProfilePageProps) {
                 <Link href="/settings" className="btn-secondary flex-1 justify-center" style={{ padding: '10px', fontSize: '12px' }}>
                   <Settings size={13} /> Edit Profile
                 </Link>
+                <button onClick={handleShareProfile} className="btn-secondary justify-center" style={{ padding: '10px 12px' }} aria-label="Share profile" title="Share profile">
+                  <Share2 size={14} />
+                </button>
                 <WhatsNewLink variant="icon" />
               </>
             ) : currentUserId ? (
@@ -453,6 +486,9 @@ export default function ProfilePage({ params }: ProfilePageProps) {
                 >
                   <GitCompare size={13} /> Compare
                 </Link>
+                <button onClick={handleShareProfile} className="btn-secondary justify-center" style={{ padding: '10px 12px' }} aria-label="Share profile" title="Share profile">
+                  <Share2 size={14} />
+                </button>
                 <div className="btn-secondary justify-center" style={{ padding: '10px 12px' }}>
                   <ContentMenu
                     currentUserId={currentUserId ?? undefined}
@@ -470,8 +506,8 @@ export default function ProfilePage({ params }: ProfilePageProps) {
 
           {/* Stats grid */}
           <div className="relative grid grid-cols-4 gap-2 pt-4 mt-4" style={{ borderTop: '1px solid var(--border-subtle)' }}>
-            <Stat label="Reviews" value={reviews.length} color="var(--text-primary)" />
-            <Stat label="Lists"   value={allListsCount}  color="var(--cyan-400)" />
+            <Stat label="Reviews" value={reviews.length} color="var(--cyan-400)" />
+            <Stat label="Tried"   value={triedIts.length} color="var(--teal-400)" />
             <Link href={`/profile/${user.username}/followers`} className="hover:opacity-80 transition-opacity">
               <Stat label="Followers" value={followerCount} color="var(--violet-400)" />
             </Link>
@@ -480,52 +516,6 @@ export default function ProfilePage({ params }: ProfilePageProps) {
             </Link>
           </div>
         </div>
-
-        {/* ─── Top-rated highlight ─── */}
-        {topRated && (
-          <Link
-            href={`/review/${topRated.id}`}
-            className="block rounded-2xl overflow-hidden transition-all hover:scale-[1.005] animate-fade-in-up"
-            style={{
-              background: `linear-gradient(135deg, ${tierColor}10, rgba(15,20,36,0.5))`,
-              border: `1px solid ${tierColor}33`,
-              padding: '14px',
-            }}
-          >
-            <div className="flex items-center gap-3">
-              {/* image with floating tier badge */}
-              <div className="relative flex-shrink-0">
-                {topRated.image_url ? (
-                  <CanImage src={topRated.image_url} alt={topRated.seltzer_name} className="w-16 h-16 rounded-xl" style={{ border: '1px solid var(--border-subtle)' }} />
-                ) : (
-                  <div className="w-16 h-16 rounded-xl flex items-center justify-center" style={{ background: `${tierColor}1a`, border: `1px solid ${tierColor}33` }}>
-                    <Droplets size={22} style={{ color: tierColor }} />
-                  </div>
-                )}
-                <span
-                  className="absolute -top-1.5 -right-1.5 w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-extrabold"
-                  style={{ background: tierColor, color: '#0a0e1a', boxShadow: `0 0 12px ${tierColor}66` }}
-                >
-                  {tier}
-                </span>
-              </div>
-
-              <div className="flex-1 min-w-0">
-                <p className="text-[10px] font-bold uppercase tracking-[0.16em] flex items-center gap-1" style={{ color: tierColor }}>
-                  <Trophy size={10} /> {isOwnProfile ? 'Your top rated' : `@${user.username}'s top pick`}
-                </p>
-                <p className="font-bold text-sm truncate mt-0.5" style={{ color: 'var(--text-primary)' }}>
-                  {topRated.title?.trim() || topRated.seltzer_name}
-                </p>
-                <p className="text-xs truncate" style={{ color: 'var(--text-muted)' }}>
-                  {topRated.brand && <>{topRated.brand} · </>}
-                  <span style={{ color: tierColor, fontWeight: 600 }}>⭐ {topRated.rating.toFixed(1)}</span>
-                  {reviews.length > 1 && <> · avg {avgRating.toFixed(1)} across {reviews.length}</>}
-                </p>
-              </div>
-            </div>
-          </Link>
-        )}
 
         {/* ─── Taste profile (advanced metrics) ─── */}
         {taste && taste.total >= 2 && (
@@ -559,6 +549,28 @@ export default function ProfilePage({ params }: ProfilePageProps) {
               />
               <TraitPill label={`Sweet spot ${taste.sweetTier}`} sub="most-rated tier" tone="emerald" />
             </div>
+
+            {/* Flavor fingerprint — what flavor families this palate leans toward */}
+            {taste.flavorFamilies.length > 0 && (
+              <div className="mb-4">
+                <p className="text-[10px] font-bold uppercase tracking-wider mb-1.5" style={{ color: 'var(--text-muted)' }}>
+                  Flavor fingerprint
+                </p>
+                <div className="flex h-3 rounded-full overflow-hidden" style={{ background: 'rgba(148,163,184,0.08)' }}>
+                  {taste.flavorFamilies.slice(0, 6).map((f) => (
+                    <div key={f.family} title={`${f.family} · ${f.count}`} style={{ width: `${(f.count / taste.total) * 100}%`, background: FLAVOR_COLOR[f.family] || '#94a3b8' }} />
+                  ))}
+                </div>
+                <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2">
+                  {taste.flavorFamilies.slice(0, 4).map((f) => (
+                    <span key={f.family} className="inline-flex items-center gap-1 text-[10px]" style={{ color: 'var(--text-secondary)' }}>
+                      <span className="w-2 h-2 rounded-full" style={{ background: FLAVOR_COLOR[f.family] }} />
+                      {f.family} <span style={{ color: 'var(--text-muted)' }}>· {f.count}</span>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Tier distribution bar chart */}
             <div className="mb-4">

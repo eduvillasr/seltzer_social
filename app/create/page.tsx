@@ -8,7 +8,6 @@ import Link from 'next/link';
 import {
   ArrowLeft, Droplets, Search, Check, Plus, Upload, X, ListPlus, ArrowRight, CheckCircle2, ScanLine,
 } from 'lucide-react';
-import { Navigation } from '@/components/Navigation';
 import { CanImage } from '@/components/CanImage';
 import { RatingInput } from '@/components/RatingInput';
 import { BarcodeScanner } from '@/components/BarcodeScanner';
@@ -418,7 +417,6 @@ export default function CreateReview() {
   if (createdReview) {
     return (
       <>
-        <Navigation />
         <main className="max-w-md mx-auto px-4 pt-20 pb-32">
           <div className="animate-fade-in-up space-y-5">
             <div className="glass-card text-center">
@@ -483,7 +481,6 @@ export default function CreateReview() {
       {showScanner && (
         <BarcodeScanner onDetected={resolveBarcode} onClose={() => setShowScanner(false)} />
       )}
-      <Navigation />
       <main className="max-w-md mx-auto px-4 pt-20 pb-32">
         <Link
           href="/feed"

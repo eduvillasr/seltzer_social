@@ -11,7 +11,6 @@ import Link from 'next/link';
 import {
   Sparkles, Flame, Trophy, Users, ListPlus, ArrowRight, Droplets,
 } from 'lucide-react';
-import { Navigation } from '@/components/Navigation';
 import { TopHeader } from '@/components/TopHeader';
 import { CanImage } from '@/components/CanImage';
 import { Avatar } from '@/components/Avatar';
@@ -89,7 +88,6 @@ export default function TrendingPage() {
 
   return (
     <>
-      <Navigation />
       <PullIndicator ptr={ptr} />
       <TopHeader title="Trending" back="/feed" />
       <main {...ptr.bind} style={pullContentStyle(ptr)} className="max-w-md mx-auto px-4 with-top-header pb-32 space-y-6">

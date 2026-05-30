@@ -4,7 +4,6 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Navigation } from '@/components/Navigation';
 import { BackHeader } from '@/components/BackHeader';
 import { Avatar } from '@/components/Avatar';
 import { ArrowLeft, Users, UserPlus, UserMinus } from 'lucide-react';
@@ -60,7 +59,6 @@ export default function FollowersPage({ params }: PageProps) {
 
   return (
     <>
-      <Navigation />
       <main className="max-w-md mx-auto px-4 pt-20 pb-32">
         <BackHeader href={`/profile/${params.username}`} label="Back to profile" />
 

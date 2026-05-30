@@ -11,7 +11,6 @@ import {
   Search, X, Users, ArrowRight, Flame, Droplets, Tag,
   UserPlus, UserMinus, List as ListIcon,
 } from 'lucide-react';
-import { Navigation } from '@/components/Navigation';
 import { TopHeader } from '@/components/TopHeader';
 import { Avatar } from '@/components/Avatar';
 import { CanImage } from '@/components/CanImage';
@@ -138,7 +137,6 @@ export default function DiscoverPage() {
 
   return (
     <>
-      <Navigation />
       <TopHeader
         title="Discover"
         right={

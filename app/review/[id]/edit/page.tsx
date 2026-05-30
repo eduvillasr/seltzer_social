@@ -6,7 +6,6 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, Check, Upload, X, Trash2, Droplets, Search, Plus, Pencil } from 'lucide-react';
-import { Navigation } from '@/components/Navigation';
 import { CanImage } from '@/components/CanImage';
 import { BackHeader } from '@/components/BackHeader';
 import { RatingInput } from '@/components/RatingInput';
@@ -246,12 +245,11 @@ export default function EditReviewPage({ params }: { params: { id: string } }) {
   }
 
   if (loading) {
-    return (<><Navigation /><main className="max-w-md mx-auto px-4 pt-20 pb-32"><CanLoader /></main></>);
+    return (<><main className="max-w-md mx-auto px-4 pt-20 pb-32"><CanLoader /></main></>);
   }
   if (forbidden) {
     return (
       <>
-        <Navigation />
         <main className="max-w-md mx-auto px-4 pt-20 pb-32 text-center">
           <p className="font-bold mb-2" style={{ color: 'var(--text-primary)' }}>Not your review</p>
           <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>You can only edit reviews you wrote.</p>
@@ -263,7 +261,7 @@ export default function EditReviewPage({ params }: { params: { id: string } }) {
     );
   }
   if (!review) {
-    return (<><Navigation /><main className="max-w-md mx-auto px-4 pt-20 pb-32 text-center"><p style={{ color: 'var(--text-secondary)' }}>Review not found</p></main></>);
+    return (<><main className="max-w-md mx-auto px-4 pt-20 pb-32 text-center"><p style={{ color: 'var(--text-secondary)' }}>Review not found</p></main></>);
   }
 
   const currentImage = pendingPreview || review.image_url || '';
@@ -272,7 +270,6 @@ export default function EditReviewPage({ params }: { params: { id: string } }) {
 
   return (
     <>
-      <Navigation />
       <main className="max-w-md mx-auto px-4 pt-12 pb-32 space-y-5">
         <BackHeader href={`/review/${review.id}`} label="Back to review" />
 

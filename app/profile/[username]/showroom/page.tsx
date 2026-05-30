@@ -10,7 +10,6 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { Sparkles, Share2, Hand } from 'lucide-react';
-import { Navigation } from '@/components/Navigation';
 import { BackHeader } from '@/components/BackHeader';
 import { CanLoader } from '@/components/CanLoader';
 import { ShowroomCase } from '@/components/ShowroomCase';
@@ -78,10 +77,10 @@ export default function ShowroomPage({ params }: { params: { username: string } 
   }, [stats, unlockedIds]);
 
   if (loading || !result) {
-    return (<><Navigation /><main className="max-w-md mx-auto px-4 pt-12 pb-32"><CanLoader /></main></>);
+    return (<><main className="max-w-md mx-auto px-4 pt-12 pb-32"><CanLoader /></main></>);
   }
   if (notFound || !user) {
-    return (<><Navigation /><main className="max-w-md mx-auto px-4 pt-20 pb-32 text-center"><p style={{ color: 'var(--text-secondary)' }}>User not found</p></main></>);
+    return (<><main className="max-w-md mx-auto px-4 pt-20 pb-32 text-center"><p style={{ color: 'var(--text-secondary)' }}>User not found</p></main></>);
   }
 
   const earnedCount = result.earned.length;
@@ -110,7 +109,6 @@ export default function ShowroomPage({ params }: { params: { username: string } 
 
   return (
     <>
-      <Navigation />
       <main className="max-w-md mx-auto px-4 pt-12 pb-32 space-y-4">
         <BackHeader href={`/profile/${params.username}`} label="Back to profile" />
 

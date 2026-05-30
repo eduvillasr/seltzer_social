@@ -10,7 +10,6 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Navigation } from '@/components/Navigation';
 import { TopHeader } from '@/components/TopHeader';
 import { CanLoader } from '@/components/CanLoader';
 import { getAllBrandsWithStats } from '@/lib/supabase';
@@ -65,7 +64,6 @@ export default function BrandsIndexPage() {
 
   return (
     <>
-      <Navigation />
       <TopHeader title="Brands" back="/discover" />
       <main className="max-w-md mx-auto px-4 with-top-header pb-32 space-y-5">
         <div className="h-1" />

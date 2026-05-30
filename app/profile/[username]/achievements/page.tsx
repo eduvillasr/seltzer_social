@@ -8,7 +8,6 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Lock, Pin, Check } from 'lucide-react';
-import { Navigation } from '@/components/Navigation';
 import { BackHeader } from '@/components/BackHeader';
 import { CanLoader } from '@/components/CanLoader';
 import { AchievementBadge } from '@/components/AchievementBadge';
@@ -102,10 +101,10 @@ export default function AchievementsPage({ params }: { params: { username: strin
   }
 
   if (loading || !stats) {
-    return (<><Navigation /><main className="max-w-md mx-auto px-4 pt-12 pb-32"><CanLoader /></main></>);
+    return (<><main className="max-w-md mx-auto px-4 pt-12 pb-32"><CanLoader /></main></>);
   }
   if (!user) {
-    return (<><Navigation /><main className="max-w-md mx-auto px-4 pt-20 pb-32 text-center"><p style={{ color: 'var(--text-secondary)' }}>User not found</p></main></>);
+    return (<><main className="max-w-md mx-auto px-4 pt-20 pb-32 text-center"><p style={{ color: 'var(--text-secondary)' }}>User not found</p></main></>);
   }
 
   // Dirty check — only show Save when picks changed from server state
@@ -122,7 +121,6 @@ export default function AchievementsPage({ params }: { params: { username: strin
 
   return (
     <>
-      <Navigation />
       <main className="max-w-md mx-auto px-4 pt-12 pb-32 space-y-5">
         <BackHeader href={`/profile/${params.username}`} label="Back to profile" />
 

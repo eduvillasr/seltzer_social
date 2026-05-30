@@ -5,7 +5,6 @@
 import { useEffect, useState, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Navigation } from '@/components/Navigation';
 import { TopHeader } from '@/components/TopHeader';
 import { Avatar } from '@/components/Avatar';
 import { AvatarCropper } from '@/components/AvatarCropper';
@@ -164,7 +163,6 @@ export default function SettingsPage() {
   if (loading) {
     return (
       <>
-        <Navigation />
         <main className="max-w-md mx-auto px-4 pt-20 pb-32 text-center">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-400 to-cyan-600 flex items-center justify-center mx-auto animate-float">
             <Droplets size={18} className="text-white" />
@@ -183,7 +181,6 @@ export default function SettingsPage() {
           onCropped={handleCropped}
         />
       )}
-      <Navigation />
       <TopHeader title="Settings" back="/feed" />
       <main className="max-w-md mx-auto px-4 with-top-header pb-32">
         <div className="h-4" />{/* breathing room below the fixed header */}

@@ -21,7 +21,6 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Navigation } from '@/components/Navigation';
 import { TopHeader } from '@/components/TopHeader';
 import { CanLoader } from '@/components/CanLoader';
 import {
@@ -211,17 +210,16 @@ export default function StatsPage({ params }: { params: { username: string } }) 
   }, [metrics, sortMode]);
 
   if (loading) {
-    return (<><Navigation /><TopHeader title="Stats" back={`/profile/${params.username}`} /><main className="max-w-md mx-auto px-4 with-top-header pb-32"><CanLoader /></main></>);
+    return (<><TopHeader title="Stats" back={`/profile/${params.username}`} /><main className="max-w-md mx-auto px-4 with-top-header pb-32"><CanLoader /></main></>);
   }
 
   if (!user) {
-    return (<><Navigation /><TopHeader title="Stats" back="/feed" /><main className="max-w-md mx-auto px-4 with-top-header pb-32 text-center"><p style={{ color: 'var(--text-secondary)' }}>User not found</p></main></>);
+    return (<><TopHeader title="Stats" back="/feed" /><main className="max-w-md mx-auto px-4 with-top-header pb-32 text-center"><p style={{ color: 'var(--text-secondary)' }}>User not found</p></main></>);
   }
 
   if (!metrics) {
     return (
       <>
-        <Navigation />
         <TopHeader title="Stats" back={`/profile/${user.username}`} />
         <main className="max-w-md mx-auto px-4 with-top-header pb-32">
           <div className="glass-card text-center py-12">
@@ -237,7 +235,6 @@ export default function StatsPage({ params }: { params: { username: string } }) 
 
   return (
     <>
-      <Navigation />
       <TopHeader title="Stats" back={`/profile/${user.username}`} />
       <main className="max-w-md mx-auto px-4 with-top-header pb-32 space-y-5">
         <div className="h-1" />

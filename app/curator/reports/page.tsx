@@ -9,7 +9,6 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Navigation } from '@/components/Navigation';
 import { BackHeader } from '@/components/BackHeader';
 import { CanLoader } from '@/components/CanLoader';
 import { ShieldAlert, AlertTriangle, Check, X, Trash2 } from 'lucide-react';
@@ -92,13 +91,12 @@ export default function CuratorReportsPage() {
   }
 
   if (loading || authorized === null) {
-    return (<><Navigation /><main className="max-w-md mx-auto px-4 pt-12 pb-32"><CanLoader /></main></>);
+    return (<><main className="max-w-md mx-auto px-4 pt-12 pb-32"><CanLoader /></main></>);
   }
 
   if (!authorized) {
     return (
       <>
-        <Navigation />
         <main className="max-w-md mx-auto px-4 pt-12 pb-32 space-y-4">
           <BackHeader href="/feed" />
           <div className="glass-card text-center py-10">
@@ -115,7 +113,6 @@ export default function CuratorReportsPage() {
 
   return (
     <>
-      <Navigation />
       <main className="max-w-md mx-auto px-4 pt-12 pb-32 space-y-4">
         <BackHeader href="/feed" />
 

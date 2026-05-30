@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, ListPlus, Users } from 'lucide-react';
-import { Navigation } from '@/components/Navigation';
 import { BackHeader } from '@/components/BackHeader';
 import { Avatar } from '@/components/Avatar';
 import { createSharedTierList, getMutualFollows, supabase } from '@/lib/supabase';
@@ -50,7 +49,6 @@ export default function CreateSharedListPage() {
 
   return (
     <>
-      <Navigation />
       <main className="max-w-md mx-auto px-4 pt-10 pb-32">
         <BackHeader href="/feed" />
 

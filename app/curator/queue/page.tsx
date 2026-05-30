@@ -13,7 +13,6 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Navigation } from '@/components/Navigation';
 import { CanImage } from '@/components/CanImage';
 import { BackHeader } from '@/components/BackHeader';
 import { CanLoader } from '@/components/CanLoader';
@@ -111,13 +110,12 @@ export default function CuratorQueuePage() {
   }
 
   if (loading || authorized === null) {
-    return (<><Navigation /><main className="max-w-md mx-auto px-4 pt-12 pb-32"><CanLoader /></main></>);
+    return (<><main className="max-w-md mx-auto px-4 pt-12 pb-32"><CanLoader /></main></>);
   }
 
   if (!authorized) {
     return (
       <>
-        <Navigation />
         <main className="max-w-md mx-auto px-4 pt-12 pb-32 space-y-4">
           <BackHeader href="/feed" />
           <div className="glass-card text-center py-10">
@@ -134,7 +132,6 @@ export default function CuratorQueuePage() {
 
   return (
     <>
-      <Navigation />
       <main className="max-w-md mx-auto px-4 pt-12 pb-32 space-y-4">
         <BackHeader href="/feed" />
 

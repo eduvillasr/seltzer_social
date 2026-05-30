@@ -6,7 +6,6 @@
 
 'use client';
 
-import { Navigation } from '@/components/Navigation';
 import { BackHeader } from '@/components/BackHeader';
 
 const LAST_UPDATED = 'May 29, 2026';
@@ -14,7 +13,6 @@ const LAST_UPDATED = 'May 29, 2026';
 export default function TermsPage() {
   return (
     <>
-      <Navigation />
       <main className="max-w-md mx-auto px-4 pt-12 pb-32 space-y-5">
         <BackHeader href="/settings" />
 

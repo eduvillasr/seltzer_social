@@ -92,11 +92,16 @@ export function Navigation() {
 
   return (
     <nav
-      className="fixed bottom-0 left-0 right-0 z-50"
       style={{
+        // Inline position so nothing in the cascade can knock it out of fixed.
         // Solid, edge-to-edge bar (Instagram/Letterboxd style). No heavy
-        // backdrop-blur, so the WebView never re-rasterizes it on scroll — that
-        // was the source of the jitter. paddingBottom clears the home indicator.
+        // backdrop-blur, so the WebView never re-rasterizes it on scroll.
+        // paddingBottom clears the home indicator.
+        position: 'fixed',
+        left: 0,
+        right: 0,
+        bottom: 0,
+        zIndex: 50,
         background: 'rgba(10, 14, 26, 0.97)',
         borderTop: '1px solid rgba(255, 255, 255, 0.08)',
         paddingBottom: 'env(safe-area-inset-bottom, 0px)',

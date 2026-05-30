@@ -8,7 +8,6 @@ import { Heart, MessageCircle, Star, ArrowLeft, Droplets, Check, X, ExternalLink
 import { StarRating } from '@/components/StarRating';
 import { showToast } from '@/components/Toast';
 import { Review, SharedTierListSuggestion } from '@/types';
-import { Navigation } from '@/components/Navigation';
 import { TopHeader } from '@/components/TopHeader';
 import { CommentSection } from '@/components/CommentSection';
 import { CanImage } from '@/components/CanImage';
@@ -153,7 +152,6 @@ export default function ReviewPage({ params }: ReviewPageProps) {
   if (loading) {
     return (
       <>
-        <Navigation />
         <main className="max-w-2xl mx-auto px-4 pt-24 pb-24">
           <CanLoader label="Pouring review…" />
         </main>
@@ -164,7 +162,6 @@ export default function ReviewPage({ params }: ReviewPageProps) {
   if (!review) {
     return (
       <>
-        <Navigation />
         <main className="max-w-2xl mx-auto px-4 pt-24 pb-24 text-center">
           <p style={{ color: 'var(--text-secondary)' }}>Review not found</p>
         </main>
@@ -182,7 +179,6 @@ export default function ReviewPage({ params }: ReviewPageProps) {
 
   return (
     <>
-      <Navigation />
       <TopHeader title="Review" back="/feed" />
       <main className="max-w-2xl mx-auto px-4 with-top-header pb-24 space-y-6">
         <div className="h-1" />{/* breathing room below the fixed header */}

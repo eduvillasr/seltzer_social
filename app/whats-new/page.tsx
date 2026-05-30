@@ -6,7 +6,6 @@
 import { useEffect } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, Sparkles, Wrench, Zap, Rocket } from 'lucide-react';
-import { Navigation } from '@/components/Navigation';
 import { BackHeader } from '@/components/BackHeader';
 import { RELEASES, CURRENT_VERSION, SEEN_KEY, type ChangeKind } from '@/lib/changelog';
 
@@ -26,7 +25,6 @@ export default function WhatsNewPage() {
 
   return (
     <>
-      <Navigation />
       <main className="max-w-md mx-auto px-4 pt-12 pb-32 space-y-5">
         <BackHeader href="/feed" />
 

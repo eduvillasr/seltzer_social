@@ -12,7 +12,6 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Navigation } from '@/components/Navigation';
 import { CanImage } from '@/components/CanImage';
 import { TopHeader } from '@/components/TopHeader';
 import { CanLoader } from '@/components/CanLoader';
@@ -122,13 +121,12 @@ export default function BrandHubPage({ params }: { params: { name: string } }) {
   }, [rows, sortMode]);
 
   if (loading) {
-    return (<><Navigation /><TopHeader title={brand} back /><main className="max-w-md mx-auto px-4 with-top-header pb-32"><CanLoader /></main></>);
+    return (<><TopHeader title={brand} back /><main className="max-w-md mx-auto px-4 with-top-header pb-32"><CanLoader /></main></>);
   }
 
   if (rows.length === 0) {
     return (
       <>
-        <Navigation />
         <TopHeader title={decodedBrand} back />
         <main className="max-w-md mx-auto px-4 with-top-header pb-32">
           <div className="glass-card text-center py-12">
@@ -152,7 +150,6 @@ export default function BrandHubPage({ params }: { params: { name: string } }) {
 
   return (
     <>
-      <Navigation />
       <TopHeader title={brand} back />
       <main className="max-w-md mx-auto px-4 with-top-header pb-32 space-y-5">
         <div className="h-1" />

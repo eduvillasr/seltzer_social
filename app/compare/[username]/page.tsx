@@ -9,7 +9,6 @@ import { useRouter } from 'next/navigation';
 import {
   ArrowLeft, GitCompare, Sparkles, AlertCircle, ThumbsUp, ThumbsDown, Droplets,
 } from 'lucide-react';
-import { Navigation } from '@/components/Navigation';
 import { CanImage } from '@/components/CanImage';
 import { BackHeader } from '@/components/BackHeader';
 import { Avatar } from '@/components/Avatar';
@@ -140,16 +139,15 @@ export default function ComparePage({ params }: { params: { username: string } }
   }, [rows, view]);
 
   if (loading) {
-    return (<><Navigation /><main className="max-w-md mx-auto px-4 pt-20 pb-32"><CanLoader label="Comparing tastes…" /></main></>);
+    return (<><main className="max-w-md mx-auto px-4 pt-20 pb-32"><CanLoader label="Comparing tastes…" /></main></>);
   }
 
   if (!them) {
-    return (<><Navigation /><main className="max-w-md mx-auto px-4 pt-20 pb-32 text-center"><p style={{ color: 'var(--text-secondary)' }}>User not found</p></main></>);
+    return (<><main className="max-w-md mx-auto px-4 pt-20 pb-32 text-center"><p style={{ color: 'var(--text-secondary)' }}>User not found</p></main></>);
   }
 
   return (
     <>
-      <Navigation />
       <main className="max-w-md mx-auto px-4 pt-12 pb-32 space-y-5">
         <BackHeader href={`/profile/${params.username}`} label={`Back to @${them.username}`} />
 

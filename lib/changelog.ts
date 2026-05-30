@@ -20,7 +20,7 @@ export interface Release {
   changes: ChangeEntry[];
 }
 
-export const CURRENT_VERSION = '0.17.0';
+export const CURRENT_VERSION = '0.18.0';
 
 /** localStorage key for "last version the user opened the changelog at". */
 export const SEEN_KEY = 'seltzer:last-seen-version';
@@ -32,6 +32,33 @@ export function hasUnseenRelease(): boolean {
 }
 
 export const RELEASES: Release[] = [
+  {
+    version: '0.18.0',
+    date: '2026-05-30',
+    headline: 'A richer profile and a steadier bottom bar',
+    changes: [
+      {
+        kind: 'new',
+        title: 'Your seltzer rank',
+        detail: 'Your profile now shows a rank under your name that grows with your reviews — First Sip → Regular → Connoisseur → Sommelier → all the way to Cellar Master.',
+      },
+      {
+        kind: 'new',
+        title: 'Flavor fingerprint',
+        detail: 'The Taste Profile now charts which flavor families you gravitate toward — citrus, berry, tropical, botanical, and more — so your palate has a face.',
+      },
+      {
+        kind: 'improved',
+        title: 'A cleaner, fancier profile',
+        detail: 'A tier-tinted cover banner behind your avatar, a single combined "Trophies & Honors" card that opens your showroom, a unified stats row (now showing how many drinks you\'ve tried), and a Share button to send your profile to a friend.',
+      },
+      {
+        kind: 'fixed',
+        title: 'The bottom bar stays put',
+        detail: 'The navigation bar is now pinned edge-to-edge at the bottom and no longer drifts up the screen or lags while you scroll.',
+      },
+    ],
+  },
   {
     version: '0.17.0',
     date: '2026-05-29',

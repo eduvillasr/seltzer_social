@@ -6,7 +6,6 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Bell, Check, CheckCheck, Trash2, Vote, AtSign, Heart, MessageCircle, UserPlus, Droplets, CornerDownRight, ListPlus, X } from 'lucide-react';
-import { Navigation } from '@/components/Navigation';
 import { TopHeader } from '@/components/TopHeader';
 import { CanLoader } from '@/components/CanLoader';
 import { PullIndicator, pullContentStyle } from '@/components/PullIndicator';
@@ -78,7 +77,6 @@ export default function InboxPage() {
 
   return (
     <>
-      <Navigation />
       <PullIndicator ptr={ptr} />
       <TopHeader
         title="Inbox"
