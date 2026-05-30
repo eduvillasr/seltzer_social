@@ -26,9 +26,9 @@ const SEED_ORDER = ['1', '0', '2'];
 
 // Triangular formation: hero apex at back-center, two supporters front + wide.
 const PEDESTALS: { slot: string; pos: React.CSSProperties; colW: number; colH: number; trophyH: number; hero?: boolean }[] = [
-  { slot: '1', pos: { left: '50%', bottom: 104, transform: 'translateX(-50%)' }, colW: 100, colH: 66, trophyH: 156, hero: true },
-  { slot: '0', pos: { left: '13%', bottom: 14, transform: 'translateX(-50%)' }, colW: 66, colH: 52, trophyH: 108 },
-  { slot: '2', pos: { left: '87%', bottom: 14, transform: 'translateX(-50%)' }, colW: 66, colH: 52, trophyH: 108 },
+  { slot: '1', pos: { left: '50%', bottom: 104, transform: 'translateX(-50%)' }, colW: 100, colH: 70, trophyH: 158, hero: true },
+  { slot: '0', pos: { left: '13%', bottom: 14, transform: 'translateX(-50%)' }, colW: 58, colH: 48, trophyH: 96 },
+  { slot: '2', pos: { left: '87%', bottom: 14, transform: 'translateX(-50%)' }, colW: 58, colH: 48, trophyH: 96 },
 ];
 const FRAMES: { slot: string; pos: React.CSSProperties; size: number; hero?: boolean }[] = [
   { slot: '0', pos: { left: '20%', top: '30%', transform: 'translate(-50%,-50%)' }, size: 58, hero: true },
@@ -223,21 +223,26 @@ export function ShowroomCase({
 
   return (
     <div>
-      {/* Bold gold frame around the whole hall */}
-      <div style={{ padding: 4, borderRadius: 26, background: 'linear-gradient(145deg, #f0d28a, #9c7a30 55%, #c9a24a)' }}>
-        <div className="relative w-full overflow-hidden" style={{ height: 'min(74vh, 600px)', borderRadius: 22 }}>
-          {/* ── Wall (navy → purple, warm ceiling glow) ── */}
-          <div className="absolute inset-0" style={{ background: 'radial-gradient(ellipse 80% 46% at 50% 0%, rgba(255,196,110,0.18), transparent 62%), linear-gradient(180deg, #3a2b52 0%, #2b2142 42%, #221b38 72%, #181428 100%)' }} />
-          {/* cornice + mid molding */}
-          <div className="absolute left-0 right-0" style={{ top: 0, height: 7, background: 'linear-gradient(180deg, #d8c48a, #8f7536)' }} />
-          <div className="absolute left-0 right-0" style={{ top: '20%', height: 2, background: 'linear-gradient(90deg, transparent, rgba(216,196,138,0.5), transparent)' }} />
+      {/* Thick bold gold frame around the whole hall */}
+      <div style={{ padding: 7, borderRadius: 28, background: 'linear-gradient(145deg, #e8c074, #7e5a16 52%, #c08a2e)', boxShadow: '0 18px 44px rgba(0,0,0,0.55)' }}>
+        <div className="relative w-full overflow-hidden" style={{ height: 'min(74vh, 600px)', borderRadius: 21 }}>
+          {/* ── Wall (rich purple, warm ceiling glow) ── */}
+          <div className="absolute inset-0" style={{ background: 'radial-gradient(ellipse 80% 46% at 50% 0%, rgba(255,196,110,0.20), transparent 62%), linear-gradient(180deg, #463169 0%, #38265b 42%, #2a1d49 72%, #1d1535 100%)' }} />
+          {/* velvet texture */}
+          <div className="absolute inset-0 pointer-events-none" style={{ opacity: 0.5, backgroundImage: 'repeating-linear-gradient(135deg, rgba(255,255,255,0.028) 0 2px, transparent 2px 5px)' }} />
+          {/* warm side accent lights */}
+          <div className="absolute pointer-events-none" style={{ left: 0, top: '16%', width: '26%', height: '52%', background: 'radial-gradient(ellipse at 0% 50%, rgba(255,168,78,0.18), transparent 70%)' }} />
+          <div className="absolute pointer-events-none" style={{ right: 0, top: '16%', width: '26%', height: '52%', background: 'radial-gradient(ellipse at 100% 50%, rgba(255,168,78,0.18), transparent 70%)' }} />
+          {/* cornice + thick mid molding */}
+          <div className="absolute left-0 right-0" style={{ top: 0, height: 8, background: 'linear-gradient(180deg, #e6cd8a, #8f7536)' }} />
+          <div className="absolute left-0 right-0" style={{ top: '19%', height: 6, background: 'linear-gradient(180deg, #e6cd8a, #9c7a30)', boxShadow: '0 2px 5px rgba(0,0,0,0.4)' }} />
 
           {/* columns */}
           <Column side="left" />
           <Column side="right" />
 
           {/* central arched alcove behind hero */}
-          <div className="absolute pointer-events-none" style={{ left: '50%', transform: 'translateX(-50%)', top: '13%', width: '50%', height: '64%', borderRadius: '50% 50% 8px 8px / 42% 42% 4px 4px', background: 'linear-gradient(180deg, rgba(86,64,118,0.85), rgba(44,34,66,0.92))', border: '3px solid #c9a24a', boxShadow: '0 0 34px rgba(201,162,74,0.28), inset 0 10px 36px rgba(0,0,0,0.45)' }} />
+          <div className="absolute pointer-events-none" style={{ left: '50%', transform: 'translateX(-50%)', top: '13%', width: '50%', height: '64%', borderRadius: '50% 50% 8px 8px / 42% 42% 4px 4px', background: 'linear-gradient(180deg, rgba(38,24,60,0.92), rgba(16,10,30,0.96))', border: '3px solid #c08a2e', boxShadow: '0 0 32px rgba(192,138,46,0.32), inset 0 12px 40px rgba(0,0,0,0.55)' }} />
 
           {/* signage */}
           <div className="absolute left-1/2 -translate-x-1/2" style={{ top: 9, padding: '4px 16px', borderRadius: 5, background: 'linear-gradient(180deg, #f1d68f, #9c7a30)', boxShadow: '0 3px 8px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.6)' }}>
@@ -264,6 +269,11 @@ export function ShowroomCase({
                     )}
                   </div>
                 </div>
+                {ach && (
+                  <div className="mx-auto" style={{ marginTop: 3, padding: '1px 5px', borderRadius: 2, background: 'linear-gradient(180deg, #b07a3a, #6e4a1e)', maxWidth: size + 12, boxShadow: '0 1px 2px rgba(0,0,0,0.5)' }}>
+                    <p className="text-[7px] font-bold truncate text-center" style={{ color: '#f0d6a8' }}>{ach.name}</p>
+                  </div>
+                )}
               </div>
             );
           })}
@@ -282,24 +292,41 @@ export function ShowroomCase({
           {/* floor far-fade into the wall + warm sheen */}
           <div className="absolute inset-x-0 bottom-0 pointer-events-none" style={{ height: '50%', background: 'linear-gradient(180deg, #181428 0%, rgba(24,20,40,0.35) 20%, transparent 44%)' }} />
           <div className="absolute inset-x-0 bottom-0 pointer-events-none" style={{ height: '30%', background: 'radial-gradient(ellipse 60% 80% at 50% 100%, rgba(255,225,170,0.10), transparent 70%)' }} />
+          {/* gold inlay line leading to the hero */}
+          <div className="absolute pointer-events-none" style={{ left: '50%', bottom: 0, transform: 'translateX(-50%)', width: 4, height: '38%', background: 'linear-gradient(180deg, rgba(216,196,138,0.55), rgba(216,196,138,0.04))' }} />
+          {/* spotlight pool on the floor under the hero */}
+          <div className="absolute pointer-events-none" style={{ left: '50%', bottom: '12%', transform: 'translateX(-50%)', width: '48%', height: 56, borderRadius: '50%', background: 'radial-gradient(ellipse at center, rgba(255,240,200,0.24), transparent 70%)', filter: 'blur(3px)' }} />
 
-          {/* velvet rope barrier (foreground) */}
-          <div className="absolute pointer-events-none" style={{ left: 0, right: 0, bottom: 4, height: 34 }}>
+          {/* luxe burgundy velvet rope barrier (foreground) */}
+          <div className="absolute pointer-events-none" style={{ left: 0, right: 0, bottom: 4, height: 38 }}>
             {['30%', '70%'].map((l) => (
               <div key={l} className="absolute" style={{ left: l, bottom: 0, transform: 'translateX(-50%)' }}>
-                <div style={{ width: 6, height: 30, borderRadius: 3, background: 'linear-gradient(180deg, #e9c87a, #8a6a2c)' }} />
-                <div style={{ position: 'absolute', top: -5, left: '50%', transform: 'translateX(-50%)', width: 9, height: 9, borderRadius: '50%', background: '#f1d68f', boxShadow: '0 0 6px rgba(241,214,143,0.8)' }} />
+                {/* gold stanchion post */}
+                <div style={{ width: 8, height: 32, borderRadius: 3, background: 'linear-gradient(90deg, #8a6a2c, #f1d68f 45%, #8a6a2c)' }} />
+                {/* ball top */}
+                <div style={{ position: 'absolute', top: -7, left: '50%', transform: 'translateX(-50%)', width: 12, height: 12, borderRadius: '50%', background: 'radial-gradient(circle at 35% 30%, #fbe6b0, #b08a30)', boxShadow: '0 0 6px rgba(241,214,143,0.7)' }} />
+                {/* rope knot at post */}
+                <div style={{ position: 'absolute', top: 4, left: '50%', transform: 'translateX(-50%)', width: 12, height: 10, borderRadius: '50%', background: 'radial-gradient(circle at 35% 30%, #9a2747, #5a0f26)', boxShadow: 'inset -2px -2px 3px rgba(0,0,0,0.4)' }} />
               </div>
             ))}
-            <svg className="absolute" style={{ left: '30%', width: '40%', bottom: 18, height: 18, overflow: 'visible' }} viewBox="0 0 100 20" preserveAspectRatio="none">
-              <path d="M2 2 Q50 26 98 2" fill="none" stroke="#7c1d3a" strokeWidth="4" strokeLinecap="round" />
-              <path d="M2 2 Q50 26 98 2" fill="none" stroke="#a83253" strokeWidth="1.6" strokeLinecap="round" />
+            <svg className="absolute" style={{ left: '30%', width: '40%', bottom: 20, height: 22, overflow: 'visible' }} viewBox="0 0 100 24" preserveAspectRatio="none">
+              <path d="M3 3 Q50 32 97 3" fill="none" stroke="#5a0f26" strokeWidth="8" strokeLinecap="round" />
+              <path d="M3 3 Q50 32 97 3" fill="none" stroke="#9a2747" strokeWidth="3" strokeLinecap="round" />
             </svg>
           </div>
 
-          {/* plants */}
-          <div className="absolute pointer-events-none" style={{ left: 2, bottom: 2, fontSize: 56, filter: 'drop-shadow(0 6px 8px rgba(0,0,0,0.5))' }}>🪴</div>
-          <div className="absolute pointer-events-none" style={{ right: 2, bottom: 2, fontSize: 50, filter: 'drop-shadow(0 6px 8px rgba(0,0,0,0.5))' }}>🪴</div>
+          {/* topiary (left) + decorative urn (right) */}
+          <div className="absolute pointer-events-none" style={{ left: 8, bottom: 6, filter: 'drop-shadow(0 5px 7px rgba(0,0,0,0.5))' }}>
+            <div style={{ width: 26, height: 26, borderRadius: '50%', margin: '0 auto', background: 'radial-gradient(circle at 35% 28%, #5cc463, #2e7d32)', boxShadow: 'inset -3px -3px 6px rgba(0,0,0,0.3)' }} />
+            <div style={{ width: 34, height: 32, borderRadius: '50%', margin: '-7px auto 0', background: 'radial-gradient(circle at 35% 28%, #5cc463, #2e7d32)', boxShadow: 'inset -3px -3px 6px rgba(0,0,0,0.3)' }} />
+            <div style={{ width: 5, height: 9, margin: '0 auto', background: '#6d4c2f' }} />
+            <div style={{ width: 26, height: 15, margin: '0 auto', background: 'linear-gradient(180deg, #cf8a44, #8a4f23)', clipPath: 'polygon(10% 0,90% 0,78% 100%,22% 100%)' }} />
+          </div>
+          <div className="absolute pointer-events-none" style={{ right: 10, bottom: 6, filter: 'drop-shadow(0 5px 7px rgba(0,0,0,0.5))' }}>
+            <div style={{ width: 14, height: 6, margin: '0 auto 1px', borderRadius: 3, background: '#7a5a28' }} />
+            <div style={{ width: 36, height: 46, background: 'linear-gradient(180deg, #d2a85e, #7a5a28)', borderRadius: '50% 50% 32% 32% / 38% 38% 62% 62%', border: '2px solid #5e451c', boxShadow: 'inset -4px -4px 8px rgba(0,0,0,0.3)' }} />
+            <div style={{ width: 22, height: 6, margin: '-2px auto 0', borderRadius: 2, background: '#7a5a28' }} />
+          </div>
 
           {nothing(earnedTrophies, earnedAchievements) && (
             <div className="absolute inset-0 flex items-end justify-center pb-10 px-6 text-center pointer-events-none z-10">
@@ -341,12 +368,16 @@ export function ShowroomCase({
                     <div className="pointer-events-none" style={{ width: colW * 0.86, height: 9, borderRadius: '50%', background: `radial-gradient(ellipse at center, ${hexA(color, 0.65)}, transparent 70%)`, marginBottom: -2, position: 'relative', zIndex: 1 }} />
                   </>
                 )}
-                {/* marble column */}
-                <div className="relative z-[1]" style={{ width: colW, height: colH, borderRadius: '6px 6px 4px 4px', background: 'linear-gradient(180deg, #f2eee4 0%, #d6c9ad 32%, #a08c63 100%)', boxShadow: `inset 0 2px 0 rgba(255,255,255,0.8), 0 12px 22px rgba(0,0,0,0.55)${hero ? ', 0 0 20px rgba(233,200,122,0.3)' : ''}` }}>
-                  <div className="absolute" style={{ top: -5, left: '50%', transform: 'translateX(-50%)', width: capW, height: 12, borderRadius: '50%', background: 'linear-gradient(180deg, #f8f4ea, #d8cbae)', boxShadow: '0 2px 5px rgba(0,0,0,0.35)', border: hero ? '1.5px solid rgba(233,200,122,0.85)' : 'none' }} />
-                  {hero && <div className="absolute" style={{ bottom: -8, left: '50%', transform: 'translateX(-50%)', width: capW + 8, height: 10, borderRadius: 3, background: 'linear-gradient(180deg, #e6dcc4, #a08c63)', boxShadow: '0 7px 14px rgba(0,0,0,0.5)' }} />}
+                {/* blocky ivory marble plinth with stepped platform */}
+                <div className="relative z-[1]" style={{ width: colW, height: colH, borderRadius: 3, background: 'linear-gradient(180deg, #f6f1e6 0%, #e4dac6 42%, #c2b496 100%)', boxShadow: `inset 0 2px 0 rgba(255,255,255,0.85), 0 16px 28px rgba(0,0,0,0.6)${hero ? ', 0 0 22px rgba(233,200,122,0.3)' : ''}` }}>
+                  {/* squared cap */}
+                  <div className="absolute" style={{ top: -7, left: '50%', transform: 'translateX(-50%)', width: capW, height: 9, borderRadius: 2, background: '#f6f1e6', boxShadow: '0 2px 5px rgba(0,0,0,0.4)', border: hero ? '1.5px solid rgba(233,200,122,0.85)' : '1px solid rgba(0,0,0,0.12)' }} />
+                  {/* stepped base platform */}
+                  <div className="absolute" style={{ bottom: -9, left: '50%', transform: 'translateX(-50%)', width: capW + (hero ? 14 : 7), height: 12, borderRadius: 2, background: 'linear-gradient(180deg, #e4dac6, #b3a484)', boxShadow: '0 9px 18px rgba(0,0,0,0.6)' }} />
                 </div>
-                {hero && <div className="absolute pointer-events-none" style={{ bottom: -12, left: '50%', transform: 'translateX(-50%)', width: capW + 36, height: 18, borderRadius: '50%', background: 'radial-gradient(ellipse at center, rgba(233,200,122,0.3), transparent 70%)' }} />}
+                {/* deep shadow under the podium */}
+                <div className="absolute pointer-events-none" style={{ bottom: -14, left: '50%', transform: 'translateX(-50%)', width: capW + (hero ? 40 : 18), height: 16, borderRadius: '50%', background: 'radial-gradient(ellipse at center, rgba(0,0,0,0.5), transparent 72%)', filter: 'blur(3px)' }} />
+                {hero && <div className="absolute pointer-events-none" style={{ bottom: -12, left: '50%', transform: 'translateX(-50%)', width: capW + 40, height: 18, borderRadius: '50%', background: 'radial-gradient(ellipse at center, rgba(233,200,122,0.3), transparent 70%)' }} />}
               </div>
             );
           })}
