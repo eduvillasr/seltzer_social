@@ -26,10 +26,11 @@ import { CanLoader } from '@/components/CanLoader';
 import {
   getUserByUsername, getUserReviews, getUserTriedIts,
   getBrandCatalogTotals, getCatalogSize, getGlobalAvgRating,
+  getCommunityAveragesForSeltzers,
 } from '@/lib/supabase';
 import { User } from '@/types';
 import {
-  BarChart3, Droplets, Flame, Star, TrendingUp, TrendingDown,
+  BarChart3, Flame, TrendingUp, TrendingDown,
   Compass, Layers, ArrowUpDown, Trophy,
 } from 'lucide-react';
 
@@ -68,6 +69,7 @@ interface TasteDatum {
   brand: string | null;
   seltzer_name: string;
   created_at: string;
+  seltzer_id: string | null;
 }
 
 export default function StatsPage({ params }: { params: { username: string } }) {
@@ -79,6 +81,7 @@ export default function StatsPage({ params }: { params: { username: string } }) 
   const [globalAvg, setGlobalAvg] = useState(3.5);
   const [sortMode, setSortMode] = useState<SortMode>('explored');
   const [showAllBrands, setShowAllBrands] = useState(false);
+  const [communityAvgs, setCommunityAvgs] = useState<Record<string, { avg: number; count: number }>>({});
 
   useEffect(() => { boot(); /* eslint-disable-line */ }, [params.username]);
 
@@ -108,12 +111,14 @@ export default function StatsPage({ params }: { params: { username: string } }) 
       brand: r.brand,
       seltzer_name: r.seltzer_name,
       created_at: r.created_at,
+      seltzer_id: r.seltzer_id ?? null,
     }));
     const triedRows: TasteDatum[] = (triedIts || []).map((t: any) => ({
       rating: t.rating,
       brand: t.review?.brand ?? null,
       seltzer_name: t.review?.seltzer_name ?? '',
       created_at: t.created_at,
+      seltzer_id: t.review?.seltzer_id ?? null,
     }));
 
     setData([...reviewRows, ...triedRows]);
@@ -121,6 +126,14 @@ export default function StatsPage({ params }: { params: { username: string } }) 
     setCatalogSize(size);
     setGlobalAvg(gAvg);
     setLoading(false);
+
+    // Fetch community averages (excluding this user) for the drinks they've
+    // reviewed — powers the "You vs community" comparison. Non-blocking.
+    const seltzerIds = [...reviewRows, ...triedRows].map((r) => r.seltzer_id).filter(Boolean) as string[];
+    if (seltzerIds.length > 0) {
+      const comm = await getCommunityAveragesForSeltzers(seltzerIds, (u as User).id);
+      setCommunityAvgs(comm);
+    }
   }
 
   // ─── derived metrics ──────────────────────────────────────────
@@ -208,8 +221,99 @@ export default function StatsPage({ params }: { params: { username: string } }) 
       .sort((a, b) => b[1] - a[1])
       .map(([family, count]) => ({ family, count }));
 
+    // Flavor radar — normalized 0..1 across ALL families (so the shape is
+    // comparable). Keeps a stable family order so the polygon doesn't jump.
+    const flavorRadarMax = Math.max(1, ...FLAVOR_FAMILIES.map((f) => flavorCounts[f.family] || 0));
+    const flavorRadar = FLAVOR_FAMILIES.map((f) => ({
+      family: f.family,
+      color: f.color,
+      count: flavorCounts[f.family] || 0,
+      value: (flavorCounts[f.family] || 0) / flavorRadarMax,
+    }));
+
+    // ─── Rating trend over time (monthly average) ───
+    const monthBuckets: Record<string, { sum: number; count: number; ts: number }> = {};
+    for (const d of data) {
+      const dt = new Date(d.created_at);
+      if (isNaN(dt.getTime())) continue;
+      const key = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}`;
+      if (!monthBuckets[key]) {
+        monthBuckets[key] = { sum: 0, count: 0, ts: new Date(dt.getFullYear(), dt.getMonth(), 1).getTime() };
+      }
+      monthBuckets[key].sum += d.rating;
+      monthBuckets[key].count++;
+    }
+    const monthlyTrend = Object.entries(monthBuckets)
+      .map(([key, v]) => ({ key, ts: v.ts, avg: v.sum / v.count, count: v.count }))
+      .sort((a, b) => a.ts - b.ts)
+      .slice(-12); // last 12 months max
+
+    // ─── Activity heatmap (reviews per ISO week, last ~26 weeks) ───
+    const weekMs = 7 * day;
+    // Anchor "this week" to the most recent Sunday for stable columns.
+    const today = new Date(now);
+    const dow = today.getDay();
+    const thisWeekStart = new Date(today.getFullYear(), today.getMonth(), today.getDate() - dow).getTime();
+    const WEEKS = 26;
+    const weekCounts: number[] = new Array(WEEKS).fill(0);
+    for (const d of data) {
+      const t = new Date(d.created_at).getTime();
+      if (isNaN(t)) continue;
+      const weeksAgo = Math.floor((thisWeekStart - t) / weekMs);
+      if (weeksAgo >= 0 && weeksAgo < WEEKS) {
+        weekCounts[WEEKS - 1 - weeksAgo]++; // oldest → newest left→right
+      }
+    }
+    const weeklyActivity = weekCounts.map((count, i) => ({
+      count,
+      weeksAgo: WEEKS - 1 - i,
+      ts: thisWeekStart - (WEEKS - 1 - i) * weekMs,
+    }));
+    const weekMax = Math.max(...weekCounts);
+    const activeWeeks = weekCounts.filter((c) => c > 0).length;
+
+    // ─── You vs community (per-drink delta) ───
+    // Dedupe by seltzer_id — use the user's own avg per drink vs community avg.
+    const byDrink: Record<string, { name: string; brand: string | null; ratings: number[] }> = {};
+    for (const d of data) {
+      if (!d.seltzer_id) continue;
+      if (!byDrink[d.seltzer_id]) byDrink[d.seltzer_id] = { name: d.seltzer_name, brand: d.brand, ratings: [] };
+      byDrink[d.seltzer_id].ratings.push(d.rating);
+    }
+    const vsCommunityAll = Object.entries(byDrink)
+      .map(([id, v]) => {
+        const comm = communityAvgs[id];
+        if (!comm || comm.count === 0) return null;
+        const mine = v.ratings.reduce((a, b) => a + b, 0) / v.ratings.length;
+        return {
+          id, name: v.name, brand: v.brand,
+          mine, community: comm.avg, communityCount: comm.count,
+          delta: mine - comm.avg,
+        };
+      })
+      .filter(Boolean) as Array<{ id: string; name: string; brand: string | null; mine: number; community: number; communityCount: number; delta: number }>;
+    const avgDelta = vsCommunityAll.length > 0
+      ? vsCommunityAll.reduce((s, v) => s + v.delta, 0) / vsCommunityAll.length
+      : 0;
+    // Most divergent drinks (largest |delta|), top 6
+    const vsCommunity = [...vsCommunityAll]
+      .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta))
+      .slice(0, 6);
+
+    // ─── Top-3 brand podium (most-reviewed brands) ───
+    const podium = [...brandRows].sort((a, b) => b.count - a.count || b.avgRating - a.avgRating).slice(0, 3);
+
     return {
       flavorFamilies,
+      flavorRadar,
+      monthlyTrend,
+      weeklyActivity,
+      weekMax,
+      activeWeeks,
+      vsCommunity,
+      vsCommunityCount: vsCommunityAll.length,
+      avgDelta,
+      podium,
       personalAvg,
       globalAvg,
       generosityDelta,
@@ -225,7 +329,7 @@ export default function StatsPage({ params }: { params: { username: string } }) 
       hot30,
       hot30Count: last30.length,
     };
-  }, [data, brandCatalog, catalogSize, globalAvg]);
+  }, [data, brandCatalog, catalogSize, globalAvg, communityAvgs]);
 
   const sortedBrands = useMemo<BrandRow[]>(() => {
     if (!metrics) return [];
@@ -364,18 +468,32 @@ export default function StatsPage({ params }: { params: { username: string } }) 
           </div>
         </div>
 
-        {/* ─── Flavor fingerprint ─── */}
+        {/* ─── Rating trend over time ─── */}
+        {metrics.monthlyTrend.length >= 2 && (
+          <div className="rounded-3xl p-4" style={{ background: 'rgba(15,20,36,0.5)', border: '1px solid var(--border-subtle)' }}>
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-[10px] font-bold uppercase tracking-[0.18em]" style={{ color: 'var(--cyan-400)' }}>
+                Rating trend
+              </span>
+              <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                monthly avg · last {metrics.monthlyTrend.length} mo
+              </span>
+            </div>
+            <RatingTrend points={metrics.monthlyTrend} />
+          </div>
+        )}
+
+        {/* ─── Flavor radar ─── */}
         {metrics.flavorFamilies.length > 0 && (
           <div className="rounded-3xl p-4" style={{ background: 'rgba(15,20,36,0.5)', border: '1px solid var(--border-subtle)' }}>
             <span className="text-[10px] font-bold uppercase tracking-[0.18em]" style={{ color: '#34d399' }}>
-              Flavor fingerprint
+              Flavor radar
             </span>
-            <div className="flex h-4 rounded-full overflow-hidden mt-3" style={{ background: 'rgba(148,163,184,0.08)' }}>
-              {metrics.flavorFamilies.map((f) => (
-                <div key={f.family} title={`${f.family} · ${f.count}`} style={{ width: `${(f.count / metrics.reviewCount) * 100}%`, background: FLAVOR_COLOR[f.family] || '#94a3b8' }} />
-              ))}
-            </div>
-            <div className="flex flex-wrap gap-x-3 gap-y-1.5 mt-3">
+            <p className="text-[10px] mt-0.5 mb-1" style={{ color: 'var(--text-muted)' }}>
+              Where your palate leans
+            </p>
+            <FlavorRadar axes={metrics.flavorRadar} />
+            <div className="flex flex-wrap gap-x-3 gap-y-1.5 mt-1">
               {metrics.flavorFamilies.map((f) => (
                 <span key={f.family} className="inline-flex items-center gap-1 text-[11px]" style={{ color: 'var(--text-secondary)' }}>
                   <span className="w-2.5 h-2.5 rounded-full" style={{ background: FLAVOR_COLOR[f.family] }} />
@@ -385,6 +503,19 @@ export default function StatsPage({ params }: { params: { username: string } }) 
             </div>
           </div>
         )}
+
+        {/* ─── Activity heatmap ─── */}
+        <div className="rounded-3xl p-4" style={{ background: 'rgba(15,20,36,0.5)', border: '1px solid var(--border-subtle)' }}>
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-[10px] font-bold uppercase tracking-[0.18em]" style={{ color: 'var(--violet-400)' }}>
+              Activity
+            </span>
+            <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+              {metrics.activeWeeks} active week{metrics.activeWeeks === 1 ? '' : 's'} · last 26
+            </span>
+          </div>
+          <ActivityHeatmap weeks={metrics.weeklyActivity} max={metrics.weekMax} />
+        </div>
 
         {/* ─── Per-brand explorer (collapsible) ─── */}
         <div
@@ -415,38 +546,46 @@ export default function StatsPage({ params }: { params: { username: string } }) 
           )}
         </div>
 
-        {/* ─── Fun extras ─── */}
-        <div
-          className="rounded-3xl p-4"
-          style={{ background: 'linear-gradient(135deg, rgba(251,191,36,0.08), rgba(167,139,250,0.08))', border: '1px solid var(--border-subtle)' }}
-        >
-          <span className="text-[10px] font-bold uppercase tracking-[0.18em]" style={{ color: 'var(--amber-400)' }}>
-            Superlatives
-          </span>
-          <div className="mt-3 grid grid-cols-1 gap-2">
-            <Superlative
-              icon={<Trophy size={14} />}
-              label="Reaches highest with"
-              brand={[...metrics.brandRows].filter((b) => b.count >= 2).sort((a, b) => b.avgRating - a.avgRating)[0]}
-              tone="#fbbf24"
-              hint="(min 2 drinks)"
-            />
-            <Superlative
-              icon={<Droplets size={14} />}
-              label="Has explored most"
-              brand={[...metrics.brandRows].sort((a, b) => b.exploredPct - a.exploredPct || b.count - a.count)[0]}
-              tone="#22d3ee"
-              hint="(% of brand's catalog)"
-            />
-            <Superlative
-              icon={<Star size={14} />}
-              label="Reviewed most often"
-              brand={[...metrics.brandRows].sort((a, b) => b.count - a.count)[0]}
-              tone="#a78bfa"
-              hint="(by review count)"
-            />
+        {/* ─── Top-3 brand podium ─── */}
+        {metrics.podium.length > 0 && (
+          <div
+            className="rounded-3xl p-4"
+            style={{ background: 'linear-gradient(135deg, rgba(251,191,36,0.08), rgba(167,139,250,0.08))', border: '1px solid var(--border-subtle)' }}
+          >
+            <span className="text-[10px] font-bold uppercase tracking-[0.18em] flex items-center gap-1.5" style={{ color: 'var(--amber-400)' }}>
+              <Trophy size={13} /> Most-reviewed brands
+            </span>
+            <BrandPodium podium={metrics.podium} username={user.username} />
           </div>
-        </div>
+        )}
+
+        {/* ─── You vs community ─── */}
+        {metrics.vsCommunity.length > 0 && (
+          <div className="rounded-3xl p-4" style={{ background: 'rgba(15,20,36,0.5)', border: '1px solid var(--border-subtle)' }}>
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-[10px] font-bold uppercase tracking-[0.18em]" style={{ color: '#34d399' }}>
+                You vs community
+              </span>
+              <span
+                className="text-[10px] font-bold tabular-nums px-1.5 py-0.5 rounded-md"
+                style={{
+                  background: metrics.avgDelta >= 0 ? 'rgba(52,211,153,0.12)' : 'rgba(251,113,133,0.12)',
+                  color: metrics.avgDelta >= 0 ? '#34d399' : '#fb7185',
+                }}
+              >
+                {metrics.avgDelta >= 0 ? '+' : ''}{metrics.avgDelta.toFixed(2)} avg
+              </span>
+            </div>
+            <p className="text-[10px] mb-3" style={{ color: 'var(--text-muted)' }}>
+              Where your take differs most from everyone else ({metrics.vsCommunityCount} compared)
+            </p>
+            <div className="space-y-2.5">
+              {metrics.vsCommunity.map((v) => (
+                <VsCommunityRow key={v.id} row={v} />
+              ))}
+            </div>
+          </div>
+        )}
 
         <p className="text-[10px] text-center pt-2" style={{ color: 'var(--text-muted)' }}>
           Stats update in real time as you review more drinks.
@@ -588,39 +727,249 @@ function SortControl({ mode, onChange }: { mode: SortMode; onChange: (m: SortMod
   );
 }
 
-function Superlative({
-  icon, label, brand, tone, hint,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  brand: BrandRow | undefined;
-  tone: string;
-  hint: string;
-}) {
-  if (!brand) {
-    return (
-      <div className="rounded-xl p-3" style={{ background: 'rgba(15,20,36,0.4)', border: `1px solid ${tone}22` }}>
-        <p className="text-[10px] font-bold uppercase tracking-wider flex items-center gap-1" style={{ color: tone }}>
-          {icon} {label}
-        </p>
-        <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>
-          Not enough data yet {hint}
-        </p>
-      </div>
-    );
-  }
+// ─── Top-3 brand podium ──────────────────────────────────────────
+function BrandPodium({ podium, username }: { podium: BrandRow[]; username: string }) {
+  // Order visually as 2nd · 1st · 3rd, with descending heights.
+  const first = podium[0];
+  const second = podium[1];
+  const third = podium[2];
+  const slots: { row: BrandRow | undefined; place: 1 | 2 | 3 }[] = [
+    { row: second, place: 2 },
+    { row: first, place: 1 },
+    { row: third, place: 3 },
+  ];
+  const PLACE: Record<number, { color: string; height: number; medal: string }> = {
+    1: { color: '#fbbf24', height: 96, medal: '🥇' },
+    2: { color: '#cbd5e1', height: 72, medal: '🥈' },
+    3: { color: '#d8964f', height: 56, medal: '🥉' },
+  };
   return (
-    <div className="rounded-xl p-3 flex items-center justify-between gap-2" style={{ background: `${tone}10`, border: `1px solid ${tone}33` }}>
-      <div className="min-w-0 flex-1">
-        <p className="text-[10px] font-bold uppercase tracking-wider flex items-center gap-1" style={{ color: tone }}>
-          {icon} {label}
+    <div className="flex items-end justify-center gap-2 mt-4">
+      {slots.map(({ row, place }) => {
+        const p = PLACE[place];
+        if (!row) {
+          return (
+            <div key={place} className="flex-1 flex flex-col items-center opacity-30">
+              <div className="text-lg mb-1">{p.medal}</div>
+              <div
+                className="w-full rounded-t-xl"
+                style={{ height: p.height * 0.55, background: 'rgba(148,163,184,0.1)', border: '1px solid var(--border-subtle)' }}
+              />
+            </div>
+          );
+        }
+        return (
+          <Link
+            key={place}
+            href={`/brand/${encodeURIComponent(row.brand)}`}
+            className="flex-1 flex flex-col items-center min-w-0 group"
+          >
+            <div className="text-xl mb-0.5 transition-transform group-hover:scale-110">{p.medal}</div>
+            <p className="text-[11px] font-extrabold text-center truncate w-full px-0.5" style={{ color: 'var(--text-primary)' }}>
+              {row.brand}
+            </p>
+            <p className="text-[9px] mb-1 tabular-nums" style={{ color: 'var(--text-muted)' }}>
+              {row.count} rated · {row.avgRating.toFixed(1)}★
+            </p>
+            <div
+              className="w-full rounded-t-xl flex items-start justify-center pt-1.5 transition-all group-hover:brightness-110"
+              style={{
+                height: p.height,
+                background: `linear-gradient(to bottom, ${p.color}, ${p.color}55)`,
+                boxShadow: place === 1 ? `0 0 20px ${p.color}55` : 'none',
+                border: `1px solid ${p.color}`,
+              }}
+            >
+              <span className="text-base font-black" style={{ color: 'rgba(10,14,26,0.7)' }}>{place}</span>
+            </div>
+          </Link>
+        );
+      })}
+    </div>
+  );
+}
+
+// ─── Rating trend line chart ─────────────────────────────────────
+function RatingTrend({ points }: { points: { key: string; ts: number; avg: number; count: number }[] }) {
+  const W = 320, H = 96, padX = 8, padY = 12;
+  const n = points.length;
+  const xAt = (i: number) => padX + (n <= 1 ? 0 : (i / (n - 1)) * (W - padX * 2));
+  // y-domain fixed to the rating scale 1..5 for honest comparison.
+  const yAt = (v: number) => padY + (1 - (v - 1) / 4) * (H - padY * 2);
+  const linePath = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${xAt(i).toFixed(1)} ${yAt(p.avg).toFixed(1)}`).join(' ');
+  const areaPath = `${linePath} L ${xAt(n - 1).toFixed(1)} ${H - padY} L ${xAt(0).toFixed(1)} ${H - padY} Z`;
+  const monthLabel = (ts: number) => new Date(ts).toLocaleDateString(undefined, { month: 'short' });
+  return (
+    <div>
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: 96 }} preserveAspectRatio="none">
+        {[2, 3, 4, 5].map((g) => (
+          <line key={g} x1={padX} x2={W - padX} y1={yAt(g)} y2={yAt(g)} stroke="rgba(148,163,184,0.1)" strokeWidth={1} />
+        ))}
+        <defs>
+          <linearGradient id="trendFill" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="rgba(34,211,238,0.35)" />
+            <stop offset="100%" stopColor="rgba(34,211,238,0)" />
+          </linearGradient>
+        </defs>
+        <path d={areaPath} fill="url(#trendFill)" />
+        <path d={linePath} fill="none" stroke="var(--cyan-400)" strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
+        {points.map((p, i) => (
+          <circle key={p.key} cx={xAt(i)} cy={yAt(p.avg)} r={2.5} fill="var(--cyan-400)" />
+        ))}
+      </svg>
+      <div className="flex justify-between mt-1 px-1">
+        {points.map((p, i) => (
+          (n <= 6 || i === 0 || i === n - 1 || i === Math.floor(n / 2)) ? (
+            <span key={p.key} className="text-[9px]" style={{ color: 'var(--text-muted)' }}>{monthLabel(p.ts)}</span>
+          ) : <span key={p.key} className="text-[9px]">&nbsp;</span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── Flavor radar chart ──────────────────────────────────────────
+function FlavorRadar({ axes }: { axes: { family: string; color: string; count: number; value: number }[] }) {
+  const size = 220, cx = size / 2, cy = size / 2, R = 78;
+  const n = axes.length;
+  const angleAt = (i: number) => (Math.PI * 2 * i) / n - Math.PI / 2;
+  const pt = (i: number, r: number) => ({
+    x: cx + Math.cos(angleAt(i)) * r,
+    y: cy + Math.sin(angleAt(i)) * r,
+  });
+  const ringLevels = [0.25, 0.5, 0.75, 1];
+  const shapePath = axes
+    .map((a, i) => {
+      const { x, y } = pt(i, Math.max(0.04, a.value) * R);
+      return `${i === 0 ? 'M' : 'L'} ${x.toFixed(1)} ${y.toFixed(1)}`;
+    })
+    .join(' ') + ' Z';
+  return (
+    <svg viewBox={`0 0 ${size} ${size}`} className="w-full max-w-[260px] mx-auto" style={{ height: 220 }}>
+      {/* concentric rings */}
+      {ringLevels.map((lvl) => (
+        <polygon
+          key={lvl}
+          points={axes.map((_, i) => { const { x, y } = pt(i, lvl * R); return `${x},${y}`; }).join(' ')}
+          fill="none"
+          stroke="rgba(148,163,184,0.12)"
+          strokeWidth={1}
+        />
+      ))}
+      {/* spokes */}
+      {axes.map((_, i) => { const { x, y } = pt(i, R); return (
+        <line key={i} x1={cx} y1={cy} x2={x} y2={y} stroke="rgba(148,163,184,0.1)" strokeWidth={1} />
+      ); })}
+      {/* data shape */}
+      <path d={shapePath} fill="rgba(52,211,153,0.22)" stroke="#34d399" strokeWidth={2} strokeLinejoin="round" />
+      {/* vertices */}
+      {axes.map((a, i) => { const { x, y } = pt(i, Math.max(0.04, a.value) * R); return (
+        <circle key={a.family} cx={x} cy={y} r={a.count > 0 ? 3 : 0} fill={a.color} />
+      ); })}
+      {/* labels */}
+      {axes.map((a, i) => {
+        const { x, y } = pt(i, R + 14);
+        const anchor = Math.abs(x - cx) < 6 ? 'middle' : x > cx ? 'start' : 'end';
+        const short = a.family.split(' ')[0];
+        return (
+          <text
+            key={a.family}
+            x={x} y={y}
+            textAnchor={anchor as any}
+            dominantBaseline="middle"
+            fontSize={9}
+            fontWeight={700}
+            fill={a.count > 0 ? a.color : 'rgba(148,163,184,0.4)'}
+          >
+            {short}
+          </text>
+        );
+      })}
+    </svg>
+  );
+}
+
+// ─── Activity heatmap (GitHub-style weekly) ──────────────────────
+function ActivityHeatmap({ weeks, max }: { weeks: { count: number; weeksAgo: number; ts: number }[]; max: number }) {
+  const shade = (count: number) => {
+    if (count <= 0) return 'rgba(148,163,184,0.07)';
+    const t = max > 0 ? count / max : 0;
+    const alpha = 0.25 + t * 0.7;
+    return `rgba(167,139,250,${alpha.toFixed(2)})`;
+  };
+  const monthLabel = (ts: number) => new Date(ts).toLocaleDateString(undefined, { month: 'short' });
+  return (
+    <div>
+      <div className="flex gap-[3px] items-end">
+        {weeks.map((w, i) => (
+          <div
+            key={i}
+            title={`${w.count} review${w.count === 1 ? '' : 's'} · week of ${new Date(w.ts).toLocaleDateString()}`}
+            className="flex-1 rounded-sm"
+            style={{
+              height: 26,
+              background: shade(w.count),
+              border: w.count > 0 ? '1px solid rgba(167,139,250,0.3)' : '1px solid transparent',
+            }}
+          />
+        ))}
+      </div>
+      <div className="flex justify-between mt-1.5">
+        {weeks.map((w, i) => (
+          (i === 0 || i === weeks.length - 1 || i === Math.floor(weeks.length / 2)) ? (
+            <span key={i} className="text-[9px]" style={{ color: 'var(--text-muted)' }}>{monthLabel(w.ts)}</span>
+          ) : null
+        ))}
+      </div>
+      <div className="flex items-center justify-end gap-1.5 mt-2">
+        <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>Less</span>
+        {[0, 0.25, 0.5, 0.75, 1].map((t) => (
+          <span key={t} className="w-2.5 h-2.5 rounded-sm" style={{ background: t === 0 ? 'rgba(148,163,184,0.07)' : `rgba(167,139,250,${(0.25 + t * 0.7).toFixed(2)})` }} />
+        ))}
+        <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>More</span>
+      </div>
+    </div>
+  );
+}
+
+// ─── You vs community row ────────────────────────────────────────
+function VsCommunityRow({
+  row,
+}: {
+  row: { id: string; name: string; brand: string | null; mine: number; community: number; communityCount: number; delta: number };
+}) {
+  const higher = row.delta >= 0;
+  const tone = higher ? '#34d399' : '#fb7185';
+  // Position both markers on a shared 1..5 track.
+  const pos = (v: number) => `${Math.min(100, Math.max(0, ((v - 1) / 4) * 100))}%`;
+  return (
+    <div>
+      <div className="flex items-center justify-between gap-2 mb-1">
+        <p className="text-xs font-bold truncate" style={{ color: 'var(--text-primary)' }}>
+          {row.name}
+          {row.brand && <span className="font-normal" style={{ color: 'var(--text-muted)' }}> · {row.brand}</span>}
         </p>
-        <p className="text-sm font-extrabold mt-0.5 truncate" style={{ color: 'var(--text-primary)' }}>
-          {brand.brand}
-        </p>
-        <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
-          avg {brand.avgRating.toFixed(2)} · {brand.count}/{brand.total} · {(brand.exploredPct * 100).toFixed(0)}% explored
-        </p>
+        <span className="text-[10px] font-bold tabular-nums px-1.5 py-0.5 rounded-md flex-shrink-0" style={{ background: `${tone}1a`, color: tone }}>
+          {higher ? '+' : ''}{row.delta.toFixed(1)}
+        </span>
+      </div>
+      <div className="relative h-2 rounded-full" style={{ background: 'rgba(148,163,184,0.1)' }}>
+        {/* community marker */}
+        <div
+          className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-2 h-2 rounded-full"
+          style={{ left: pos(row.community), background: 'var(--text-muted)' }}
+          title={`Community ${row.community.toFixed(2)} (${row.communityCount})`}
+        />
+        {/* your marker */}
+        <div
+          className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-3 h-3 rounded-full border-2"
+          style={{ left: pos(row.mine), background: tone, borderColor: 'var(--bg-primary, #0a0e1a)' }}
+          title={`You ${row.mine.toFixed(2)}`}
+        />
+      </div>
+      <div className="flex justify-between mt-1">
+        <span className="text-[9px] tabular-nums" style={{ color: tone }}>you {row.mine.toFixed(1)}</span>
+        <span className="text-[9px] tabular-nums" style={{ color: 'var(--text-muted)' }}>community {row.community.toFixed(1)} · {row.communityCount}</span>
       </div>
     </div>
   );

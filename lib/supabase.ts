@@ -377,6 +377,34 @@ export async function getGlobalAvgRating(): Promise<number> {
   return totalCount > 0 ? totalSum / totalCount : 3.5;
 }
 
+/**
+ * Community average rating per seltzer (excluding one user), for the
+ * "You vs community" stats card. Returns a map seltzer_id → { avg, count }
+ * where count is the number of OTHER people who rated it.
+ */
+export async function getCommunityAveragesForSeltzers(
+  seltzerIds: string[],
+  excludeUserId?: string,
+): Promise<Record<string, { avg: number; count: number }>> {
+  const ids = Array.from(new Set(seltzerIds.filter(Boolean)));
+  if (ids.length === 0) return {};
+  const { data } = await supabase
+    .from('reviews')
+    .select('seltzer_id, rating, user_id')
+    .in('seltzer_id', ids);
+  const acc: Record<string, { sum: number; count: number }> = {};
+  for (const r of (data || []) as Array<{ seltzer_id: string | null; rating: number; user_id: string }>) {
+    if (!r.seltzer_id) continue;
+    if (excludeUserId && r.user_id === excludeUserId) continue;
+    if (!acc[r.seltzer_id]) acc[r.seltzer_id] = { sum: 0, count: 0 };
+    acc[r.seltzer_id].sum += r.rating;
+    acc[r.seltzer_id].count++;
+  }
+  const out: Record<string, { avg: number; count: number }> = {};
+  for (const [id, v] of Object.entries(acc)) out[id] = { avg: v.sum / v.count, count: v.count };
+  return out;
+}
+
 export async function searchSeltzers(query: string) {
   if (!query || query.length < 1) {
     const { data, error } = await supabase.from('seltzers').select('*').order('brand').limit(20);
@@ -1502,7 +1530,7 @@ export async function getUserTriedIt(userId: string, reviewId: string) {
 export async function getUserTriedIts(userId: string) {
   const { data, error } = await supabase
     .from('tried_it')
-    .select('rating, created_at, review:reviews(id, user_id, seltzer_name, brand, image_url)')
+    .select('rating, created_at, review:reviews(id, user_id, seltzer_id, seltzer_name, brand, image_url)')
     .eq('user_id', userId)
     .order('created_at', { ascending: false });
   if (error) return { data: [], error };

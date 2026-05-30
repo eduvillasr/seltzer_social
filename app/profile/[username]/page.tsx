@@ -241,19 +241,6 @@ export default function ProfilePage({ params }: ProfilePageProps) {
     ))[0];
   }, [reviews]);
 
-  const topBrands = useMemo(() => {
-    const counts: Record<string, number> = {};
-    for (const r of reviews) {
-      const b = r.brand?.trim();
-      if (!b) continue;
-      counts[b] = (counts[b] || 0) + 1;
-    }
-    return Object.entries(counts)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 4)
-      .map(([brand, count]) => ({ brand, count }));
-  }, [reviews]);
-
   // ─── advanced taste metrics ──────────────────────────────────
   // We merge full reviews + "tried it" quick-rates so the profile reflects
   // every drink the user has expressed an opinion on, not just ones they
@@ -530,151 +517,46 @@ export default function ProfilePage({ params }: ProfilePageProps) {
           </div>
         </div>
 
-        {/* ─── Taste profile (advanced metrics) ─── */}
+        {/* ─── Analytics entry (full breakdown lives on the stats page) ─── */}
         {taste && taste.total >= 2 && (
-          <div
-            className="rounded-3xl overflow-hidden animate-fade-in-up"
+          <Link
+            href={`/profile/${user.username}/stats`}
+            className="block rounded-3xl overflow-hidden animate-fade-in-up transition-transform hover:scale-[1.01] active:scale-[0.99]"
             style={{
-              background: 'linear-gradient(135deg, rgba(34,211,238,0.06), rgba(167,139,250,0.06))',
-              border: '1px solid var(--border-subtle)',
+              background: 'linear-gradient(135deg, rgba(34,211,238,0.1), rgba(167,139,250,0.1))',
+              border: '1px solid rgba(34,211,238,0.25)',
+              boxShadow: '0 0 24px rgba(6,182,212,0.12)',
               padding: '16px',
             }}
           >
-            <div className="flex items-center justify-between mb-3 gap-2">
-              <span className="text-[10px] font-bold uppercase tracking-[0.18em]" style={{ color: 'var(--cyan-400)' }}>
-                Taste Profile
-              </span>
-              <span className="text-[10px] text-right" style={{ color: 'var(--text-muted)' }}>
-                {taste.reviewCount} review{taste.reviewCount === 1 ? '' : 's'}
-                {taste.triedItCount > 0 && <> · {taste.triedItCount} tried</>}
-                {' · avg '}{taste.mean.toFixed(1)}
-              </span>
-            </div>
-
-            {/* Trait pills */}
-            <div className="flex flex-wrap gap-2 mb-4">
-              <TraitPill label={taste.generosityLabel} sub="critic style" tone="cyan" />
-              <TraitPill label={taste.pickinessLabel} sub="opinion spread" tone="violet" />
-              <TraitPill
-                label={`${taste.loyaltyPct}% loyal`}
-                sub={taste.topBrandByCount?.[0] ?? ''}
-                tone="amber"
-              />
-              <TraitPill label={`Sweet spot ${taste.sweetTier}`} sub="most-rated tier" tone="emerald" />
-            </div>
-
-            {/* Flavor fingerprint — what flavor families this palate leans toward */}
-            {taste.flavorFamilies.length > 0 && (
-              <div className="mb-4">
-                <p className="text-[10px] font-bold uppercase tracking-wider mb-1.5" style={{ color: 'var(--text-muted)' }}>
-                  Flavor fingerprint
-                </p>
-                <div className="flex h-3 rounded-full overflow-hidden" style={{ background: 'rgba(148,163,184,0.08)' }}>
-                  {taste.flavorFamilies.slice(0, 6).map((f) => (
-                    <div key={f.family} title={`${f.family} · ${f.count}`} style={{ width: `${(f.count / taste.total) * 100}%`, background: FLAVOR_COLOR[f.family] || '#94a3b8' }} />
-                  ))}
-                </div>
-                <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2">
-                  {taste.flavorFamilies.slice(0, 4).map((f) => (
-                    <span key={f.family} className="inline-flex items-center gap-1 text-[10px]" style={{ color: 'var(--text-secondary)' }}>
-                      <span className="w-2 h-2 rounded-full" style={{ background: FLAVOR_COLOR[f.family] }} />
-                      {f.family} <span style={{ color: 'var(--text-muted)' }}>· {f.count}</span>
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Tier distribution bar chart */}
-            <div className="mb-4">
-              <p className="text-[10px] font-bold uppercase tracking-wider mb-1.5" style={{ color: 'var(--text-muted)' }}>
-                Tier distribution
-              </p>
-              <div className="flex items-end gap-1.5 h-16">
-                {(['S','A','B','C','D','F'] as const).map((t) => {
-                  const c = taste.tierCounts[t];
-                  const max = Math.max(...Object.values(taste.tierCounts));
-                  const heightPct = max ? (c / max) * 100 : 0;
-                  return (
-                    <div key={t} className="flex-1 flex flex-col items-center justify-end h-full">
-                      <span className="text-[9px] font-bold mb-0.5" style={{ color: c > 0 ? TIER_COLORS[t] : 'var(--text-muted)' }}>
-                        {c}
-                      </span>
-                      <div
-                        className="w-full rounded-t transition-all"
-                        style={{
-                          height: `${Math.max(heightPct, 4)}%`,
-                          background: c > 0 ? `${TIER_COLORS[t]}cc` : 'rgba(148,163,184,0.08)',
-                          boxShadow: c > 0 ? `0 0 12px ${TIER_COLORS[t]}33` : 'none',
-                        }}
-                      />
-                      <span className="text-[10px] font-extrabold mt-1" style={{ color: TIER_COLORS[t] }}>
-                        {t}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Best & worst brand callouts */}
-            {(taste.bestBrand || taste.worstBrand) && (
-              <div className="grid grid-cols-2 gap-2">
-                {taste.bestBrand && (
-                  <BrandCallout
-                    label="Reaches highest"
-                    brand={taste.bestBrand[0]}
-                    avg={taste.bestBrand[1].sum / taste.bestBrand[1].count}
-                    count={taste.bestBrand[1].count}
-                    tone="#10b981"
-                  />
-                )}
-                {taste.worstBrand && taste.bestBrand && taste.worstBrand[0] !== taste.bestBrand[0] && (
-                  <BrandCallout
-                    label="Falls flattest"
-                    brand={taste.worstBrand[0]}
-                    avg={taste.worstBrand[1].sum / taste.worstBrand[1].count}
-                    count={taste.worstBrand[1].count}
-                    tone="#fb7185"
-                  />
-                )}
-              </div>
-            )}
-
-            <div className="mt-3 pt-3" style={{ borderTop: '1px solid var(--border-subtle)' }}>
-              <p className="text-[10px] mb-2 text-center" style={{ color: 'var(--text-muted)' }}>
-                {taste.uniqueBrands} {taste.uniqueBrands === 1 ? 'brand' : 'brands'} explored · catalog completion, histograms &amp; more
-              </p>
-              <Link
-                href={`/profile/${user.username}/stats`}
-                className="flex items-center justify-center gap-2 w-full rounded-xl py-2.5 text-xs font-bold transition-transform hover:scale-[1.01] active:scale-95"
-                style={{ background: 'linear-gradient(135deg, var(--cyan-400), var(--cyan-600))', color: '#fff', boxShadow: '0 0 16px rgba(6,182,212,0.25)' }}
+            <div className="flex items-center gap-3">
+              <div
+                className="flex-shrink-0 w-11 h-11 rounded-2xl flex items-center justify-center"
+                style={{ background: 'linear-gradient(135deg, var(--cyan-400), var(--cyan-600))', boxShadow: '0 0 16px rgba(6,182,212,0.3)' }}
               >
-                <BarChart3 size={14} /> View full analytics <ChevronRight size={14} />
-              </Link>
+                <BarChart3 size={20} color="#fff" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-extrabold" style={{ color: 'var(--text-primary)' }}>
+                  {isOwnProfile ? 'Your seltzer analytics' : `@${user.username}'s analytics`}
+                </p>
+                <p className="text-[11px]" style={{ color: 'var(--text-secondary)' }}>
+                  Flavor radar, rating trends, brand podium &amp; more
+                </p>
+              </div>
+              <ChevronRight size={18} style={{ color: 'var(--cyan-400)' }} className="flex-shrink-0" />
             </div>
-          </div>
-        )}
 
-        {/* ─── Top brands strip ─── */}
-        {topBrands.length > 0 && (
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-[0.18em] mb-2 px-1" style={{ color: 'var(--text-muted)' }}>
-              {isOwnProfile ? 'Brands you reach for' : 'Goes back for'}
-            </p>
-            <div className="flex flex-wrap gap-2">
-              {topBrands.map((b) => (
-                <Link
-                  key={b.brand}
-                  href={`/brand/${encodeURIComponent(b.brand)}`}
-                  className="text-xs px-3 py-1.5 rounded-full transition-colors hover:bg-white/5"
-                  style={{ background: 'rgba(15,20,36,0.6)', border: '1px solid var(--border-subtle)', color: 'var(--text-secondary)' }}
-                >
-                  {b.brand} <span style={{ color: 'var(--text-muted)' }}>· {b.count}</span>
-                </Link>
-              ))}
+            {/* Quick-glance chips so the entry still teases the data */}
+            <div className="flex flex-wrap gap-2 mt-3 pt-3" style={{ borderTop: '1px solid var(--border-subtle)' }}>
+              <MiniChip label="Drinks rated" value={`${taste.total}`} tone="var(--cyan-400)" />
+              <MiniChip label="Brands" value={`${taste.uniqueBrands}`} tone="var(--violet-400)" />
+              <MiniChip label="Avg rating" value={taste.mean.toFixed(1)} tone="var(--amber-400)" />
+              {taste.bestBrand && (
+                <MiniChip label="Top brand" value={taste.bestBrand[0]} tone="#34d399" />
+              )}
             </div>
-          </div>
+          </Link>
         )}
 
         {/* ─── View toggle ─── */}
@@ -894,37 +776,14 @@ function ReviewGridTile({ review }: { review: Review }) {
   );
 }
 
-const PILL_TONES: Record<string, { fg: string; bg: string; border: string }> = {
-  cyan:    { fg: 'var(--cyan-400)',   bg: 'rgba(34,211,238,0.08)',  border: 'rgba(34,211,238,0.22)' },
-  violet:  { fg: 'var(--violet-400)', bg: 'rgba(167,139,250,0.08)', border: 'rgba(167,139,250,0.22)' },
-  amber:   { fg: 'var(--amber-400)',  bg: 'rgba(251,191,36,0.08)',  border: 'rgba(251,191,36,0.22)' },
-  emerald: { fg: '#34d399',           bg: 'rgba(52,211,153,0.08)',  border: 'rgba(52,211,153,0.22)' },
-};
-
-function TraitPill({ label, sub, tone }: { label: string; sub: string; tone: keyof typeof PILL_TONES }) {
-  const t = PILL_TONES[tone];
+function MiniChip({ label, value, tone }: { label: string; value: string; tone: string }) {
   return (
     <div
-      className="rounded-xl px-3 py-1.5 flex flex-col"
-      style={{ background: t.bg, border: `1px solid ${t.border}` }}
+      className="rounded-xl px-2.5 py-1.5 flex flex-col min-w-0"
+      style={{ background: `${tone === 'var(--cyan-400)' || tone.startsWith('var') ? 'rgba(255,255,255,0.04)' : `${tone}14`}`, border: '1px solid var(--border-subtle)' }}
     >
-      <span className="text-xs font-bold leading-tight" style={{ color: t.fg }}>{label}</span>
-      {sub && <span className="text-[10px] truncate" style={{ color: 'var(--text-muted)' }}>{sub}</span>}
-    </div>
-  );
-}
-
-function BrandCallout({ label, brand, avg, count, tone }: { label: string; brand: string; avg: number; count: number; tone: string }) {
-  return (
-    <div
-      className="rounded-xl p-2.5"
-      style={{ background: `${tone}10`, border: `1px solid ${tone}33` }}
-    >
-      <p className="text-[9px] font-bold uppercase tracking-wider" style={{ color: tone }}>{label}</p>
-      <p className="text-sm font-extrabold mt-0.5 truncate" style={{ color: 'var(--text-primary)' }}>{brand}</p>
-      <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
-        avg {avg.toFixed(1)} · {count} reviews
-      </p>
+      <span className="text-[9px] font-bold uppercase tracking-wider truncate" style={{ color: 'var(--text-muted)' }}>{label}</span>
+      <span className="text-xs font-extrabold leading-tight truncate" style={{ color: tone }}>{value}</span>
     </div>
   );
 }
