@@ -40,7 +40,7 @@ export const RELEASES: Release[] = [
       {
         kind: 'new',
         title: 'Trophy Showroom',
-        detail: 'Every profile now has a Showroom — a museum gallery you curate. Trophies stand as sculptures on spotlit podiums, and your achievements hang as framed art on the back wall. Drag trophies onto podiums and achievements onto wall frames to arrange your exhibit, then save; visitors see your arrangement. Trophies are a small, rare set (just 8 to chase) across four rarities — earned by reviewing, getting likes, being part of the community, and referring friends. Founders and beta testers all share a one-of-a-kind, extra-shiny "Pioneer" trophy for being here before launch. Open it from any profile via the gold "Trophy Showroom" card.',
+        detail: 'Every profile now has a Showroom — a warm wooden trophy case that captures your whole seltzer personality. Your seltzer-can trophies stand on a shelf (the hero in the center), your achievements show as a grid of challenge coins plus ribbons and shields for the rarer ones, a "Most Loved" plaque crowns your highest-rated drink, and a taste-profile card sums up your style. Drag trophies onto the shelf and coins around the grid to curate it, then save; anyone who visits your profile sees it. Trophies are a small, rare set (just 8 to chase) across four rarities — earned by reviewing, getting likes, being part of the community, and referring friends. Founders and beta testers all share a one-of-a-kind "Pioneer" trophy for being here before launch. Open it from any profile via the gold "Trophy Showroom" card.',
       },
       {
         kind: 'new',
@@ -68,9 +68,9 @@ export const RELEASES: Release[] = [
         detail: 'A redesigned single-screen welcome, a heart-burst when you like, animated count-ups on profile and compare stats, and a glossier tier list — including a gold shimmer on the S-tier.',
       },
       {
-        kind: 'fixed',
-        title: 'Steadier bottom navigation',
-        detail: 'The floating bottom nav no longer lags or jitters while you scroll on phones.',
+        kind: 'improved',
+        title: 'Redesigned bottom navigation',
+        detail: 'The floating "bubble" nav is now a fixed, edge-to-edge bottom bar (think Instagram or Letterboxd) — and because it no longer uses a heavy blur, it stays rock-steady instead of lagging while you scroll.',
       },
     ],
   },

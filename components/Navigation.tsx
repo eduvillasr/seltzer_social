@@ -87,122 +87,88 @@ export function Navigation() {
     return pathname?.startsWith(path);
   };
 
+  const profileActive = !!pathname?.startsWith('/profile');
+  const discoverActive = isActive('/discover') || isActive('/search');
+
   return (
-    <>
-      <nav
-        className="fixed left-1/2 z-50"
-        style={{
-          width: 'calc(100% - 24px)',
-          maxWidth: '460px',
-          // Float above the home indicator on iPhones; falls back to 16px on devices without inset
-          bottom: 'calc(16px + env(safe-area-inset-bottom, 0px))',
-          // Promote to its own GPU layer. Without this, the heavy backdrop-blur
-          // below gets re-rasterized on every scroll frame in mobile WebViews,
-          // which is what makes the bar look like it lags / jitters. translateZ
-          // pins it to the compositor so it stays rock-steady during scroll.
-          transform: 'translateX(-50%) translateZ(0)',
-          willChange: 'transform',
-          backfaceVisibility: 'hidden',
-        }}
-      >
-        <div
-          className="relative rounded-full overflow-hidden"
-          style={{
-            background: 'rgba(15, 20, 36, 0.65)',
-            backdropFilter: 'blur(32px) saturate(200%)',
-            WebkitBackdropFilter: 'blur(32px) saturate(200%)',
-            border: '1px solid rgba(255, 255, 255, 0.08)',
-            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.04) inset, 0 1px 0 rgba(255, 255, 255, 0.08) inset',
-          }}
+    <nav
+      className="fixed bottom-0 left-0 right-0 z-50"
+      style={{
+        // Solid, edge-to-edge bar (Instagram/Letterboxd style). No heavy
+        // backdrop-blur, so the WebView never re-rasterizes it on scroll — that
+        // was the source of the jitter. paddingBottom clears the home indicator.
+        background: 'rgba(10, 14, 26, 0.97)',
+        borderTop: '1px solid rgba(255, 255, 255, 0.08)',
+        paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+        boxShadow: '0 -4px 16px rgba(0, 0, 0, 0.35)',
+      }}
+    >
+      <div className="flex items-stretch" style={{ height: 54 }}>
+        <NavTab href="/feed" label="Feed" active={isActive('/feed')} onTap={() => haptic('selection')}>
+          <Home size={23} strokeWidth={isActive('/feed') ? 2.5 : 2} />
+        </NavTab>
+
+        <NavTab href="/discover" label="Discover" active={discoverActive} onTap={() => haptic('selection')}>
+          <Flame size={23} strokeWidth={discoverActive ? 2.5 : 2} />
+        </NavTab>
+
+        {/* Create — emphasized but inline (no floating bubble) */}
+        <Link
+          href="/create"
+          title="Write a review"
+          aria-label="Write a review"
+          onClick={() => haptic('medium')}
+          className="flex-1 flex items-center justify-center active:scale-95 transition-transform"
         >
           <div
-            className="absolute inset-0 pointer-events-none"
-            style={{ background: 'linear-gradient(180deg, rgba(255, 255, 255, 0.04) 0%, transparent 50%, rgba(255, 255, 255, 0.02) 100%)' }}
-          />
-
-          <div className="relative flex items-center justify-around px-2 py-2">
-            <Link
-              href="/feed"
-              onClick={() => haptic('selection')}
-              className="flex flex-col items-center gap-0.5 py-2 px-4 rounded-full transition-all active:scale-95"
-              style={{
-                background: isActive('/feed') ? 'rgba(6, 182, 212, 0.15)' : 'transparent',
-                color: isActive('/feed') ? 'var(--cyan-400)' : 'var(--text-tertiary)',
-              }}
-            >
-              <Home size={20} strokeWidth={isActive('/feed') ? 2.5 : 2} />
-              <span style={{ fontSize: '10px', fontWeight: 600 }}>Feed</span>
-            </Link>
-
-            <Link
-              href="/discover"
-              onClick={() => haptic('selection')}
-              className="flex flex-col items-center gap-0.5 py-2 px-4 rounded-full transition-all active:scale-95"
-              style={{
-                // Treat /search as part of the Discover tab so both routes feel "active" — keeps old bookmarks ergonomic
-                background: isActive('/discover') || isActive('/search') ? 'rgba(6, 182, 212, 0.15)' : 'transparent',
-                color: isActive('/discover') || isActive('/search') ? 'var(--cyan-400)' : 'var(--text-tertiary)',
-              }}
-            >
-              <Flame size={20} strokeWidth={isActive('/discover') || isActive('/search') ? 2.5 : 2} />
-              <span style={{ fontSize: '10px', fontWeight: 600 }}>Discover</span>
-            </Link>
-
-            <Link
-              href="/create"
-              title="Write a review"
-              aria-label="Write a review"
-              onClick={() => haptic('medium')}
-              className="flex items-center justify-center transition-all hover:scale-105 active:scale-95"
-              style={{
-                width: '48px',
-                height: '48px',
-                borderRadius: '50%',
-                background: 'linear-gradient(135deg, var(--cyan-400), var(--cyan-600))',
-                boxShadow: '0 4px 16px rgba(6, 182, 212, 0.4), 0 0 24px rgba(6, 182, 212, 0.2)',
-              }}
-            >
-              <Plus size={22} className="text-white" strokeWidth={2.5} />
-            </Link>
-
-            <Link
-              href="/inbox"
-              onClick={() => haptic('selection')}
-              className="relative flex flex-col items-center gap-0.5 py-2 px-4 rounded-full transition-all active:scale-95"
-              style={{
-                background: isActive('/inbox') ? 'rgba(6, 182, 212, 0.15)' : 'transparent',
-                color: isActive('/inbox') ? 'var(--cyan-400)' : 'var(--text-tertiary)',
-              }}
-            >
-              <div className="relative">
-                <Bell size={20} strokeWidth={isActive('/inbox') ? 2.5 : 2} />
-                {unreadCount > 0 && (
-                  <span
-                    className="absolute -top-1.5 -right-2 min-w-[16px] h-4 px-1 rounded-full text-[9px] font-bold flex items-center justify-center"
-                    style={{ background: 'var(--amber-400)', color: '#0a0e1a' }}
-                  >
-                    {unreadCount > 9 ? '9+' : unreadCount}
-                  </span>
-                )}
-              </div>
-              <span style={{ fontSize: '10px', fontWeight: 600 }}>Inbox</span>
-            </Link>
-
-            <Link
-              href={`/profile/${username}`}
-              onClick={() => haptic('selection')}
-              className="flex flex-col items-center gap-0.5 py-2 px-4 rounded-full transition-all active:scale-95"
-              style={{
-                background: pathname?.startsWith('/profile') ? 'rgba(6, 182, 212, 0.15)' : 'transparent',
-                color: pathname?.startsWith('/profile') ? 'var(--cyan-400)' : 'var(--text-tertiary)',
-              }}
-            >
-              <User size={20} strokeWidth={pathname?.startsWith('/profile') ? 2.5 : 2} />
-              <span style={{ fontSize: '10px', fontWeight: 600 }}>Profile</span>
-            </Link>
+            className="flex items-center justify-center"
+            style={{ width: 40, height: 30, borderRadius: 10, background: 'linear-gradient(135deg, var(--cyan-400), var(--cyan-600))', boxShadow: '0 2px 8px rgba(6,182,212,0.4)' }}
+          >
+            <Plus size={20} className="text-white" strokeWidth={2.6} />
           </div>
-        </div>
-      </nav>
-    </>
+        </Link>
+
+        <NavTab href="/inbox" label="Inbox" active={isActive('/inbox')} onTap={() => haptic('selection')}>
+          <span className="relative">
+            <Bell size={23} strokeWidth={isActive('/inbox') ? 2.5 : 2} />
+            {unreadCount > 0 && (
+              <span
+                className="absolute -top-1.5 -right-2 min-w-[16px] h-4 px-1 rounded-full text-[9px] font-bold flex items-center justify-center"
+                style={{ background: 'var(--amber-400)', color: '#0a0e1a' }}
+              >
+                {unreadCount > 9 ? '9+' : unreadCount}
+              </span>
+            )}
+          </span>
+        </NavTab>
+
+        <NavTab href={`/profile/${username}`} label="Profile" active={profileActive} onTap={() => haptic('selection')}>
+          <User size={23} strokeWidth={profileActive ? 2.5 : 2} />
+        </NavTab>
+      </div>
+    </nav>
+  );
+}
+
+// A single full-width nav tab — even flex column, active = cyan.
+function NavTab({
+  href, label, active, onTap, children,
+}: {
+  href: string;
+  label: string;
+  active: boolean;
+  onTap: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <Link
+      href={href}
+      onClick={onTap}
+      className="flex-1 flex flex-col items-center justify-center gap-0.5 active:scale-95 transition-transform"
+      style={{ color: active ? 'var(--cyan-400)' : 'var(--text-tertiary)' }}
+    >
+      {children}
+      <span style={{ fontSize: '10px', fontWeight: active ? 700 : 600 }}>{label}</span>
+    </Link>
   );
 }

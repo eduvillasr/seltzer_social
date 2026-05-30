@@ -267,9 +267,9 @@ a { color:inherit; text-decoration:none; }
 /* Respect iPhone home-indicator + Android gesture bar when pinning to bottom */
 .safe-bottom { padding-bottom: env(safe-area-inset-bottom, 0px); }
 
-/* Pages with the floating bottom nav need extra room so content
-   doesn't sit under the nav. Use this on the <main> element. */
-.with-bottom-nav { padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
+/* Pages with the fixed bottom nav need room so content doesn't sit under the
+   bar (≈54px tall) + the home-indicator inset. Use this on the <main> element. */
+.with-bottom-nav { padding-bottom: calc(70px + env(safe-area-inset-bottom, 0px)); }
 
 /* Pages with the fixed <TopHeader> need top padding equal to the header's
    fixed height (48px) plus the safe-area inset. Apply on the page's <main>. */
