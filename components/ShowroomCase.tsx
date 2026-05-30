@@ -1,77 +1,43 @@
 // components/ShowroomCase.tsx
 //
-// A grand hall of fame. A warm, dramatic gallery room: navy→purple walls with
-// gold trim, a central arched alcove flanked by columns, a perspective
-// checkerboard marble floor, spotlit pedestals in a triangular formation (a
-// 40%-larger hero plinth at the apex), velvet ropes, plants, and dust motes
-// drifting in the light. Trophies are big sculptures; achievements hang as
-// framed plaques. Owners drag their best pieces in and Save; visitors see the
-// scene. Pointer-based drag so it works on touch (the native app) too.
+// A warm wooden trophy case. Trophies stand on a lower wooden shelf (the hero
+// big in the center, two supporters flanking); achievements hang as framed
+// medal plaques on the upper shelf — rarer ones take ribbon/shield shapes (see
+// AchievementMedal). A brass "HALL OF FAME" header tops it off and a velvet
+// rope runs along the front. Owners drag trophies onto the shelf and
+// achievements into the frames, then Save; visitors see the arrangement.
+// Pointer-based drag so it works on touch (the native app) too.
 //
 // Saved layout: { podiums: {slotId: trophyId}, wall: {frameId: achId} }.
 
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Trophy, RARITY_META } from '@/lib/trophies';
+import { Trophy } from '@/lib/trophies';
 import { Achievement, TIER_META } from '@/lib/achievements';
 import { TrophyArt } from './TrophyArt';
-import { AchievementBadge } from './AchievementBadge';
+import { AchievementMedal } from './AchievementMedal';
 import { haptic } from '@/lib/haptics';
 
 const PODIUM_SLOTS = ['0', '1', '2'];
 const FRAME_SLOTS = ['0', '1'];
-// Seed best→hero: first earned trophy lands on the center (hero) plinth.
-const SEED_ORDER = ['1', '0', '2'];
+const SEED_ORDER = ['1', '0', '2']; // best → hero (center)
 
-// Triangular formation: hero apex at back-center, two supporters front + wide.
-const PEDESTALS: { slot: string; pos: React.CSSProperties; colW: number; colH: number; trophyH: number; hero?: boolean }[] = [
-  { slot: '1', pos: { left: '50%', bottom: 16, transform: 'translateX(-50%)' }, colW: 94, colH: 60, trophyH: 124, hero: true },
-  { slot: '0', pos: { left: '13%', bottom: 30, transform: 'translateX(-50%)' }, colW: 56, colH: 46, trophyH: 90 },
-  { slot: '2', pos: { left: '87%', bottom: 30, transform: 'translateX(-50%)' }, colW: 56, colH: 46, trophyH: 90 },
+// Trophies stand on the lower shelf; hero center is biggest.
+const PEDESTALS: { slot: string; pos: React.CSSProperties; trophyH: number; hero?: boolean }[] = [
+  { slot: '1', pos: { left: '50%', bottom: '28%', transform: 'translateX(-50%)' }, trophyH: 152, hero: true },
+  { slot: '0', pos: { left: '21%', bottom: '28%', transform: 'translateX(-50%)' }, trophyH: 94 },
+  { slot: '2', pos: { left: '79%', bottom: '28%', transform: 'translateX(-50%)' }, trophyH: 94 },
 ];
+// Achievements hang framed on the upper shelf.
 const FRAMES: { slot: string; pos: React.CSSProperties; size: number; hero?: boolean }[] = [
-  { slot: '0', pos: { left: '20%', top: '30%', transform: 'translate(-50%,-50%)' }, size: 58, hero: true },
-  { slot: '1', pos: { left: '80%', top: '30%', transform: 'translate(-50%,-50%)' }, size: 44 },
+  { slot: '0', pos: { left: '26%', top: '20%', transform: 'translate(-50%,-50%)' }, size: 56, hero: true },
+  { slot: '1', pos: { left: '74%', top: '20%', transform: 'translate(-50%,-50%)' }, size: 48 },
 ];
-
-function hexA(hex: string, alpha: number) {
-  const a = Math.round(Math.max(0, Math.min(1, alpha)) * 255).toString(16).padStart(2, '0');
-  return `${hex}${a}`;
-}
 
 type ItemKind = 'trophy' | 'achievement';
 type Zone = 'podium' | 'wall' | 'tray';
 type DragState = { kind: ItemKind; id: string; from: { zone: Zone; slotId?: string }; x: number; y: number } | null;
-
-function Column({ side }: { side: 'left' | 'right' }) {
-  return (
-    <div className="absolute pointer-events-none" style={{ [side]: '3%', top: '8%', bottom: '30%', width: 24 } as React.CSSProperties}>
-      {/* capital */}
-      <div style={{ position: 'absolute', top: -4, left: -6, right: -6, height: 12, borderRadius: 3, background: 'linear-gradient(180deg, #d8c48a, #9c8347)', boxShadow: '0 2px 4px rgba(0,0,0,0.4)' }} />
-      {/* shaft with fluting */}
-      <div style={{ position: 'absolute', top: 8, bottom: 10, left: 0, right: 0, borderRadius: 2, background: 'repeating-linear-gradient(90deg, #b9a079 0 4px, #8f794f 4px 8px)', boxShadow: 'inset 0 0 8px rgba(0,0,0,0.3)' }} />
-      {/* base */}
-      <div style={{ position: 'absolute', bottom: -4, left: -7, right: -7, height: 12, borderRadius: 3, background: 'linear-gradient(180deg, #c7ac72, #7e6a3e)', boxShadow: '0 3px 6px rgba(0,0,0,0.5)' }} />
-      {/* sconce glow */}
-      <div style={{ position: 'absolute', top: '30%', left: '50%', transform: 'translateX(-50%)', width: 8, height: 8, borderRadius: '50%', background: '#ffd98a', boxShadow: '0 0 14px 5px rgba(255,205,120,0.6)' }} />
-    </div>
-  );
-}
-
-// A little bookshelf for the corridor depth — colorful spines on dark shelves.
-function Bookshelf({ scale = 1 }: { scale?: number }) {
-  const books = ['#b4533a', '#3a6ab4', '#c9a13a', '#4a9e5e', '#8a4fb0'];
-  return (
-    <div style={{ transform: `scale(${scale})`, transformOrigin: 'bottom left', width: 40, background: '#23170c', border: '2px solid #46301a', borderRadius: 2, padding: 2, boxShadow: '0 4px 10px rgba(0,0,0,0.6)' }}>
-      {[0, 1, 2].map((shelf) => (
-        <div key={shelf} style={{ display: 'flex', alignItems: 'flex-end', gap: 1, height: 15, borderBottom: '2px solid #46301a' }}>
-          {books.map((c, i) => <div key={i} style={{ flex: 1, height: 9 + ((i + shelf) % 3) * 3, background: c, borderRadius: '1px 1px 0 0' }} />)}
-        </div>
-      ))}
-    </div>
-  );
-}
 
 export function ShowroomCase({
   earnedTrophies,
@@ -150,6 +116,7 @@ export function ShowroomCase({
   const trophyTray = earnedTrophies.filter((t) => !placedTrophyIds.has(t.id));
   const achTray = earnedAchievements.filter((a) => !placedAchIds.has(a.id));
   const dirty = JSON.stringify(podiums) !== JSON.stringify(savedPodiums) || JSON.stringify(wall) !== JSON.stringify(savedWall);
+  const nothing = earnedTrophies.length === 0 && earnedAchievements.length === 0;
 
   function placeInto(setMap: React.Dispatch<React.SetStateAction<Record<string, string>>>, id: string, fromSlot: string | undefined, targetSlot: string) {
     setMap((prev) => {
@@ -237,91 +204,52 @@ export function ShowroomCase({
 
   return (
     <div>
-      {/* Thick bold gold frame around the whole hall */}
-      <div style={{ padding: 7, borderRadius: 28, background: 'linear-gradient(145deg, #e8c074, #7e5a16 52%, #c08a2e)', boxShadow: '0 18px 44px rgba(0,0,0,0.55)' }}>
-        <div className="relative w-full overflow-hidden" style={{ height: 'min(74vh, 600px)', borderRadius: 21 }}>
-          {/* ── Wall (rich purple, warm ceiling glow) ── */}
-          <div className="absolute inset-0" style={{ background: 'radial-gradient(ellipse 80% 46% at 50% 0%, rgba(255,196,110,0.20), transparent 62%), linear-gradient(180deg, #463169 0%, #38265b 42%, #2a1d49 72%, #1d1535 100%)' }} />
-          {/* velvet texture */}
-          <div className="absolute inset-0 pointer-events-none" style={{ opacity: 0.5, backgroundImage: 'repeating-linear-gradient(135deg, rgba(255,255,255,0.028) 0 2px, transparent 2px 5px)' }} />
-          {/* warm side accent lights */}
-          <div className="absolute pointer-events-none" style={{ left: 0, top: '16%', width: '26%', height: '52%', background: 'radial-gradient(ellipse at 0% 50%, rgba(255,168,78,0.18), transparent 70%)' }} />
-          <div className="absolute pointer-events-none" style={{ right: 0, top: '16%', width: '26%', height: '52%', background: 'radial-gradient(ellipse at 100% 50%, rgba(255,168,78,0.18), transparent 70%)' }} />
-          {/* cornice + thick mid molding */}
-          <div className="absolute left-0 right-0" style={{ top: 0, height: 8, background: 'linear-gradient(180deg, #e6cd8a, #8f7536)' }} />
-          <div className="absolute left-0 right-0" style={{ top: '19%', height: 6, background: 'linear-gradient(180deg, #e6cd8a, #9c7a30)', boxShadow: '0 2px 5px rgba(0,0,0,0.4)' }} />
+      {/* Wooden cabinet frame */}
+      <div style={{ padding: 9, borderRadius: 22, background: 'linear-gradient(160deg, #8a542a, #4a2c14)', boxShadow: '0 18px 44px rgba(0,0,0,0.55)' }}>
+        <div className="relative w-full overflow-hidden" style={{ height: 'min(74vh, 600px)', borderRadius: 12, background: 'linear-gradient(180deg, #5e3719 0%, #4a2c14 100%)' }}>
+          {/* back-panel wood grain */}
+          <div className="absolute inset-0 pointer-events-none" style={{ opacity: 0.22, backgroundImage: 'repeating-linear-gradient(90deg, rgba(0,0,0,0.16) 0 1px, transparent 1px 13px)' }} />
+          {/* warm top light + inner shadow */}
+          <div className="absolute inset-x-0 top-0 pointer-events-none" style={{ height: '42%', background: 'radial-gradient(ellipse at 50% 0%, rgba(255,210,140,0.16), transparent 70%)' }} />
+          <div className="absolute inset-0 pointer-events-none" style={{ boxShadow: 'inset 0 0 52px 16px rgba(0,0,0,0.5)', borderRadius: 12 }} />
 
-          {/* columns */}
-          <Column side="left" />
-          <Column side="right" />
-
-          {/* central arched alcove behind hero */}
-          <div className="absolute pointer-events-none" style={{ left: '50%', transform: 'translateX(-50%)', top: '13%', width: '50%', height: '64%', borderRadius: '50% 50% 8px 8px / 42% 42% 4px 4px', background: 'linear-gradient(180deg, rgba(38,24,60,0.92), rgba(16,10,30,0.96))', border: '3px solid #c08a2e', boxShadow: '0 0 32px rgba(192,138,46,0.32), inset 0 12px 40px rgba(0,0,0,0.55)' }} />
-
-          {/* receding gallery corridor inside the arch — sits ABOVE the hero so the
-              hallway stays visible; brighter walls + clearer art for real depth */}
-          <div className="absolute pointer-events-none overflow-hidden" style={{ left: '50%', transform: 'translateX(-50%)', top: '14%', width: '46%', height: '42%', borderRadius: '50% 50% 4px 4px / 62% 62% 4px 4px' }}>
-            {/* ceiling */}
-            <div className="absolute top-0 left-0 right-0" style={{ height: '24%', background: 'linear-gradient(180deg, #2f2152, #1e1640)' }} />
-            {/* left wall + framed painting */}
-            <div className="absolute" style={{ left: 0, top: '8%', width: '31%', height: '84%', background: 'linear-gradient(90deg, #3c2c62, #261a48)', clipPath: 'polygon(0 0, 100% 18%, 100% 82%, 0 100%)' }}>
-              <div className="absolute" style={{ left: '16%', top: '34%', width: 20, height: 16, background: 'radial-gradient(circle at 38% 32%, #9a7ac4, #2c1e4c)', border: '1.5px solid #c9a24a', boxShadow: '0 1px 3px rgba(0,0,0,0.5)' }} />
-            </div>
-            {/* right wall + framed painting */}
-            <div className="absolute" style={{ right: 0, top: '8%', width: '31%', height: '84%', background: 'linear-gradient(270deg, #3c2c62, #261a48)', clipPath: 'polygon(0 18%, 100% 0, 100% 100%, 0 82%)' }}>
-              <div className="absolute" style={{ right: '16%', top: '34%', width: 20, height: 16, background: 'radial-gradient(circle at 38% 32%, #6f9ec4, #1c2a38)', border: '1.5px solid #c9a24a', boxShadow: '0 1px 3px rgba(0,0,0,0.5)' }} />
-            </div>
-            {/* far wall: warm doorway glow + bookshelf + a small painting */}
-            <div className="absolute overflow-hidden" style={{ left: '50%', top: '24%', transform: 'translateX(-50%)', width: '42%', height: '50%', background: 'linear-gradient(180deg, #2c2048, #181232)' }}>
-              <div className="absolute inset-0" style={{ background: 'radial-gradient(ellipse at 50% 42%, rgba(255,205,130,0.30), transparent 72%)' }} />
-              <div className="absolute" style={{ left: 2, bottom: 1 }}><Bookshelf scale={0.5} /></div>
-              <div className="absolute" style={{ right: '12%', top: '14%', width: 14, height: 17, background: 'radial-gradient(circle at 40% 32%, #b06f8a, #241430)', border: '1px solid #c9a24a' }} />
-            </div>
-            {/* receding floor */}
-            <div className="absolute" style={{ left: '50%', bottom: 0, transform: 'translateX(-50%)', width: '74%', height: '28%', clipPath: 'polygon(30% 0, 70% 0, 100% 100%, 0 100%)', backgroundColor: '#8a7350', backgroundImage: 'linear-gradient(45deg, #685038 25%, transparent 25% 75%, #685038 75%)', backgroundSize: '11px 11px' }} />
-          </div>
-
-          {/* signage */}
-          <div className="absolute left-1/2 -translate-x-1/2" style={{ top: 9, padding: '4px 16px', borderRadius: 5, background: 'linear-gradient(180deg, #f1d68f, #9c7a30)', boxShadow: '0 3px 8px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.6)' }}>
+          {/* brass header */}
+          <div className="absolute left-1/2 -translate-x-1/2" style={{ top: 8, padding: '4px 16px', borderRadius: 5, background: 'linear-gradient(180deg, #f1d68f, #9c7a30)', boxShadow: '0 3px 8px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.6)' }}>
             <p className="text-[11px] font-extrabold tracking-[0.24em]" style={{ color: '#2a1c06', fontFamily: 'var(--font-display)' }}>HALL OF FAME</p>
           </div>
 
-          {/* framed achievements (plaques) */}
+          {/* upper shelf board (behind framed achievements) */}
+          <ShelfBoard top="33%" />
+          {/* lower shelf board (under trophies) */}
+          <ShelfBoard top="72%" />
+
+          {/* framed achievement medals (upper shelf) */}
           {FRAMES.map(({ slot, pos, size, hero }) => {
             const ach = wall[slot] ? achById[wall[slot]] : null;
-            const pad = hero ? 5 : 3;
+            const innerH = Math.round(size * 1.32);
             return (
               <div key={slot} className="absolute flex flex-col items-center" style={pos}>
                 {ach && (
-                  <p className="text-[7px] font-extrabold uppercase tracking-wider mb-0.5" style={{ color: '#e9c873', textShadow: '0 1px 2px rgba(0,0,0,0.7)' }}>
+                  <p className="text-[7px] font-extrabold uppercase tracking-wider mb-0.5" style={{ color: '#f0d6a8', textShadow: '0 1px 2px rgba(0,0,0,0.7)' }}>
                     {TIER_META[ach.tier].label}
                   </p>
                 )}
                 <div
                   ref={(el) => { frameRefs.current[slot] = el; }}
-                  className="relative"
-                  style={{ padding: pad + 2, borderRadius: 4, background: ach ? 'linear-gradient(160deg, #f4d98f, #7e5a1e)' : 'rgba(233,200,122,0.22)', boxShadow: ach ? `0 6px 14px rgba(0,0,0,0.55)${hero ? ', 0 0 18px rgba(233,200,122,0.45)' : ''}` : 'none' }}
+                  style={{ padding: hero ? 5 : 4, borderRadius: 4, background: ach ? 'linear-gradient(160deg, #e8c074, #7e5420)' : 'rgba(160,110,50,0.28)', boxShadow: ach ? `0 5px 12px rgba(0,0,0,0.55)${hero ? ', 0 0 14px rgba(233,200,122,0.35)' : ''}` : 'none' }}
                 >
-                  {/* gilt corner ornaments */}
-                  {ach && (
-                    <>
-                      <span className="absolute" style={{ width: 5, height: 5, borderRadius: 1, background: '#fbe6b0', left: -1, top: -1 }} />
-                      <span className="absolute" style={{ width: 5, height: 5, borderRadius: 1, background: '#fbe6b0', right: -1, top: -1 }} />
-                      <span className="absolute" style={{ width: 5, height: 5, borderRadius: 1, background: '#fbe6b0', left: -1, bottom: -1 }} />
-                      <span className="absolute" style={{ width: 5, height: 5, borderRadius: 1, background: '#fbe6b0', right: -1, bottom: -1 }} />
-                    </>
-                  )}
-                  {/* canvas with a painterly, tier-tinted backdrop + inner gilt border */}
-                  <div className="relative flex items-center justify-center overflow-hidden" style={{ width: size, height: size, borderRadius: 2, background: '#0c0a18', boxShadow: 'inset 0 0 12px rgba(0,0,0,0.7)', outline: '1px solid rgba(233,200,122,0.55)', outlineOffset: -3 }}>
-                    {ach && (
-                      <div className="absolute inset-0" style={{ background: `radial-gradient(circle at 30% 28%, ${TIER_META[ach.tier].color}dd, transparent 55%), radial-gradient(circle at 74% 74%, ${TIER_META[ach.tier].color}88, transparent 52%), linear-gradient(160deg, #2a2348, #120e22)` }} />
-                    )}
+                  {/* gilt corners */}
+                  {ach && [['-1px','-1px',true,true],['-1px',undefined,false,true],[undefined,'-1px',true,false],[undefined,undefined,false,false]].map((c, i) => (
+                    <span key={i} className="absolute" style={{ width: 5, height: 5, borderRadius: 1, background: '#fbe6b0', left: c[3] ? -1 : undefined, right: c[3] ? undefined : -1, top: c[2] ? -1 : undefined, bottom: c[2] ? undefined : -1 }} />
+                  ))}
+                  {/* light cream backing (like a display mat) */}
+                  <div className="relative flex items-center justify-center overflow-hidden" style={{ width: size, height: innerH, borderRadius: 2, background: 'linear-gradient(180deg, #f4e7c8, #d8c39a)', boxShadow: 'inset 0 0 10px rgba(120,80,30,0.35)' }}>
                     {ach ? (
-                      <div className="relative" onPointerDown={(e) => startDrag('achievement', ach.id, { zone: 'wall', slotId: slot }, e)} style={{ touchAction: isOwner ? 'none' : 'auto', cursor: isOwner ? 'grab' : 'default', opacity: draggingId === ach.id ? 0.2 : 1 }}>
-                        <AchievementBadge achievement={ach} unlocked size={hero ? 'md' : 'sm'} />
+                      <div onPointerDown={(e) => startDrag('achievement', ach.id, { zone: 'wall', slotId: slot }, e)} style={{ touchAction: isOwner ? 'none' : 'auto', cursor: isOwner ? 'grab' : 'default', opacity: draggingId === ach.id ? 0.2 : 1 }}>
+                        <AchievementMedal achievement={ach} height={innerH - 6} />
                       </div>
                     ) : (
-                      <div className="rounded-full" style={{ width: hero ? 30 : 24, height: hero ? 30 : 24, border: '1.5px dashed rgba(255,255,255,0.16)', opacity: 0.5 }} />
+                      <div className="rounded-full" style={{ width: 26, height: 26, border: '1.5px dashed rgba(90,60,20,0.4)', opacity: 0.6 }} />
                     )}
                   </div>
                 </div>
@@ -334,127 +262,48 @@ export function ShowroomCase({
             );
           })}
 
-          {/* ── Perspective checkerboard marble floor ── */}
-          <div
-            className="absolute"
-            style={{
-              left: '-30%', right: '-30%', bottom: 0, height: '54%',
-              transformOrigin: 'bottom center', transform: 'perspective(360px) rotateX(60deg)',
-              backgroundColor: '#cbb896',
-              backgroundImage: 'linear-gradient(45deg, #a98f63 25%, transparent 25% 75%, #a98f63 75%), linear-gradient(45deg, #a98f63 25%, transparent 25% 75%, #a98f63 75%)',
-              backgroundSize: '52px 52px', backgroundPosition: '0 0, 26px 26px',
-            }}
-          />
-          {/* floor far-fade into the wall + warm sheen */}
-          <div className="absolute inset-x-0 bottom-0 pointer-events-none" style={{ height: '50%', background: 'linear-gradient(180deg, #181428 0%, rgba(24,20,40,0.35) 20%, transparent 44%)' }} />
-          <div className="absolute inset-x-0 bottom-0 pointer-events-none" style={{ height: '30%', background: 'radial-gradient(ellipse 60% 80% at 50% 100%, rgba(255,225,170,0.10), transparent 70%)' }} />
-          {/* gold inlay line leading to the hero */}
-          <div className="absolute pointer-events-none" style={{ left: '50%', bottom: 0, transform: 'translateX(-50%)', width: 4, height: '38%', background: 'linear-gradient(180deg, rgba(216,196,138,0.55), rgba(216,196,138,0.04))' }} />
-          {/* spotlight pool on the floor under the hero */}
-          <div className="absolute pointer-events-none" style={{ left: '50%', bottom: '12%', transform: 'translateX(-50%)', width: '48%', height: 56, borderRadius: '50%', background: 'radial-gradient(ellipse at center, rgba(255,240,200,0.24), transparent 70%)', filter: 'blur(3px)' }} />
-
-          {/* luxe burgundy velvet rope barrier (foreground) */}
-          <div className="absolute pointer-events-none" style={{ left: 0, right: 0, bottom: 4, height: 38 }}>
-            {['30%', '70%'].map((l) => (
-              <div key={l} className="absolute" style={{ left: l, bottom: 0, transform: 'translateX(-50%)' }}>
-                {/* gold stanchion post */}
-                <div style={{ width: 8, height: 32, borderRadius: 3, background: 'linear-gradient(90deg, #8a6a2c, #f1d68f 45%, #8a6a2c)' }} />
-                {/* ball top */}
-                <div style={{ position: 'absolute', top: -7, left: '50%', transform: 'translateX(-50%)', width: 12, height: 12, borderRadius: '50%', background: 'radial-gradient(circle at 35% 30%, #fbe6b0, #b08a30)', boxShadow: '0 0 6px rgba(241,214,143,0.7)' }} />
-                {/* rope knot at post */}
-                <div style={{ position: 'absolute', top: 4, left: '50%', transform: 'translateX(-50%)', width: 12, height: 10, borderRadius: '50%', background: 'radial-gradient(circle at 35% 30%, #9a2747, #5a0f26)', boxShadow: 'inset -2px -2px 3px rgba(0,0,0,0.4)' }} />
-              </div>
-            ))}
-            <svg className="absolute" style={{ left: '30%', width: '40%', bottom: 20, height: 22, overflow: 'visible' }} viewBox="0 0 100 24" preserveAspectRatio="none">
-              <path d="M3 3 Q50 32 97 3" fill="none" stroke="#5a0f26" strokeWidth="8" strokeLinecap="round" />
-              <path d="M3 3 Q50 32 97 3" fill="none" stroke="#9a2747" strokeWidth="3" strokeLinecap="round" />
-            </svg>
-          </div>
-
-          {/* topiary (left) + decorative urn (right) — front outer corners, above podiums */}
-          <div className="absolute pointer-events-none" style={{ left: 6, bottom: 6, zIndex: 30, filter: 'drop-shadow(0 5px 7px rgba(0,0,0,0.5))' }}>
-            <div style={{ width: 20, height: 20, borderRadius: '50%', margin: '0 auto', background: 'radial-gradient(circle at 34% 28%, #6cce72, #2f7d34)', border: '1.5px solid #245c28', boxShadow: 'inset -3px -3px 5px rgba(0,0,0,0.35), inset 2px 2px 4px rgba(255,255,255,0.3)' }} />
-            <div style={{ width: 28, height: 26, borderRadius: '50%', margin: '-5px auto 0', background: 'radial-gradient(circle at 34% 28%, #6cce72, #2f7d34)', border: '1.5px solid #245c28', boxShadow: 'inset -3px -3px 5px rgba(0,0,0,0.35), inset 2px 2px 4px rgba(255,255,255,0.3)' }} />
-            <div style={{ width: 4, height: 7, margin: '0 auto', background: '#6d4c2f' }} />
-            {/* terracotta pot */}
-            <div style={{ width: 24, height: 16, margin: '0 auto', background: 'linear-gradient(180deg, #d2884a, #9a5a2a)', borderRadius: '2px 2px 5px 5px', clipPath: 'polygon(12% 0,88% 0,76% 100%,24% 100%)', border: '1px solid #7a4420' }} />
-          </div>
-          <div className="absolute pointer-events-none" style={{ right: 2, bottom: 4, zIndex: 30, filter: 'drop-shadow(0 5px 7px rgba(0,0,0,0.5))' }}>
-            <div style={{ width: 14, height: 6, margin: '0 auto 1px', borderRadius: 3, background: '#7a5a28' }} />
-            <div style={{ width: 36, height: 46, background: 'linear-gradient(180deg, #d2a85e, #7a5a28)', borderRadius: '50% 50% 32% 32% / 38% 38% 62% 62%', border: '2px solid #5e451c', boxShadow: 'inset -4px -4px 8px rgba(0,0,0,0.3)' }} />
-            <div style={{ width: 22, height: 6, margin: '-2px auto 0', borderRadius: 2, background: '#7a5a28' }} />
-          </div>
-
-          {nothing(earnedTrophies, earnedAchievements) && (
-            <div className="absolute inset-0 flex items-end justify-center pb-10 px-6 text-center pointer-events-none z-10">
-              <p className="text-xs" style={{ color: 'rgba(255,255,255,0.6)' }}>
-                {isOwner ? 'Earn trophies and achievements and your hall fills up.' : 'Nothing on display yet.'}
+          {nothing && (
+            <div className="absolute inset-0 flex items-center justify-center px-6 text-center pointer-events-none z-10">
+              <p className="text-xs" style={{ color: 'rgba(255,235,200,0.7)' }}>
+                {isOwner ? 'Earn trophies and achievements and your case fills up.' : 'Nothing on display yet.'}
               </p>
             </div>
           )}
 
-          {/* ── Pedestals (triangular; hero rendered first so the front pair overlap it) ── */}
-          {PEDESTALS.map(({ slot, pos, colW, colH, trophyH, hero }) => {
+          {/* trophies standing on the lower shelf (hero first so the pair overlaps it) */}
+          {PEDESTALS.map(({ slot, pos, trophyH, hero }) => {
             const trophy = podiums[slot] ? trophyById[podiums[slot]] : null;
-            const color = trophy ? RARITY_META[trophy.rarity].color : '#ffffff';
-            const capW = colW + 12;
             return (
-              <div key={slot} ref={(el) => { podiumRefs.current[slot] = el; }} className="absolute flex flex-col items-center" style={{ ...pos, width: colW + 28, zIndex: hero ? 1 : 2 }}>
-                {/* spotlight beam */}
-                {trophy && (
-                  <div className="spotlight-beam absolute pointer-events-none" style={{ bottom: colH - 6, left: '50%', transform: 'translateX(-50%)', width: hero ? colW + 30 : colW + 8, height: hero ? 180 : 130, clipPath: 'polygon(42% 0, 58% 0, 100% 100%, 0 100%)', background: `linear-gradient(180deg, rgba(255,236,190,${hero ? 0.36 : 0.26}), rgba(255,236,190,0.04) 62%, transparent)`, filter: 'blur(5px)' }} />
+              <div key={slot} ref={(el) => { podiumRefs.current[slot] = el; }} className="absolute flex flex-col items-center justify-end" style={{ ...pos, width: Math.round(trophyH * 0.55) + 24, zIndex: hero ? 1 : 2 }}>
+                {trophy && hero && (
+                  <div className="spotlight-beam absolute pointer-events-none" style={{ bottom: trophyH * 0.5, left: '50%', transform: 'translateX(-50%)', width: 90, height: 150, clipPath: 'polygon(42% 0, 58% 0, 100% 100%, 0 100%)', background: 'linear-gradient(180deg, rgba(255,236,190,0.32), rgba(255,236,190,0.03) 62%, transparent)', filter: 'blur(5px)' }} />
                 )}
-                {/* dust motes in the hero beam */}
-                {hero && trophy && Array.from({ length: 7 }).map((_, i) => (
-                  <span key={i} className="dust-mote" style={{ left: `${28 + i * 7}%`, bottom: colH + 12 + ((i * 17) % 90), width: 3 + (i % 2), height: 3 + (i % 2), animationDuration: `${4 + i * 0.6}s`, animationDelay: `${i * 0.5}s` }} />
-                ))}
-                {/* trophy */}
-                <div className="relative z-[1] flex items-end" style={{ height: trophyH + 4 }}>
-                  {trophy ? (
-                    <div onPointerDown={(e) => startDrag('trophy', trophy.id, { zone: 'podium', slotId: slot }, e)} style={{ touchAction: isOwner ? 'none' : 'auto', cursor: isOwner ? 'grab' : 'default', opacity: draggingId === trophy.id ? 0.2 : 1, transition: 'opacity 0.15s' }}>
-                      <TrophyArt trophy={trophy} earned height={trophyH} />
-                    </div>
-                  ) : (
-                    <div className="rounded-full mb-1" style={{ width: hero ? 30 : 22, height: hero ? 30 : 22, border: '1.5px dashed rgba(200,180,140,0.5)', opacity: 0.6 }} />
-                  )}
-                </div>
-                {/* long cartoony cast shadow + glow pool on the cap */}
-                {trophy && (
-                  <>
-                    <div className="pointer-events-none" style={{ position: 'absolute', bottom: colH - 4, left: '62%', width: colW * 0.95, height: 12, borderRadius: '50%', background: 'rgba(0,0,0,0.38)', filter: 'blur(4px)', transform: 'translateX(-50%) scaleX(1.5)' }} />
-                    <div className="pointer-events-none" style={{ width: colW * 0.86, height: 9, borderRadius: '50%', background: `radial-gradient(ellipse at center, ${hexA(color, 0.65)}, transparent 70%)`, marginBottom: -2, position: 'relative', zIndex: 1 }} />
-                  </>
+                {trophy ? (
+                  <div onPointerDown={(e) => startDrag('trophy', trophy.id, { zone: 'podium', slotId: slot }, e)} style={{ touchAction: isOwner ? 'none' : 'auto', cursor: isOwner ? 'grab' : 'default', opacity: draggingId === trophy.id ? 0.2 : 1, transition: 'opacity 0.15s' }}>
+                    <TrophyArt trophy={trophy} earned height={trophyH} />
+                  </div>
+                ) : (
+                  <div className="rounded-full mb-2" style={{ width: hero ? 30 : 22, height: hero ? 30 : 22, border: '1.5px dashed rgba(255,225,180,0.35)', opacity: 0.6 }} />
                 )}
-                {/* elaborate ivory plinth — gold bands, surface highlight + shadow, stepped tiers */}
-                <div className="relative z-[1]" style={{ width: colW, height: colH, borderRadius: 3, background: 'linear-gradient(105deg, #fbf6ec 0%, #ece2cd 32%, #cbbd9c 72%, #b3a484 100%)', boxShadow: `inset 0 2px 0 rgba(255,255,255,0.9), inset -6px 0 10px rgba(0,0,0,0.18), 0 16px 28px rgba(0,0,0,0.6)${hero ? ', 0 0 24px rgba(233,200,122,0.32)' : ''}` }}>
-                  {/* squared cap */}
-                  <div className="absolute" style={{ top: -7, left: '50%', transform: 'translateX(-50%)', width: capW, height: 9, borderRadius: 2, background: 'linear-gradient(180deg, #fbf6ec, #d8cbae)', boxShadow: '0 2px 5px rgba(0,0,0,0.4)', border: hero ? '1.5px solid rgba(233,200,122,0.85)' : '1px solid rgba(110,78,18,0.25)' }} />
-                  {/* gold accent bands */}
-                  <div className="absolute left-0 right-0" style={{ top: 5, height: 3, background: 'linear-gradient(180deg, #e9c873, #9c7a30)' }} />
-                  <div className="absolute left-0 right-0" style={{ bottom: 6, height: 3, background: 'linear-gradient(180deg, #e9c873, #9c7a30)' }} />
-                  {/* surface highlight */}
-                  <div className="absolute" style={{ top: 8, left: 4, width: 5, bottom: 10, borderRadius: 2, background: 'rgba(255,255,255,0.5)' }} />
-                  {/* hero corner ornaments */}
-                  {hero && (
-                    <>
-                      <div className="absolute" style={{ top: -3, left: -3, width: 8, height: 8, borderRadius: '50%', background: 'radial-gradient(circle at 35% 30%, #fbe6b0, #b08a30)', boxShadow: '0 0 5px rgba(241,214,143,0.6)' }} />
-                      <div className="absolute" style={{ top: -3, right: -3, width: 8, height: 8, borderRadius: '50%', background: 'radial-gradient(circle at 35% 30%, #fbe6b0, #b08a30)', boxShadow: '0 0 5px rgba(241,214,143,0.6)' }} />
-                    </>
-                  )}
-                  {/* stepped base platforms */}
-                  <div className="absolute" style={{ bottom: -9, left: '50%', transform: 'translateX(-50%)', width: capW + (hero ? 16 : 8), height: 12, borderRadius: 2, background: 'linear-gradient(180deg, #e4dac6, #b3a484)', boxShadow: '0 9px 18px rgba(0,0,0,0.6)' }} />
-                  {hero && <div className="absolute" style={{ bottom: -17, left: '50%', transform: 'translateX(-50%)', width: capW + 30, height: 11, borderRadius: 2, background: 'linear-gradient(180deg, #d8cbae, #a08c63)', boxShadow: '0 8px 16px rgba(0,0,0,0.6)' }} />}
-                </div>
-                {/* deep shadow under the podium */}
-                <div className="absolute pointer-events-none" style={{ bottom: -14, left: '50%', transform: 'translateX(-50%)', width: capW + (hero ? 40 : 18), height: 16, borderRadius: '50%', background: 'radial-gradient(ellipse at center, rgba(0,0,0,0.5), transparent 72%)', filter: 'blur(3px)' }} />
-                {hero && <div className="absolute pointer-events-none" style={{ bottom: -12, left: '50%', transform: 'translateX(-50%)', width: capW + 40, height: 18, borderRadius: '50%', background: 'radial-gradient(ellipse at center, rgba(233,200,122,0.3), transparent 70%)' }} />}
+                {/* contact shadow on the shelf */}
+                {trophy && <div className="pointer-events-none" style={{ width: trophyH * 0.42, height: 6, borderRadius: '50%', background: 'rgba(0,0,0,0.4)', filter: 'blur(2px)', marginTop: -2 }} />}
               </div>
             );
           })}
 
-          {/* atmospheric vignette + warm key light */}
-          <div className="absolute inset-0 pointer-events-none" style={{ boxShadow: 'inset 0 0 64px 20px rgba(0,0,0,0.58)', borderRadius: 21 }} />
-          <div className="absolute pointer-events-none" style={{ left: '50%', top: 0, transform: 'translateX(-50%)', width: '64%', height: '72%', background: 'radial-gradient(ellipse at 50% 0%, rgba(255,220,160,0.10), transparent 66%)' }} />
+          {/* velvet rope along the front */}
+          <div className="absolute pointer-events-none" style={{ left: 0, right: 0, bottom: 4, height: 34 }}>
+            {['28%', '72%'].map((l) => (
+              <div key={l} className="absolute" style={{ left: l, bottom: 0, transform: 'translateX(-50%)' }}>
+                <div style={{ width: 8, height: 30, borderRadius: 3, background: 'linear-gradient(90deg, #8a6a2c, #f1d68f 45%, #8a6a2c)' }} />
+                <div style={{ position: 'absolute', top: -7, left: '50%', transform: 'translateX(-50%)', width: 12, height: 12, borderRadius: '50%', background: 'radial-gradient(circle at 35% 30%, #fbe6b0, #b08a30)', boxShadow: '0 0 6px rgba(241,214,143,0.7)' }} />
+              </div>
+            ))}
+            <svg className="absolute" style={{ left: '28%', width: '44%', bottom: 18, height: 22, overflow: 'visible' }} viewBox="0 0 100 24" preserveAspectRatio="none">
+              <path d="M3 3 Q50 34 97 3" fill="none" stroke="#5a0f26" strokeWidth="8" strokeLinecap="round" />
+              <path d="M3 3 Q50 34 97 3" fill="none" stroke="#9a2747" strokeWidth="3" strokeLinecap="round" />
+            </svg>
+          </div>
         </div>
       </div>
 
@@ -462,26 +311,26 @@ export function ShowroomCase({
       {isOwner && (
         <>
           <p className="text-[11px] mt-3 mb-1 px-1" style={{ color: 'var(--text-muted)' }}>
-            Only your best go on display — center plinth is the hero. Drag to curate.
+            Only your best go on display — center is the hero. Drag to curate.
           </p>
           <div ref={achTrayRef} className="rounded-2xl p-3" style={{ background: 'rgba(15,20,36,0.5)', border: '1px dashed var(--border-medium)' }}>
-            <p className="text-[10px] uppercase tracking-wider mb-2" style={{ color: 'var(--text-muted)' }}>Achievements · drag onto a wall plaque</p>
-            <div className="flex flex-wrap gap-2.5 min-h-[46px] items-center">
+            <p className="text-[10px] uppercase tracking-wider mb-2" style={{ color: 'var(--text-muted)' }}>Achievements · drag into a frame</p>
+            <div className="flex flex-wrap gap-2 min-h-[54px] items-end">
               {achTray.map((a) => (
                 <div key={a.id} onPointerDown={(e) => startDrag('achievement', a.id, { zone: 'tray' }, e)} style={{ touchAction: 'none', cursor: 'grab', opacity: draggingId === a.id ? 0.2 : 1 }}>
-                  <AchievementBadge achievement={a} unlocked size="sm" />
+                  <AchievementMedal achievement={a} height={48} />
                 </div>
               ))}
               {earnedAchievements.length === 0 && <p className="text-xs" style={{ color: 'var(--text-muted)' }}>No achievements earned yet.</p>}
-              {earnedAchievements.length > 0 && achTray.length === 0 && <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Wall’s set ✨</p>}
+              {earnedAchievements.length > 0 && achTray.length === 0 && <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Frames are set ✨</p>}
             </div>
           </div>
           <div ref={trophyTrayRef} className="mt-2 rounded-2xl p-3" style={{ background: 'rgba(15,20,36,0.5)', border: '1px dashed var(--border-medium)' }}>
-            <p className="text-[10px] uppercase tracking-wider mb-2" style={{ color: 'var(--text-muted)' }}>Trophies · drag onto a pedestal</p>
+            <p className="text-[10px] uppercase tracking-wider mb-2" style={{ color: 'var(--text-muted)' }}>Trophies · drag onto the shelf</p>
             <div className="flex flex-wrap gap-4 min-h-[64px] items-end">
               {trophyTray.map((t) => (
                 <div key={t.id} onPointerDown={(e) => startDrag('trophy', t.id, { zone: 'tray' }, e)} style={{ touchAction: 'none', cursor: 'grab', opacity: draggingId === t.id ? 0.2 : 1 }}>
-                  <TrophyArt trophy={t} earned height={76} />
+                  <TrophyArt trophy={t} earned height={74} />
                 </div>
               ))}
               {earnedTrophies.length === 0 && <p className="text-xs" style={{ color: 'var(--text-muted)' }}>No trophies earned yet.</p>}
@@ -490,9 +339,9 @@ export function ShowroomCase({
           </div>
           {dirty && (
             <div className="mt-3 rounded-2xl p-3 flex items-center gap-3 animate-fade-in-up" style={{ background: 'rgba(34,211,238,0.08)', border: '1px solid rgba(34,211,238,0.25)' }}>
-              <p className="text-xs flex-1" style={{ color: 'var(--text-primary)' }}>Hall rearranged · not saved</p>
+              <p className="text-xs flex-1" style={{ color: 'var(--text-primary)' }}>Case rearranged · not saved</p>
               <button onClick={() => { setPodiums(savedPodiums); setWall(savedWall); }} className="btn-secondary" style={{ padding: '6px 10px', fontSize: '11px' }}>Reset</button>
-              <button onClick={save} disabled={saving} className="btn-primary" style={{ padding: '6px 12px', fontSize: '11px' }}>{saving ? 'Saving…' : 'Save hall'}</button>
+              <button onClick={save} disabled={saving} className="btn-primary" style={{ padding: '6px 12px', fontSize: '11px' }}>{saving ? 'Saving…' : 'Save case'}</button>
             </div>
           )}
         </>
@@ -502,13 +351,20 @@ export function ShowroomCase({
       {drag && (
         <div className="fixed z-[200] pointer-events-none" style={{ left: drag.x, top: drag.y, transform: 'translate(-50%, -60%) scale(1.12)' }}>
           {drag.kind === 'trophy' && trophyById[drag.id] && <TrophyArt trophy={trophyById[drag.id]} earned height={120} />}
-          {drag.kind === 'achievement' && achById[drag.id] && <AchievementBadge achievement={achById[drag.id]} unlocked size="lg" />}
+          {drag.kind === 'achievement' && achById[drag.id] && <AchievementMedal achievement={achById[drag.id]} height={72} />}
         </div>
       )}
     </div>
   );
 }
 
-function nothing(t: Trophy[], a: Achievement[]) {
-  return t.length === 0 && a.length === 0;
+// A wooden shelf board with a front lip + two bracket supports.
+function ShelfBoard({ top }: { top: string }) {
+  return (
+    <div className="absolute pointer-events-none" style={{ left: '4%', right: '4%', top }}>
+      <div style={{ height: 13, borderRadius: 3, background: 'linear-gradient(180deg, #9a652f, #5e3719)', boxShadow: '0 6px 11px rgba(0,0,0,0.5), inset 0 2px 0 rgba(255,220,170,0.32)' }} />
+      <div style={{ position: 'absolute', left: '12%', top: 13, width: 10, height: 12, background: 'linear-gradient(180deg, #6e4220, #4a2c14)', clipPath: 'polygon(0 0, 100% 0, 60% 100%, 0 100%)' }} />
+      <div style={{ position: 'absolute', right: '12%', top: 13, width: 10, height: 12, background: 'linear-gradient(180deg, #6e4220, #4a2c14)', clipPath: 'polygon(0 0, 100% 0, 100% 100%, 40% 100%)' }} />
+    </div>
+  );
 }
