@@ -34,16 +34,6 @@ async function prepareSmallImage(file: File, options: { maxBytes: number; maxSiz
   return new File([blob], file.name.replace(/\.[^.]+$/, '.webp'), { type: 'image/webp' });
 }
 
-export async function getCurrentUser() {
-  const { data } = await supabase.auth.getSession();
-  return data.session?.user || null;
-}
-
-export async function getUser(userId: string) {
-  const { data, error } = await supabase.from('users').select('*').eq('id', userId).single();
-  return { data, error };
-}
-
 /**
  * Returns the user's profile row if one exists. NEVER auto-generates a username.
  * Callers that get back `{ data: null }` should route the user to /auth/choose-username
@@ -2409,6 +2399,19 @@ export async function getBlockedUserIds(userId: string): Promise<string[]> {
     .select('blocked_id')
     .eq('blocker_id', userId);
   return (data || []).map((r: { blocked_id: string }) => r.blocked_id);
+}
+
+/** Blocked users with their profile, newest first — powers the unblock list. */
+export async function getBlockedUsers(
+  userId: string,
+): Promise<Array<{ id: string; username: string; avatar_url: string | null; bio: string | null }>> {
+  const ids = await getBlockedUserIds(userId);
+  if (ids.length === 0) return [];
+  const { data } = await supabase
+    .from('users')
+    .select('id, username, avatar_url, bio')
+    .in('id', ids);
+  return (data || []) as Array<{ id: string; username: string; avatar_url: string | null; bio: string | null }>;
 }
 
 export async function blockUser(blockerId: string, blockedId: string) {

@@ -32,13 +32,6 @@ export function normalizeName(input: string): string {
   return collapseAndTrim(s);
 }
 
-export function normalizeBrandAndName(
-  brand: string,
-  name: string,
-): { brand: string; name: string } {
-  return { brand: normalizeBrand(brand), name: normalizeName(name) };
-}
-
 /**
  * Standardize a flavor name *relative to its brand*. Run after normalizeName.
  *   - strips ®, ™, © glyphs
@@ -63,16 +56,6 @@ export function standardizeName(brand: string, name: string): string {
 /** Tokens of length >= 2 from a normalized string, lowercased. */
 export function nameTokens(s: string): string[] {
   return s.toLowerCase().split(' ').map((t) => t.trim()).filter((t) => t.length >= 2);
-}
-
-/** Returns a list of human-readable problems, or [] if the name is valid. */
-export function validateName(name: string): string[] {
-  const issues: string[] = [];
-  if (!name.trim()) issues.push('Name is required.');
-  if (/[-+]/.test(name)) issues.push('Use spaces instead of dashes or +.');
-  if (/[&]/.test(name)) issues.push('Use "and" instead of "&".');
-  if (name.length > 120) issues.push('Name is too long.');
-  return issues;
 }
 
 function replaceSmartQuotes(s: string): string {

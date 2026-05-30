@@ -1,10 +1,8 @@
 // components/Trophy.tsx
 //
 // Glossy trophy visuals for the showroom. <TrophyMedallion> is the shiny
-// circular emblem; <TrophyCard> wraps it with name, rarity, tagline, and a
-// locked/progress state for the grid. Earned trophies get a rarity gradient,
-// glow, and a slow shine sweep (.shine-sweep from globals.css). Locked trophies
-// render as dim silhouettes with a progress bar to entice.
+// circular emblem. Earned trophies get a rarity gradient and glow; locked
+// trophies render as dim silhouettes with a lock glyph.
 
 'use client';
 
@@ -82,65 +80,3 @@ export function TrophyMedallion({
   );
 }
 
-export function TrophyCard({
-  trophy,
-  earned,
-  progress,
-}: {
-  trophy: Trophy;
-  earned: boolean;
-  progress?: [number, number];
-}) {
-  const r = RARITY_META[trophy.rarity];
-  const pct = progress && progress[1] > 0 ? Math.min(100, (progress[0] / progress[1]) * 100) : 0;
-
-  return (
-    <div
-      className="rounded-2xl p-4 flex flex-col items-center text-center transition-transform duration-300 hover:scale-[1.02]"
-      style={{
-        background: earned
-          ? `linear-gradient(160deg, ${hexA(r.color, 0.10)}, rgba(15,20,36,0.5))`
-          : 'rgba(15,20,36,0.45)',
-        border: `1px solid ${earned ? hexA(r.color, 0.4) : 'var(--border-subtle)'}`,
-        boxShadow: earned ? `0 0 24px ${hexA(r.color, r.glow * 0.18)}` : 'none',
-      }}
-    >
-      <TrophyMedallion trophy={trophy} earned={earned} size={72} />
-
-      <p
-        className="text-sm font-extrabold mt-3 leading-tight"
-        style={{ fontFamily: 'var(--font-display)', color: earned ? 'var(--text-primary)' : 'var(--text-secondary)' }}
-      >
-        {trophy.name}
-      </p>
-
-      <span
-        className="inline-block text-[9px] font-bold uppercase tracking-wider mt-1 px-2 py-0.5 rounded-full"
-        style={{
-          background: earned ? hexA(r.color, 0.18) : 'rgba(148,163,184,0.10)',
-          color: earned ? r.color : 'var(--text-muted)',
-        }}
-      >
-        {r.label}
-      </span>
-
-      <p className="text-[11px] mt-2 leading-snug" style={{ color: 'var(--text-muted)' }}>
-        {earned ? trophy.tagline : trophy.description}
-      </p>
-
-      {!earned && progress && (
-        <div className="w-full mt-2.5">
-          <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.06)' }}>
-            <div
-              className="h-full rounded-full transition-all duration-500"
-              style={{ width: `${pct}%`, background: `linear-gradient(90deg, ${r.gradient.join(', ')})` }}
-            />
-          </div>
-          <p className="text-[10px] mt-1 tabular-nums" style={{ color: 'var(--text-muted)' }}>
-            {progress[0].toLocaleString()} / {progress[1].toLocaleString()}
-          </p>
-        </div>
-      )}
-    </div>
-  );
-}

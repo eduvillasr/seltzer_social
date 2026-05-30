@@ -61,24 +61,6 @@ function seltzerRank(reviewCount: number): string {
   return (RANKS.find((r) => reviewCount >= r.min) ?? RANKS[RANKS.length - 1]).title;
 }
 
-// Flavor families for the taste fingerprint — match keywords in a drink name.
-const FLAVOR_FAMILIES: { family: string; color: string; keywords: string[] }[] = [
-  { family: 'Citrus',       color: '#fbbf24', keywords: ['lemon', 'lime', 'orange', 'grapefruit', 'citrus', 'yuzu', 'tangerine', 'pamplemousse', 'clementine'] },
-  { family: 'Berry',        color: '#f472b6', keywords: ['berry', 'strawberry', 'raspberry', 'blackberry', 'blueberry', 'cranberry', 'acai', 'açai'] },
-  { family: 'Tropical',     color: '#34d399', keywords: ['mango', 'pineapple', 'coconut', 'passion', 'guava', 'kiwi', 'peach', 'apricot', 'dragon'] },
-  { family: 'Melon',        color: '#a3e635', keywords: ['watermelon', 'melon', 'cantaloupe', 'honeydew'] },
-  { family: 'Cherry',       color: '#fb7185', keywords: ['cherry'] },
-  { family: 'Apple & Pear', color: '#86efac', keywords: ['apple', 'pear'] },
-  { family: 'Cola & Spice', color: '#c084fc', keywords: ['cola', 'root beer', 'ginger', 'cream', 'vanilla', 'chai'] },
-  { family: 'Botanical',    color: '#2dd4bf', keywords: ['cucumber', 'mint', 'basil', 'lavender', 'hibiscus', 'elderflower', 'rose', 'lemongrass'] },
-];
-const FLAVOR_COLOR: Record<string, string> = Object.fromEntries(FLAVOR_FAMILIES.map((f) => [f.family, f.color]));
-function flavorFamilyOf(name: string): string | null {
-  const n = (name || '').toLowerCase();
-  for (const f of FLAVOR_FAMILIES) if (f.keywords.some((k) => n.includes(k))) return f.family;
-  return null;
-}
-
 export default function ProfilePage({ params }: ProfilePageProps) {
   const [user, setUser] = useState<User | null>(null);
   const [reviews, setReviews] = useState<Review[]>([]);
@@ -245,19 +227,18 @@ export default function ProfilePage({ params }: ProfilePageProps) {
   // We merge full reviews + "tried it" quick-rates so the profile reflects
   // every drink the user has expressed an opinion on, not just ones they
   // wrote a paragraph about.
+  // Lightweight taste summary — just the figures the analytics-entry chips
+  // need. The full breakdown (tiers, flavor families, generosity, etc.) now
+  // lives on the dedicated stats page.
   const taste = useMemo(() => {
-    type Datum = { rating: number; brand: string | null; seltzer_name: string };
+    type Datum = { rating: number; brand: string | null };
     const all: Datum[] = [
-      ...reviews.map((r) => ({ rating: r.rating, brand: r.brand, seltzer_name: r.seltzer_name })),
-      ...triedIts,
+      ...reviews.map((r) => ({ rating: r.rating, brand: r.brand })),
+      ...triedIts.map((t) => ({ rating: t.rating, brand: t.brand })),
     ];
     if (all.length === 0) return null;
 
-    // Tier distribution
-    const tierCounts: Record<string, number> = { S: 0, A: 0, B: 0, C: 0, D: 0, F: 0 };
-    for (const d of all) tierCounts[ratingToTier(d.rating)]++;
-
-    // Brand stats
+    // Brand stats — count + sum per brand, for unique-brand count and best brand.
     const byBrand: Record<string, { count: number; sum: number }> = {};
     for (const d of all) {
       const b = (d.brand?.trim() || 'Unknown');
@@ -266,79 +247,18 @@ export default function ProfilePage({ params }: ProfilePageProps) {
       byBrand[b].sum += d.rating;
     }
     const brandEntries = Object.entries(byBrand);
-    const topBrandByCount = brandEntries.sort((a, b) => b[1].count - a[1].count)[0];
     const brandsWith2Plus = brandEntries.filter(([, v]) => v.count >= 2);
     const bestBrand = brandsWith2Plus.length > 0
       ? brandsWith2Plus.sort((a, b) => b[1].sum / b[1].count - a[1].sum / a[1].count)[0]
       : null;
-    const worstBrand = brandsWith2Plus.length > 0
-      ? brandsWith2Plus.sort((a, b) => a[1].sum / a[1].count - b[1].sum / b[1].count)[0]
-      : null;
 
-    // Generosity vs. critic — variance from neutral 3.0
-    const harshCount    = all.filter((d) => d.rating < 3).length;
-    const generousCount = all.filter((d) => d.rating >= 4).length;
-    const generosityScore = generousCount / all.length; // 0..1
-
-    // Pickiness — std deviation of ratings (high = wide spread, low = consistent)
     const mean = all.reduce((s, d) => s + d.rating, 0) / all.length;
-    const variance = all.reduce((s, d) => s + (d.rating - mean) ** 2, 0) / all.length;
-    const stdDev = Math.sqrt(variance);
-
-    // Brand loyalty — % of opinions from top brand
-    const loyaltyPct = topBrandByCount
-      ? Math.round((topBrandByCount[1].count / all.length) * 100)
-      : 0;
-
-    // Sweet spot — most-rated tier
-    const sweetTier = (Object.entries(tierCounts).sort((a, b) => b[1] - a[1])[0])[0];
-
-    // Variety — unique brands across reviews + tried-its
-    const uniqueBrands = brandEntries.length;
-
-    // Flavor fingerprint — which flavor families this palate gravitates toward.
-    const flavorCounts: Record<string, number> = {};
-    for (const d of all) {
-      const fam = flavorFamilyOf(d.seltzer_name);
-      if (fam) flavorCounts[fam] = (flavorCounts[fam] || 0) + 1;
-    }
-    const flavorFamilies = Object.entries(flavorCounts)
-      .sort((a, b) => b[1] - a[1])
-      .map(([family, count]) => ({ family, count }));
-
-    // Generosity label
-    const generosityLabel =
-      generosityScore >= 0.65 ? 'Generous' :
-      generosityScore >= 0.4  ? 'Balanced'  :
-      generosityScore >= 0.2  ? 'Selective' :
-                                'Harsh critic';
-
-    // Pickiness label (std dev — higher = more polarized opinions)
-    const pickinessLabel =
-      stdDev >= 1.2 ? 'Polarized'  :
-      stdDev >= 0.8 ? 'Opinionated':
-      stdDev >= 0.4 ? 'Steady'     :
-                      'Lockstep';
 
     return {
       total: all.length,
-      reviewCount: reviews.length,
-      triedItCount: triedIts.length,
-      tierCounts,
-      topBrandByCount,
+      uniqueBrands: brandEntries.length,
       bestBrand,
-      worstBrand,
-      generosityScore,
-      generosityLabel,
-      stdDev,
-      pickinessLabel,
-      loyaltyPct,
-      sweetTier,
-      uniqueBrands,
-      harshCount,
-      generousCount,
       mean,
-      flavorFamilies,
     };
   }, [reviews, triedIts]);
 

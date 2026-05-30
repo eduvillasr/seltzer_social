@@ -12,7 +12,7 @@ import { showToast } from '@/components/Toast';
 import { ensureUserProfile, supabase, uploadAvatar, updateUserProfile, deleteMyAccount } from '@/lib/supabase';
 import { referralLink } from '@/lib/referral';
 import { haptic } from '@/lib/haptics';
-import { ArrowLeft, LogOut, Bell, Shield, HelpCircle, Info, ChevronRight, Droplets, Camera, Check, X, Upload, Sparkles, ImagePlus, FileText, ScrollText, Trash2, AlertTriangle, ShieldAlert, UserPlus, Share2 } from 'lucide-react';
+import { ArrowLeft, LogOut, Bell, Shield, ShieldOff, HelpCircle, Info, ChevronRight, Droplets, Camera, Check, X, Upload, Sparkles, ImagePlus, FileText, ScrollText, Trash2, AlertTriangle, ShieldAlert, UserPlus, Share2 } from 'lucide-react';
 import { CURRENT_VERSION, hasUnseenRelease } from '@/lib/changelog';
 
 export default function SettingsPage() {
@@ -300,6 +300,7 @@ export default function SettingsPage() {
           <p className="text-xs uppercase tracking-wider mb-3 px-1" style={{ color: 'var(--text-muted)' }}>Account</p>
           <div className="rounded-2xl overflow-hidden" style={{ background: 'rgba(15, 20, 36, 0.6)', border: '1px solid rgba(255,255,255,0.06)' }}>
             <SettingItem icon={<Bell size={18} />} label="Notifications" disabled />
+            <SettingItem icon={<ShieldOff size={18} />} label="Blocked accounts" href="/settings/blocked" />
             <SettingItem icon={<Shield size={18} />} label="Privacy" disabled />
           </div>
         </div>
