@@ -67,23 +67,29 @@ function ShapeEls({ shape, name }: { shape: TrophyShape; name: string }) {
       </g>
     );
   }
-  // can
+  // can — a proper tall seltzer can: tapered neck, recessed lid, pull-tab,
+  // ribbed top/bottom, a wide label band, and condensation beads.
   return (
     <g>
       <BlockBase name={name} />
+      {/* body with a slightly tapered neck + base (soda-can silhouette) */}
+      <path
+        d="M37 22 Q37 16 42 15 L58 15 Q63 16 63 22 L65 90 Q65 97 60 98 L40 98 Q35 97 35 90 Z"
+        fill={GOLD} stroke={OUT} strokeWidth="2.5" strokeLinejoin="round"
+      />
+      {/* recessed lid */}
+      <ellipse cx="50" cy="15" rx="13" ry="3.6" fill={GOLD_DK} stroke={OUT} strokeWidth="2.4" />
       {/* pull-tab */}
-      <ellipse cx="50" cy="13" rx="7" ry="2.6" fill={GOLD_DK} stroke={OUT} strokeWidth="2" />
-      <circle cx="50" cy="13" r="3" fill="none" stroke={OUT} strokeWidth="1.6" />
-      {/* body */}
-      <rect x="32" y="16" width="36" height="82" rx="7" fill={GOLD} stroke={OUT} strokeWidth="2.5" />
-      {/* top + bottom ridges */}
-      {[22, 26, 88, 92].map((y) => <line key={y} x1="34" y1={y} x2="66" y2={y} stroke={GOLD_DK} strokeWidth="1.4" />)}
-      {/* condensation line */}
-      <path d="M60 30 Q63 44 60 58 Q57 72 60 84" fill="none" stroke="#f3e6bf" strokeWidth="1.6" strokeLinecap="round" opacity="0.7" />
+      <rect x="46" y="12" width="8" height="5" rx="2" fill={GOLD} stroke={OUT} strokeWidth="1.6" />
+      {/* neck + base ribs */}
+      {[21, 24, 91, 94].map((y) => <line key={y} x1="38" y1={y} x2="62" y2={y} stroke={GOLD_DK} strokeWidth="1.3" />)}
       {/* label band */}
-      <rect x="30" y="46" width="40" height="22" fill={GOLD_DK} stroke={OUT} strokeWidth="2.4" />
-      <line x1="30" y1="46" x2="70" y2="46" stroke={OUT} strokeWidth="1.4" />
-      <line x1="30" y1="68" x2="70" y2="68" stroke={OUT} strokeWidth="1.4" />
+      <rect x="34" y="44" width="32" height="26" fill={GOLD_DK} stroke={OUT} strokeWidth="2.4" />
+      {/* condensation beads */}
+      <circle cx="41" cy="34" r="1.6" fill="#f3e6bf" opacity="0.85" />
+      <circle cx="60" cy="40" r="2" fill="#f3e6bf" opacity="0.85" />
+      <circle cx="58" cy="80" r="1.5" fill="#f3e6bf" opacity="0.85" />
+      <circle cx="42" cy="76" r="1.3" fill="#f3e6bf" opacity="0.8" />
     </g>
   );
 }
