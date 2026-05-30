@@ -26,9 +26,9 @@ const SEED_ORDER = ['1', '0', '2'];
 
 // Triangular formation: hero apex at back-center, two supporters front + wide.
 const PEDESTALS: { slot: string; pos: React.CSSProperties; colW: number; colH: number; trophyH: number; hero?: boolean }[] = [
-  { slot: '1', pos: { left: '50%', bottom: 104, transform: 'translateX(-50%)' }, colW: 100, colH: 70, trophyH: 158, hero: true },
-  { slot: '0', pos: { left: '13%', bottom: 14, transform: 'translateX(-50%)' }, colW: 58, colH: 48, trophyH: 96 },
-  { slot: '2', pos: { left: '87%', bottom: 14, transform: 'translateX(-50%)' }, colW: 58, colH: 48, trophyH: 96 },
+  { slot: '1', pos: { left: '50%', bottom: 16, transform: 'translateX(-50%)' }, colW: 94, colH: 60, trophyH: 124, hero: true },
+  { slot: '0', pos: { left: '13%', bottom: 30, transform: 'translateX(-50%)' }, colW: 56, colH: 46, trophyH: 90 },
+  { slot: '2', pos: { left: '87%', bottom: 30, transform: 'translateX(-50%)' }, colW: 56, colH: 46, trophyH: 90 },
 ];
 const FRAMES: { slot: string; pos: React.CSSProperties; size: number; hero?: boolean }[] = [
   { slot: '0', pos: { left: '20%', top: '30%', transform: 'translate(-50%,-50%)' }, size: 58, hero: true },
@@ -258,24 +258,27 @@ export function ShowroomCase({
           {/* central arched alcove behind hero */}
           <div className="absolute pointer-events-none" style={{ left: '50%', transform: 'translateX(-50%)', top: '13%', width: '50%', height: '64%', borderRadius: '50% 50% 8px 8px / 42% 42% 4px 4px', background: 'linear-gradient(180deg, rgba(38,24,60,0.92), rgba(16,10,30,0.96))', border: '3px solid #c08a2e', boxShadow: '0 0 32px rgba(192,138,46,0.32), inset 0 12px 40px rgba(0,0,0,0.55)' }} />
 
-          {/* receding gallery corridor inside the arch — depth, with art + a bookshelf */}
-          <div className="absolute pointer-events-none overflow-hidden" style={{ left: '50%', transform: 'translateX(-50%)', top: '15%', width: '44%', height: '58%', borderRadius: '50% 50% 6px 6px / 40% 40% 4px 4px' }}>
-            {/* corridor left wall (receding) with a framed painting */}
-            <div className="absolute" style={{ left: 0, top: '8%', width: '33%', height: '74%', background: 'linear-gradient(90deg, #2a1c48, #1a1230)', clipPath: 'polygon(0 0, 100% 16%, 100% 84%, 0 100%)' }}>
-              <div className="absolute" style={{ left: '12%', top: '36%', width: 17, height: 14, background: 'radial-gradient(circle at 38% 32%, #7a5aa8, #241636)', border: '1.5px solid #9c7a30' }} />
+          {/* receding gallery corridor inside the arch — sits ABOVE the hero so the
+              hallway stays visible; brighter walls + clearer art for real depth */}
+          <div className="absolute pointer-events-none overflow-hidden" style={{ left: '50%', transform: 'translateX(-50%)', top: '14%', width: '46%', height: '42%', borderRadius: '50% 50% 4px 4px / 62% 62% 4px 4px' }}>
+            {/* ceiling */}
+            <div className="absolute top-0 left-0 right-0" style={{ height: '24%', background: 'linear-gradient(180deg, #2f2152, #1e1640)' }} />
+            {/* left wall + framed painting */}
+            <div className="absolute" style={{ left: 0, top: '8%', width: '31%', height: '84%', background: 'linear-gradient(90deg, #3c2c62, #261a48)', clipPath: 'polygon(0 0, 100% 18%, 100% 82%, 0 100%)' }}>
+              <div className="absolute" style={{ left: '16%', top: '34%', width: 20, height: 16, background: 'radial-gradient(circle at 38% 32%, #9a7ac4, #2c1e4c)', border: '1.5px solid #c9a24a', boxShadow: '0 1px 3px rgba(0,0,0,0.5)' }} />
             </div>
-            {/* corridor right wall (receding) with a framed painting */}
-            <div className="absolute" style={{ right: 0, top: '8%', width: '33%', height: '74%', background: 'linear-gradient(270deg, #2a1c48, #1a1230)', clipPath: 'polygon(0 16%, 100% 0, 100% 100%, 0 84%)' }}>
-              <div className="absolute" style={{ right: '12%', top: '36%', width: 17, height: 14, background: 'radial-gradient(circle at 38% 32%, #4f88a8, #16222e)', border: '1.5px solid #9c7a30' }} />
+            {/* right wall + framed painting */}
+            <div className="absolute" style={{ right: 0, top: '8%', width: '31%', height: '84%', background: 'linear-gradient(270deg, #3c2c62, #261a48)', clipPath: 'polygon(0 18%, 100% 0, 100% 100%, 0 82%)' }}>
+              <div className="absolute" style={{ right: '16%', top: '34%', width: 20, height: 16, background: 'radial-gradient(circle at 38% 32%, #6f9ec4, #1c2a38)', border: '1.5px solid #c9a24a', boxShadow: '0 1px 3px rgba(0,0,0,0.5)' }} />
             </div>
-            {/* far back wall: warm doorway glow + bookshelf + a small painting */}
-            <div className="absolute overflow-hidden" style={{ left: '50%', top: '28%', transform: 'translateX(-50%)', width: '40%', height: '44%', background: 'linear-gradient(180deg, #241838, #14102a)', boxShadow: '0 0 18px rgba(255,200,120,0.14)' }}>
-              <div className="absolute inset-0" style={{ background: 'radial-gradient(ellipse at 50% 38%, rgba(255,200,120,0.18), transparent 70%)' }} />
-              <div className="absolute" style={{ left: 3, bottom: 2 }}><Bookshelf scale={0.46} /></div>
-              <div className="absolute" style={{ right: '14%', top: '16%', width: 12, height: 15, background: 'radial-gradient(circle at 40% 32%, #a85f7a, #221428)', border: '1px solid #9c7a30' }} />
+            {/* far wall: warm doorway glow + bookshelf + a small painting */}
+            <div className="absolute overflow-hidden" style={{ left: '50%', top: '24%', transform: 'translateX(-50%)', width: '42%', height: '50%', background: 'linear-gradient(180deg, #2c2048, #181232)' }}>
+              <div className="absolute inset-0" style={{ background: 'radial-gradient(ellipse at 50% 42%, rgba(255,205,130,0.30), transparent 72%)' }} />
+              <div className="absolute" style={{ left: 2, bottom: 1 }}><Bookshelf scale={0.5} /></div>
+              <div className="absolute" style={{ right: '12%', top: '14%', width: 14, height: 17, background: 'radial-gradient(circle at 40% 32%, #b06f8a, #241430)', border: '1px solid #c9a24a' }} />
             </div>
-            {/* corridor floor (receding checker strip) */}
-            <div className="absolute" style={{ left: '50%', bottom: 0, transform: 'translateX(-50%)', width: '66%', height: '32%', clipPath: 'polygon(26% 0, 74% 0, 100% 100%, 0 100%)', backgroundColor: '#7a6444', backgroundImage: 'linear-gradient(45deg, #5a4632 25%, transparent 25% 75%, #5a4632 75%)', backgroundSize: '13px 13px' }} />
+            {/* receding floor */}
+            <div className="absolute" style={{ left: '50%', bottom: 0, transform: 'translateX(-50%)', width: '74%', height: '28%', clipPath: 'polygon(30% 0, 70% 0, 100% 100%, 0 100%)', backgroundColor: '#8a7350', backgroundImage: 'linear-gradient(45deg, #685038 25%, transparent 25% 75%, #685038 75%)', backgroundSize: '11px 11px' }} />
           </div>
 
           {/* signage */}
@@ -369,11 +372,12 @@ export function ShowroomCase({
           </div>
 
           {/* topiary (left) + decorative urn (right) — front outer corners, above podiums */}
-          <div className="absolute pointer-events-none" style={{ left: 2, bottom: 4, zIndex: 30, filter: 'drop-shadow(0 5px 7px rgba(0,0,0,0.5))' }}>
-            <div style={{ width: 26, height: 26, borderRadius: '50%', margin: '0 auto', background: 'radial-gradient(circle at 35% 28%, #5cc463, #2e7d32)', boxShadow: 'inset -3px -3px 6px rgba(0,0,0,0.3)' }} />
-            <div style={{ width: 34, height: 32, borderRadius: '50%', margin: '-7px auto 0', background: 'radial-gradient(circle at 35% 28%, #5cc463, #2e7d32)', boxShadow: 'inset -3px -3px 6px rgba(0,0,0,0.3)' }} />
-            <div style={{ width: 5, height: 9, margin: '0 auto', background: '#6d4c2f' }} />
-            <div style={{ width: 26, height: 15, margin: '0 auto', background: 'linear-gradient(180deg, #cf8a44, #8a4f23)', clipPath: 'polygon(10% 0,90% 0,78% 100%,22% 100%)' }} />
+          <div className="absolute pointer-events-none" style={{ left: 6, bottom: 6, zIndex: 30, filter: 'drop-shadow(0 5px 7px rgba(0,0,0,0.5))' }}>
+            <div style={{ width: 20, height: 20, borderRadius: '50%', margin: '0 auto', background: 'radial-gradient(circle at 34% 28%, #6cce72, #2f7d34)', border: '1.5px solid #245c28', boxShadow: 'inset -3px -3px 5px rgba(0,0,0,0.35), inset 2px 2px 4px rgba(255,255,255,0.3)' }} />
+            <div style={{ width: 28, height: 26, borderRadius: '50%', margin: '-5px auto 0', background: 'radial-gradient(circle at 34% 28%, #6cce72, #2f7d34)', border: '1.5px solid #245c28', boxShadow: 'inset -3px -3px 5px rgba(0,0,0,0.35), inset 2px 2px 4px rgba(255,255,255,0.3)' }} />
+            <div style={{ width: 4, height: 7, margin: '0 auto', background: '#6d4c2f' }} />
+            {/* terracotta pot */}
+            <div style={{ width: 24, height: 16, margin: '0 auto', background: 'linear-gradient(180deg, #d2884a, #9a5a2a)', borderRadius: '2px 2px 5px 5px', clipPath: 'polygon(12% 0,88% 0,76% 100%,24% 100%)', border: '1px solid #7a4420' }} />
           </div>
           <div className="absolute pointer-events-none" style={{ right: 2, bottom: 4, zIndex: 30, filter: 'drop-shadow(0 5px 7px rgba(0,0,0,0.5))' }}>
             <div style={{ width: 14, height: 6, margin: '0 auto 1px', borderRadius: 3, background: '#7a5a28' }} />
