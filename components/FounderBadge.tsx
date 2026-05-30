@@ -14,7 +14,8 @@ export const BETA_TESTER_USERNAMES_LOWER = new Set<string>([
   'eduvillasr',
   'nicepantsuit',
   'cts',
-  'colinmonaco'  
+  'colinmonaco',
+  'carols1stfan',
 ]);
 
 /**

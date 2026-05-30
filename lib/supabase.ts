@@ -95,7 +95,7 @@ export async function isUsernameAvailable(username: string) {
  * Claim a username for an authenticated user. Idempotent: if the row already
  * exists with the same username, returns it. Errors out on collisions.
  */
-export async function claimUsername(userId: string, username: string) {
+export async function claimUsername(userId: string, username: string, referredBy?: string | null) {
   const u = username.trim();
   const validation = validateUsername(u);
   if (!validation.ok) return { data: null, error: new Error(validation.reason) };
@@ -115,7 +115,7 @@ export async function claimUsername(userId: string, username: string) {
 
   const { data, error } = await supabase
     .from('users')
-    .insert([{ id: userId, username: u }])
+    .insert([{ id: userId, username: u, ...(referredBy ? { referred_by: referredBy } : {}) }])
     .select('*')
     .single();
   return { data, error };
@@ -584,11 +584,40 @@ export async function getAchievementStats(userId: string, isFounder: boolean, is
     if ((row as any).follower_id === userId) following++;
   }
 
-  // Tier lists (member of)
-  const { count: tierListsAsMember } = await supabase
+  // Tier lists this user owns or co-owns. We fetch the ids (not just a count)
+  // so we can also tally subscribers across those lists below.
+  const { data: ownedLists } = await supabase
     .from('shared_tier_lists')
-    .select('id', { count: 'exact', head: true })
+    .select('id')
     .or(`owner_id.eq.${userId},partner_id.eq.${userId}`);
+  const ownedListIds = (ownedLists || []).map((l: any) => l.id);
+  const tierListsAsMember = ownedListIds.length;
+
+  // ── Community engagement around shared tier lists ──
+  // Tier lists have no "likes", so subscribers (people who follow your
+  // rankings) are the equivalent signal; plus approved suggestions and votes
+  // cast measure genuine participation in others' lists.
+  let tierListSubscribers = 0;
+  if (ownedListIds.length > 0) {
+    const { count } = await supabase
+      .from('shared_tier_list_subscriptions')
+      .select('list_id', { count: 'exact', head: true })
+      .in('list_id', ownedListIds);
+    tierListSubscribers = count ?? 0;
+  }
+
+  const [{ count: approvedSuggestions }, { count: tierListVotesCast }, { count: referralsMade }] = await Promise.all([
+    supabase.from('shared_tier_list_suggestions')
+      .select('id', { count: 'exact', head: true })
+      .eq('created_by', userId).eq('status', 'approved'),
+    supabase.from('shared_tier_list_votes')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', userId),
+    // Users who signed up via this user's referral link.
+    supabase.from('users')
+      .select('id', { count: 'exact', head: true })
+      .eq('referred_by', userId),
+  ]);
 
   return {
     reviewCount,
@@ -600,7 +629,11 @@ export async function getAchievementStats(userId: string, isFounder: boolean, is
     totalTriedItReceived,
     followers,
     following,
-    tierListsAsMember: tierListsAsMember ?? 0,
+    tierListsAsMember,
+    tierListSubscribers,
+    approvedSuggestions: approvedSuggestions ?? 0,
+    tierListVotesCast: tierListVotesCast ?? 0,
+    referralsMade: referralsMade ?? 0,
     hasFiveStarReview,
     hasFreshReview,
     isFounder,
@@ -613,6 +646,48 @@ export async function getAchievementStats(userId: string, isFounder: boolean, is
  *  of the five "do this to get started" items, plus a top-level
  *  dismissed flag so the card can hide itself permanently.
  */
+/**
+ * Look for an already-uploaded avatar in storage when users.avatar_url is null,
+ * and heal the column if one is found. Covers photos uploaded before the
+ * uploadAvatar DB-write fix (or whenever that write silently failed). Returns
+ * the public URL if an avatar exists, else null. Best-effort: never throws.
+ */
+async function findAndHealAvatar(userId: string): Promise<string | null> {
+  // Avatars live at `${userId}/avatar-*` in the `avatars` bucket, or
+  // `avatars/${userId}/avatar-*` in the `review-images` fallback bucket.
+  const candidates: Array<{ bucket: string; prefix: string }> = [
+    { bucket: 'avatars', prefix: userId },
+    { bucket: 'review-images', prefix: `avatars/${userId}` },
+  ];
+
+  for (const { bucket, prefix } of candidates) {
+    try {
+      const { data: files, error } = await supabase.storage
+        .from(bucket)
+        .list(prefix, { limit: 100 });
+      if (error || !files?.length) continue;
+
+      // Newest avatar file wins (names embed a timestamp, but sort to be safe).
+      const avatarFiles = files
+        .filter((f) => f.name.startsWith('avatar-'))
+        .sort((a, b) => b.name.localeCompare(a.name));
+      if (!avatarFiles.length) continue;
+
+      const path = `${prefix}/${avatarFiles[0].name}`;
+      const { data: urlData } = supabase.storage.from(bucket).getPublicUrl(path);
+      const publicUrl = urlData?.publicUrl;
+      if (!publicUrl) continue;
+
+      // Heal the column so every surface (nav, profile, checklist) agrees.
+      await supabase.from('users').update({ avatar_url: publicUrl }).eq('id', userId);
+      return publicUrl;
+    } catch {
+      // Ignore and try the next bucket — detection must never break the checklist.
+    }
+  }
+  return null;
+}
+
 export async function getOnboardingChecklist(userId: string): Promise<{
   username: string;
   hasAvatar: boolean;
@@ -643,7 +718,16 @@ export async function getOnboardingChecklist(userId: string): Promise<{
   ]);
 
   const username     = (profile as any)?.username ?? '';
-  const hasAvatar    = !!(profile as any)?.avatar_url;
+  // The avatar_url column is normally the source of truth, but an old upload
+  // (or one whose DB write silently failed before the uploadAvatar fix) can
+  // leave it null while the photo still sits in storage. Rather than nag a
+  // user who clearly already has a photo, fall back to the storage bucket and
+  // self-heal the column so it's correct everywhere from then on.
+  let hasAvatar = !!(profile as any)?.avatar_url;
+  if (!hasAvatar) {
+    const healedUrl = await findAndHealAvatar(userId);
+    if (healedUrl) hasAvatar = true;
+  }
   const follows3Plus = (followCount ?? 0) >= 3;
   const hasReview    = (reviewCount ?? 0) > 0;
   const hasTierList  = ((ownLists ?? 0) + (subscribedLists ?? 0)) > 0;

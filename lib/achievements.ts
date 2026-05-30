@@ -46,6 +46,10 @@ export interface AchievementStats {
   followers: number;
   following: number;
   tierListsAsMember: number;
+  tierListSubscribers: number;   // subscribers across lists you own/co-own
+  approvedSuggestions: number;   // your suggestions approved onto any list
+  tierListVotesCast: number;     // votes you've cast on suggestions
+  referralsMade: number;         // users who signed up via your referral link
   hasFiveStarReview: boolean;
   hasFreshReview: boolean; // posted in last 7 days
   isFounder: boolean;

@@ -14,6 +14,7 @@ import { CanImage } from '@/components/CanImage';
 import { BackHeader } from '@/components/BackHeader';
 import { Avatar } from '@/components/Avatar';
 import { CanLoader } from '@/components/CanLoader';
+import { CountUp } from '@/components/CountUp';
 import {
   getUserByUsername, getUserReviews, supabase,
 } from '@/lib/supabase';
@@ -186,9 +187,13 @@ export default function ComparePage({ params }: { params: { username: string } }
             <>
               {/* Big agreement number */}
               <div className="text-center mb-3">
-                <p className="text-5xl font-extrabold" style={{ fontFamily: 'var(--font-display)', background: 'linear-gradient(135deg, var(--cyan-400), var(--violet-400))', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-                  {stats.agreement}%
-                </p>
+                <CountUp
+                  value={stats.agreement}
+                  suffix="%"
+                  duration={1100}
+                  className="text-5xl font-extrabold inline-block"
+                  style={{ fontFamily: 'var(--font-display)', background: 'linear-gradient(135deg, var(--cyan-400), var(--violet-400))', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}
+                />
                 <p className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>
                   taste agreement
                   <span style={{ color: 'var(--text-muted)' }}> · {rows.length} {rows.length === 1 ? 'drink' : 'drinks'} in common</span>

@@ -309,3 +309,61 @@ a { color:inherit; text-decoration:none; }
 }
 @keyframes fadeOut { from { opacity: 1 } to { opacity: 0 } }
 @keyframes fadeIn  { from { opacity: 0 } to { opacity: 1 } }
+
+/* ─── Polish layer: micro-interactions, tier shine, celebration ─────── */
+
+/* Heart "pop" when a like fires (applied to the icon for ~0.4s) */
+@keyframes heartPop {
+  0%   { transform: scale(1); }
+  30%  { transform: scale(0.78); }
+  60%  { transform: scale(1.32); }
+  100% { transform: scale(1); }
+}
+.heart-pop { animation: heartPop 0.42s cubic-bezier(0.16,1,0.3,1); }
+
+/* Expanding ring burst behind the heart / tried-it droplet */
+@keyframes burstRing {
+  0%   { transform: scale(0.3); opacity: 0.55; }
+  100% { transform: scale(1.9); opacity: 0; }
+}
+.burst-ring { animation: burstRing 0.5s ease-out forwards; }
+
+/* Soft ripple for the Tried-It action */
+@keyframes rippleFx {
+  0%   { transform: scale(0); opacity: 0.45; }
+  100% { transform: scale(2.6); opacity: 0; }
+}
+.ripple-fx { animation: rippleFx 0.55s ease-out forwards; }
+
+/* Sweeping highlight for the S-tier (and any prestige surface) */
+@keyframes shineSweep {
+  0%   { transform: translateX(-160%) skewX(-18deg); }
+  100% { transform: translateX(320%) skewX(-18deg); }
+}
+.shine-sweep { position: relative; overflow: hidden; }
+.shine-sweep::after {
+  content: ''; position: absolute; top: 0; bottom: 0; left: 0; width: 35%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.28), transparent);
+  transform: translateX(-160%) skewX(-18deg);
+  animation: shineSweep 3.4s ease-in-out infinite;
+  pointer-events: none;
+}
+
+/* Confetti pieces for the achievement-unlock celebration */
+@keyframes confettiDrop {
+  0%   { transform: translate3d(0,0,0) rotate(0deg); opacity: 1; }
+  100% { transform: translate3d(var(--cx, 0px), var(--cy, 160px), 0) rotate(var(--cr, 540deg)); opacity: 0; }
+}
+.confetti-piece {
+  position: absolute; top: 0; left: 50%;
+  animation: confettiDrop var(--cd, 1.1s) cubic-bezier(0.16,1,0.3,1) forwards;
+  animation-delay: var(--cdelay, 0s);
+}
+
+/* Trophy/badge reveal scale-in with a touch of overshoot */
+@keyframes badgeReveal {
+  0%   { transform: scale(0.4) rotate(-12deg); opacity: 0; }
+  55%  { transform: scale(1.12) rotate(4deg); opacity: 1; }
+  100% { transform: scale(1) rotate(0deg); opacity: 1; }
+}
+.badge-reveal { animation: badgeReveal 0.6s cubic-bezier(0.16,1,0.3,1) forwards; }

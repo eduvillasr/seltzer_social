@@ -14,6 +14,7 @@ import { reviewHeadline, reviewDrinkLabel, hasCustomTitle } from '@/lib/reviewDi
 import { MentionText } from './MentionText';
 import { ContentMenu } from './ContentMenu';
 import { showToast } from './Toast';
+import { haptic } from '@/lib/haptics';
 import { createLike, deleteLike, getUserLike, getLikes, createTriedIt, getUserTriedIt, getTriedItStats, deleteReview, getCommentCount } from '@/lib/supabase';
 
 interface ReviewCardProps {
@@ -26,6 +27,10 @@ export function ReviewCard({ review, currentUserId, onDelete }: ReviewCardProps)
   const [isLiked, setIsLiked] = useState(false);
   const [likeCount, setLikeCount] = useState(0);
   const [loading, setLoading] = useState(false);
+  // Bumped each time a like fires (not on unlike) to replay the heart pop +
+  // burst ring. A tried-it submit bumps its own counter for the droplet ripple.
+  const [likeBurst, setLikeBurst] = useState(0);
+  const [triedBurst, setTriedBurst] = useState(0);
   const [deleted, setDeleted] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
@@ -96,6 +101,9 @@ export function ReviewCard({ review, currentUserId, onDelete }: ReviewCardProps)
       setIsLiked(false);
       setLikeCount((c) => Math.max(0, c - 1));
     } else {
+      // Fire the delight first so it feels instant, then persist.
+      setLikeBurst((k) => k + 1);
+      haptic('light');
       await createLike(currentUserId, review.id);
       setIsLiked(true);
       setLikeCount((c) => c + 1);
@@ -112,6 +120,8 @@ export function ReviewCard({ review, currentUserId, onDelete }: ReviewCardProps)
     setMyTriedRating(pendingRating);
     setShowTriedPanel(false);
     setSubmittingTried(false);
+    setTriedBurst((k) => k + 1);
+    haptic('success');
     loadTriedItCount();
     showToast(wasUpdate ? 'Rating updated' : 'Marked as tried', 'success', `Your score: ${pendingRating.toFixed(1)}`);
   }
@@ -228,7 +238,17 @@ export function ReviewCard({ review, currentUserId, onDelete }: ReviewCardProps)
 
       <div className="flex items-center gap-1 pt-3" style={{ borderTop: '1px solid var(--border-subtle)' }}>
         <button onClick={handleLike} disabled={loading || !currentUserId} className={`action-btn ${isLiked ? 'active-like' : ''}`}>
-          <Heart size={15} className={isLiked ? 'fill-current' : ''} />{likeCount > 0 && <span>{likeCount}</span>}
+          <span className="relative inline-flex items-center justify-center">
+            <Heart key={likeBurst} size={15} className={`${isLiked ? 'fill-current' : ''} ${likeBurst > 0 ? 'heart-pop' : ''}`} />
+            {likeBurst > 0 && (
+              <span
+                key={`ring-${likeBurst}`}
+                className="burst-ring absolute rounded-full pointer-events-none"
+                style={{ inset: '-6px', border: '2px solid var(--coral-400)' }}
+              />
+            )}
+          </span>
+          {likeCount > 0 && <span>{likeCount}</span>}
         </button>
 
         <Link href={`/review/${review.id}`} className="action-btn">
@@ -239,14 +259,23 @@ export function ReviewCard({ review, currentUserId, onDelete }: ReviewCardProps)
         {/* Tried It — hidden for own reviews */}
         {!isOwnReview && currentUserId && (
           <button
-            onClick={() => hasTried ? setShowTriedPanel(!showTriedPanel) : setShowTriedPanel(!showTriedPanel)}
+            onClick={() => { haptic('light'); setShowTriedPanel((v) => !v); }}
             className="action-btn ml-auto"
             style={{
               color: hasTried ? 'var(--cyan-400)' : undefined,
               background: hasTried ? 'rgba(6,182,212,0.08)' : undefined,
             }}
           >
-            <Droplets size={15} className={hasTried ? 'fill-current' : ''} />
+            <span className="relative inline-flex items-center justify-center">
+              <Droplets size={15} className={hasTried ? 'fill-current' : ''} />
+              {triedBurst > 0 && (
+                <span
+                  key={`tripple-${triedBurst}`}
+                  className="ripple-fx absolute rounded-full pointer-events-none"
+                  style={{ inset: '-7px', border: '2px solid var(--cyan-400)' }}
+                />
+              )}
+            </span>
             <span>{hasTried ? `Tried · ${myTriedRating.toFixed(1)}` : 'Tried It?'}</span>
           </button>
         )}

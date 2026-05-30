@@ -7,6 +7,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { Plus, Home, Flame, Bell, User } from 'lucide-react';
 import { ensureUserProfile, getUnreadNotificationCount, supabase } from '@/lib/supabase';
+import { haptic } from '@/lib/haptics';
 import { AuthUser } from '@/types';
 
 // Routes where Navigation shouldn't push to choose-username (would loop, or
@@ -89,12 +90,19 @@ export function Navigation() {
   return (
     <>
       <nav
-        className="fixed left-1/2 -translate-x-1/2 z-50"
+        className="fixed left-1/2 z-50"
         style={{
           width: 'calc(100% - 24px)',
           maxWidth: '460px',
           // Float above the home indicator on iPhones; falls back to 16px on devices without inset
           bottom: 'calc(16px + env(safe-area-inset-bottom, 0px))',
+          // Promote to its own GPU layer. Without this, the heavy backdrop-blur
+          // below gets re-rasterized on every scroll frame in mobile WebViews,
+          // which is what makes the bar look like it lags / jitters. translateZ
+          // pins it to the compositor so it stays rock-steady during scroll.
+          transform: 'translateX(-50%) translateZ(0)',
+          willChange: 'transform',
+          backfaceVisibility: 'hidden',
         }}
       >
         <div
@@ -115,7 +123,8 @@ export function Navigation() {
           <div className="relative flex items-center justify-around px-2 py-2">
             <Link
               href="/feed"
-              className="flex flex-col items-center gap-0.5 py-2 px-4 rounded-full transition-all"
+              onClick={() => haptic('selection')}
+              className="flex flex-col items-center gap-0.5 py-2 px-4 rounded-full transition-all active:scale-95"
               style={{
                 background: isActive('/feed') ? 'rgba(6, 182, 212, 0.15)' : 'transparent',
                 color: isActive('/feed') ? 'var(--cyan-400)' : 'var(--text-tertiary)',
@@ -127,7 +136,8 @@ export function Navigation() {
 
             <Link
               href="/discover"
-              className="flex flex-col items-center gap-0.5 py-2 px-4 rounded-full transition-all"
+              onClick={() => haptic('selection')}
+              className="flex flex-col items-center gap-0.5 py-2 px-4 rounded-full transition-all active:scale-95"
               style={{
                 // Treat /search as part of the Discover tab so both routes feel "active" — keeps old bookmarks ergonomic
                 background: isActive('/discover') || isActive('/search') ? 'rgba(6, 182, 212, 0.15)' : 'transparent',
@@ -142,6 +152,7 @@ export function Navigation() {
               href="/create"
               title="Write a review"
               aria-label="Write a review"
+              onClick={() => haptic('medium')}
               className="flex items-center justify-center transition-all hover:scale-105 active:scale-95"
               style={{
                 width: '48px',
@@ -156,7 +167,8 @@ export function Navigation() {
 
             <Link
               href="/inbox"
-              className="relative flex flex-col items-center gap-0.5 py-2 px-4 rounded-full transition-all"
+              onClick={() => haptic('selection')}
+              className="relative flex flex-col items-center gap-0.5 py-2 px-4 rounded-full transition-all active:scale-95"
               style={{
                 background: isActive('/inbox') ? 'rgba(6, 182, 212, 0.15)' : 'transparent',
                 color: isActive('/inbox') ? 'var(--cyan-400)' : 'var(--text-tertiary)',
@@ -178,7 +190,8 @@ export function Navigation() {
 
             <Link
               href={`/profile/${username}`}
-              className="flex flex-col items-center gap-0.5 py-2 px-4 rounded-full transition-all"
+              onClick={() => haptic('selection')}
+              className="flex flex-col items-center gap-0.5 py-2 px-4 rounded-full transition-all active:scale-95"
               style={{
                 background: pathname?.startsWith('/profile') ? 'rgba(6, 182, 212, 0.15)' : 'transparent',
                 color: pathname?.startsWith('/profile') ? 'var(--cyan-400)' : 'var(--text-tertiary)',

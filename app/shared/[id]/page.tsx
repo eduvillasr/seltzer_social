@@ -14,6 +14,7 @@ import { BackHeader } from '@/components/BackHeader';
 import { RatingInput } from '@/components/RatingInput';
 import { CanLoader } from '@/components/CanLoader';
 import { showToast } from '@/components/Toast';
+import { haptic } from '@/lib/haptics';
 import {
   acceptTierListInvite,
   addSharedTierListItem,
@@ -291,7 +292,7 @@ export default function SharedListPage({ params }: { params: { id: string } }) {
     setBulkSaving(false);
     setAddOpen(false);
     if (error) showToast('Could not add drinks', 'error', error.message);
-    else showToast(`Added ${picks.length} ${picks.length === 1 ? 'drink' : 'drinks'} 🍹`, 'success', list?.name);
+    else { haptic('success'); showToast(`Added ${picks.length} ${picks.length === 1 ? 'drink' : 'drinks'} 🍹`, 'success', list?.name); }
     load();
   }
 
@@ -312,7 +313,7 @@ export default function SharedListPage({ params }: { params: { id: string } }) {
     setManualSaving(false);
     setAddOpen(false);
     if (error) showToast('Could not add drink', 'error', error.message);
-    else showToast(`Added ${name}`, 'success', `${ratingToTier(manualRating)} tier · ${manualRating.toFixed(1)}`);
+    else { haptic('success'); showToast(`Added ${name}`, 'success', `${ratingToTier(manualRating)} tier · ${manualRating.toFixed(1)}`); }
     load();
   }
 
@@ -356,7 +357,7 @@ export default function SharedListPage({ params }: { params: { id: string } }) {
     setEditSaving(false);
     setEditingItem(null);
     if (error) showToast('Could not save', 'error', error.message);
-    else showToast('Updated', 'success', `${editingItem.seltzer_name} · ${editTier}`);
+    else { haptic('success'); showToast('Updated', 'success', `${editingItem.seltzer_name} · ${editTier}`); }
     load();
   }
 
@@ -951,27 +952,67 @@ export default function SharedListPage({ params }: { params: { id: string } }) {
             const isCollapsed = collapsedTiers.has(tier);
             const isEmpty     = tierItems.length === 0;
 
+            const color = TIER_COLORS[tier];
+            const isTop = tier === 'S';
+
             return (
-              <div key={tier} className="rounded-xl overflow-hidden flex" style={{ border: '1px solid var(--border-subtle)' }}>
+              <div
+                key={tier}
+                className="rounded-xl overflow-hidden flex"
+                style={{
+                  border: `1px solid ${isTop ? `${color}40` : 'var(--border-subtle)'}`,
+                  boxShadow: isTop ? `0 0 18px ${color}1f` : 'none',
+                }}
+              >
                 {/* Tier letter rail — tap to expand into a fullscreen
-                    scrollable view of every drink in this tier. */}
+                    scrollable view of every drink in this tier. The top (S)
+                    tier gets a gold gradient + a slow shine sweep so the best
+                    drinks feel earned. */}
                 <button
                   onClick={() => !isEmpty && setExpandedTier(tier)}
                   disabled={isEmpty}
-                  className="w-10 flex flex-col items-center justify-center font-extrabold flex-shrink-0 hover:opacity-80 transition-opacity disabled:cursor-default"
-                  style={{ background: `${TIER_COLORS[tier]}22`, color: TIER_COLORS[tier] }}
+                  className={`relative w-12 flex flex-col items-center justify-center font-extrabold flex-shrink-0 transition-opacity disabled:cursor-default ${!isEmpty ? 'hover:opacity-90' : ''} ${isTop ? 'shine-sweep' : ''}`}
+                  style={{
+                    background: isTop
+                      ? `linear-gradient(160deg, ${color}5c, ${color}1a)`
+                      : `linear-gradient(160deg, ${color}33, ${color}12)`,
+                    color,
+                    fontFamily: 'var(--font-display)',
+                  }}
                   title={!isEmpty ? `Expand tier ${tier}` : undefined}
                 >
-                  <span className="text-base">{tier}</span>
-                  {!isEmpty && <span className="text-[9px] font-medium opacity-60 mt-0.5">{tierItems.length}</span>}
+                  {/* Solid accent edge */}
+                  <span
+                    className="absolute left-0 top-0 bottom-0 w-[3px]"
+                    style={{ background: color, boxShadow: `0 0 10px ${color}` }}
+                  />
+                  <span
+                    className="text-xl leading-none"
+                    style={{ textShadow: isTop ? `0 0 14px ${color}aa` : 'none' }}
+                  >
+                    {tier}
+                  </span>
+                  {!isEmpty && (
+                    <span
+                      className="text-[9px] font-bold mt-1 px-1.5 rounded-full"
+                      style={{ background: `${color}26`, color }}
+                    >
+                      {tierItems.length}
+                    </span>
+                  )}
                 </button>
 
                 {/* Tier content */}
-                <div className="flex-1 p-2 min-h-[44px]" style={{ background: 'var(--bg-card)' }}>
+                <div className="flex-1 p-2 min-h-[48px] flex flex-col justify-center" style={{ background: 'var(--bg-card)' }}>
                   {isEmpty ? (
-                    <span className="text-xs italic" style={{ color: 'var(--text-muted)' }}>
-                      {searchQuery ? 'No matches' : 'Empty'}
-                    </span>
+                    <div
+                      className="w-full rounded-lg border border-dashed flex items-center justify-center py-2.5"
+                      style={{ borderColor: 'var(--border-medium)' }}
+                    >
+                      <span className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
+                        {searchQuery ? 'No matches' : isMember ? 'Add a drink to this tier' : 'No drinks yet'}
+                      </span>
+                    </div>
                   ) : isCollapsed ? (
                     <button
                       onClick={() => toggleTier(tier)}
@@ -1113,7 +1154,7 @@ export default function SharedListPage({ params }: { params: { id: string } }) {
                 {TIERS.map((t) => (
                   <button
                     key={t}
-                    onClick={() => setEditTier(t)}
+                    onClick={() => { haptic('selection'); setEditTier(t); }}
                     className="flex-1 py-1.5 rounded-lg text-xs font-extrabold transition-all"
                     style={{
                       background: editTier === t ? TIER_COLORS[t] : `${TIER_COLORS[t]}18`,

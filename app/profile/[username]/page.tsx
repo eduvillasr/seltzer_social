@@ -25,9 +25,10 @@ import {
 } from '@/lib/supabase';
 import {
   ArrowLeft, Calendar, Droplets, UserPlus, UserMinus, List, Settings, ListPlus,
-  Star, Trophy, GitCompare, Award, Search, X, BarChart3, LayoutGrid,
+  Star, Trophy, GitCompare, Award, Search, X, BarChart3, LayoutGrid, ChevronRight,
 } from 'lucide-react';
 import { StarRating } from '@/components/StarRating';
+import { CountUp } from '@/components/CountUp';
 import { reviewHeadline, reviewDrinkLabel } from '@/lib/reviewDisplay';
 import { AchievementBadge } from '@/components/AchievementBadge';
 import { ContentMenu } from '@/components/ContentMenu';
@@ -403,6 +404,32 @@ export default function ProfilePage({ params }: ProfilePageProps) {
               </Link>
             );
           })()}
+
+          {/* Trophy Showroom — public; anyone can view this user's trophies */}
+          <Link
+            href={`/profile/${user.username}/showroom`}
+            className="shine-sweep relative mt-3 flex items-center gap-3 rounded-2xl p-3 overflow-hidden transition-transform hover:scale-[1.01]"
+            style={{
+              background: 'linear-gradient(135deg, rgba(167,139,250,0.16), rgba(34,211,238,0.10))',
+              border: '1px solid rgba(167,139,250,0.30)',
+            }}
+          >
+            <div
+              className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+              style={{ background: 'linear-gradient(150deg, #fde68a, #f59e0b)', boxShadow: '0 0 16px rgba(245,158,11,0.4)' }}
+            >
+              <Trophy size={18} color="#fff" strokeWidth={2.2} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-[10px] font-bold uppercase tracking-[0.18em]" style={{ color: 'var(--violet-400)' }}>
+                Trophy Showroom
+              </p>
+              <p className="text-xs truncate" style={{ color: 'var(--text-primary)' }}>
+                {isOwnProfile ? 'Show off your rarest trophies' : `See @${user.username}'s rarest trophies`}
+              </p>
+            </div>
+            <ChevronRight size={16} style={{ color: 'var(--text-muted)' }} />
+          </Link>
 
           {/* Action row */}
           <div className="relative flex gap-2 mt-4">
@@ -787,7 +814,7 @@ export default function ProfilePage({ params }: ProfilePageProps) {
 function Stat({ label, value, color }: { label: string; value: number; color: string }) {
   return (
     <div className="text-center">
-      <p className="text-base font-extrabold" style={{ color }}>{value}</p>
+      <CountUp value={value} className="text-base font-extrabold block" style={{ color }} />
       <p className="text-[10px] mt-0.5" style={{ color: 'var(--text-muted)' }}>{label}</p>
     </div>
   );

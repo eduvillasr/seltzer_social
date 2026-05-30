@@ -331,6 +331,9 @@ export default function CreateReview() {
       return;
     }
     showToast('Review published 🥂', 'success', `${seltzer.brand} · ${seltzer.name}`);
+    // Publishing is the most common way to unlock achievements — nudge the
+    // global watcher to re-check so any new dog tag celebrates right away.
+    if (typeof window !== 'undefined') window.dispatchEvent(new Event('achievements:check'));
 
     const { data: lists } = await getSharedTierLists(user.id);
     setLoading(false);

@@ -1,13 +1,19 @@
 // app/page.tsx
+//
+// Logged-out welcome screen. This is the first thing a signed-out user sees —
+// inside the native app it's effectively the launch screen, so it's built to
+// feel like one: a single full-height screen (no marketing scroll, no web nav
+// bar, no footer), a centered app identity, an auto-rotating showcase of the
+// product's three signature surfaces, and big bottom-anchored CTAs that respect
+// the device safe-area insets. Logged-in users are redirected straight to /feed.
 
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
-  Droplets, Star, Heart, ArrowRight, Sparkles, ListOrdered, Users, Check,
-  PenSquare, GitCompare, Award, Trophy,
+  Droplets, Star, Heart, ArrowRight, GitCompare, ListOrdered, Trophy, Sparkles,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 
@@ -15,14 +21,45 @@ const TIER_PREVIEW = [
   { tier: 'S', color: 'rgba(251,191,36,0.15)', border: 'rgba(251,191,36,0.3)', label: 'rgba(251,191,36,1)', items: ['Pamplemousse · LaCroix', 'Yuzu · Sanzo'] },
   { tier: 'A', color: 'rgba(34,211,238,0.1)',  border: 'rgba(34,211,238,0.2)',  label: 'rgba(34,211,238,1)',  items: ['Grapefruit · Spindrift', 'Lime · Topo Chico'] },
   { tier: 'B', color: 'rgba(167,139,250,0.1)', border: 'rgba(167,139,250,0.2)', label: 'rgba(167,139,250,1)', items: ['Blackberry · Bubly'] },
-  { tier: 'C', color: 'rgba(148,163,184,0.08)', border: 'rgba(148,163,184,0.12)', label: 'rgba(148,163,184,0.7)', items: ['Watermelon · AHA'] },
+];
+
+const SCENES = [
+  { key: 'tiers',   label: 'Build tier lists with friends' },
+  { key: 'reviews', label: 'Rate every seltzer you try' },
+  { key: 'compare', label: 'See whose taste matches yours' },
 ];
 
 export default function LandingPage() {
   const router = useRouter();
   const [checking, setChecking] = useState(true);
+  const [scene, setScene] = useState(0);
+  const touchStartX = useRef<number | null>(null);
+
+  // Swipe the showcase left/right like a native carousel. A small threshold
+  // keeps a vertical scroll or an accidental tap from flipping the scene.
+  function goTo(delta: number) {
+    setScene((s) => (s + delta + SCENES.length) % SCENES.length);
+  }
+  function onTouchStart(e: React.TouchEvent) {
+    touchStartX.current = e.touches[0].clientX;
+  }
+  function onTouchEnd(e: React.TouchEvent) {
+    if (touchStartX.current === null) return;
+    const dx = e.changedTouches[0].clientX - touchStartX.current;
+    touchStartX.current = null;
+    if (Math.abs(dx) < 40) return;
+    goTo(dx < 0 ? 1 : -1);
+  }
 
   useEffect(() => { checkAuth(); }, []);
+
+  // Auto-advance the showcase. Only runs once we've decided the user is logged
+  // out (so the interval never spins behind the loading splash).
+  useEffect(() => {
+    if (checking) return;
+    const id = setInterval(() => setScene((s) => (s + 1) % SCENES.length), 3800);
+    return () => clearInterval(id);
+  }, [checking]);
 
   async function checkAuth() {
     const { data } = await supabase.auth.getSession();
@@ -41,367 +78,198 @@ export default function LandingPage() {
   }
 
   return (
-    <div className="min-h-screen overflow-hidden">
+    <div
+      className="relative flex flex-col overflow-hidden hero-gradient"
+      style={{
+        minHeight: '100dvh',
+        paddingTop: 'calc(env(safe-area-inset-top, 0px) + 28px)',
+        paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 24px)',
+      }}
+    >
+      {/* Ambient glow blobs */}
+      <div className="absolute -top-10 left-[-10%] w-80 h-80 rounded-full bg-cyan-500/10 blur-[110px] pointer-events-none" />
+      <div className="absolute top-1/3 right-[-15%] w-72 h-72 rounded-full bg-violet-500/10 blur-[110px] pointer-events-none" />
 
-      {/* Nav — sits under the iOS status bar, so we pad-top by the inset */}
-      <nav
-        className="fixed top-0 left-0 right-0 z-50 glass"
-        style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}
-      >
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 flex items-center justify-between h-14 sm:h-16">
-          <Link href="/" className="flex items-center gap-2 sm:gap-2.5 min-w-0 flex-shrink">
-            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-gradient-to-br from-cyan-400 to-cyan-600 flex items-center justify-center animate-glow flex-shrink-0">
-              <Droplets size={16} className="text-white sm:w-[18px] sm:h-[18px]" />
-            </div>
-            <span className="text-base sm:text-lg font-bold truncate" style={{ fontFamily: 'var(--font-display)', color: 'var(--text-primary)' }}>Seltzer Social</span>
-          </Link>
-          <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
-            {/* On phones the Sign In label is a thin ghost link to save room next to Join */}
-            <Link href="/auth/login" className="btn-secondary hidden sm:inline-flex">Sign In</Link>
-            <Link href="/auth/login" className="btn-ghost sm:hidden" style={{ fontSize: '12px', padding: '6px 10px' }}>Sign in</Link>
-            <Link href="/auth/signup" className="btn-primary" style={{ padding: '8px 14px', fontSize: '13px' }}>
-              <span className="hidden sm:inline">Get Started</span>
-              <span className="sm:hidden">Join</span>
-              <ArrowRight size={14} />
-            </Link>
-          </div>
+      {/* Identity */}
+      <div className="flex flex-col items-center px-6 animate-fade-in-up">
+        <div className="w-16 h-16 rounded-[20px] bg-gradient-to-br from-cyan-400 to-cyan-600 flex items-center justify-center animate-float animate-glow mb-3">
+          <Droplets size={30} className="text-white" />
         </div>
-      </nav>
+        <span className="text-lg font-bold tracking-tight" style={{ fontFamily: 'var(--font-display)', color: 'var(--text-primary)' }}>
+          Seltzer Social
+        </span>
+      </div>
 
-      {/* Hero — `.hero-top-pad` handles the responsive top padding and adds
-          safe-area-inset-top on mobile so iPhone notches don't crush the title. */}
-      <section className="relative hero-top-pad pb-14 sm:pb-20 px-4 hero-gradient overflow-hidden">
-        <div className="absolute top-32 left-[5%] w-96 h-96 rounded-full bg-cyan-500/5 blur-[120px]" />
-        <div className="absolute top-48 right-[10%] w-72 h-72 rounded-full bg-violet-500/5 blur-[100px]" />
+      {/* Hero headline + rotating showcase — flex-1 keeps it centered between
+          the identity and the bottom CTAs on any screen height. */}
+      <div className="flex-1 flex flex-col items-center justify-center px-6 min-h-0">
+        <h1
+          className="text-3xl sm:text-4xl font-extrabold text-center leading-[1.1] mb-2 animate-fade-in-up break-anywhere"
+          style={{ fontFamily: 'var(--font-display)', animationDelay: '0.05s', color: 'var(--text-primary)' }}
+        >
+          Rate seltzers.<br />
+          <span className="gradient-text">Find your people.</span>
+        </h1>
+        <p
+          className="text-sm text-center mb-6 animate-fade-in-up"
+          style={{ animationDelay: '0.12s', color: 'var(--text-secondary)', maxWidth: '300px' }}
+        >
+          Your seltzer opinions say a lot about you. Find out who agrees.
+        </p>
 
-        <div className="max-w-5xl mx-auto">
-          <div className="grid lg:grid-cols-2 gap-12 items-center">
-
-            {/* Left — copy */}
-            <div>
-              <div className="flex items-center gap-3 mb-6 animate-fade-in-up">
-                <div className="h-px w-10 bg-gradient-to-r from-transparent to-cyan-500/50" />
-                <span className="text-xs font-semibold uppercase tracking-[0.2em]" style={{ color: 'var(--cyan-400)' }}>
-                  <Sparkles size={10} className="inline mr-1.5 mb-0.5" />For sparkling water people
-                </span>
-              </div>
-
-              <h1
-                className="text-4xl sm:text-6xl font-extrabold mb-5 sm:mb-6 leading-[1.08] animate-fade-in-up break-anywhere"
-                style={{ fontFamily: 'var(--font-display)', animationDelay: '0.05s', color: 'var(--text-primary)' }}
-              >
-                Rate seltzers.{' '}
-                <span className="gradient-text">Find your people.</span>
-              </h1>
-
-              <p
-                className="text-base sm:text-lg mb-6 sm:mb-8 leading-relaxed animate-fade-in-up"
-                style={{ animationDelay: '0.15s', color: 'var(--text-secondary)', maxWidth: '480px' }}
-              >
-                Build collaborative tier lists, write reviews, and discover who around you shares your taste. Turns out seltzer opinions say a lot about a person.
-              </p>
-
-              <div className="flex flex-col sm:flex-row items-stretch sm:items-start gap-3 animate-fade-in-up" style={{ animationDelay: '0.25s' }}>
-                <Link href="/auth/signup" className="btn-primary justify-center" style={{ fontSize: '15px', padding: '13px 28px' }}>
-                  Get Started <ArrowRight size={16} />
-                </Link>
-                <Link href="/auth/login" className="btn-secondary justify-center" style={{ fontSize: '15px', padding: '13px 28px' }}>
-                  I have an account
-                </Link>
-              </div>
-
-              {/* Social proof pills */}
-              <div className="flex flex-wrap gap-2 mt-8 animate-fade-in-up" style={{ animationDelay: '0.35s' }}>
-                {[
-                  { icon: <Check size={11} />, text: 'Collaborative tier lists' },
-                  { icon: <Check size={11} />, text: '1,000+ drink catalog' },
-                  { icon: <Check size={11} />, text: 'Compare your taste' },
-                  { icon: <Check size={11} />, text: 'Earn achievements' },
-                ].map((p) => (
-                  <span key={p.text} className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full" style={{ background: 'rgba(6,182,212,0.08)', border: '1px solid rgba(6,182,212,0.15)', color: 'var(--cyan-400)' }}>
-                    {p.icon} {p.text}
-                  </span>
-                ))}
-              </div>
-            </div>
-
-            {/* Right — tier list preview */}
-            <div className="animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
-              <div className="glass-card" style={{ padding: '20px' }}>
-                <div className="flex items-center justify-between mb-4">
-                  <div>
-                    <p className="font-bold text-sm" style={{ fontFamily: 'var(--font-display)', color: 'var(--text-primary)' }}>Office Seltzer Tier List</p>
-                    <p className="text-xs" style={{ color: 'var(--text-muted)' }}>@alex_dev + @priya_design</p>
-                  </div>
-                  <span className="badge-cyan" style={{ fontSize: '10px', padding: '3px 8px' }}>Live</span>
-                </div>
-
-                <div className="space-y-2 mb-4">
-                  {TIER_PREVIEW.map(({ tier, color, border, label, items }) => (
-                    <div key={tier} className="flex rounded-xl overflow-hidden" style={{ border: `1px solid ${border}` }}>
-                      <div className="w-9 flex items-center justify-center text-sm font-black flex-shrink-0" style={{ background: color, color: label }}>
-                        {tier}
-                      </div>
-                      <div className="flex-1 px-2 py-1.5 flex flex-wrap gap-1.5" style={{ background: 'rgba(15,20,36,0.5)' }}>
-                        {items.map((item) => (
-                          <span key={item} className="text-xs px-2 py-0.5 rounded-md" style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border-subtle)', color: 'var(--text-secondary)' }}>
-                            {item}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Compare-tastes teaser — shows the kind of insight the app surfaces */}
-                <div
-                  className="rounded-xl p-3 mt-3"
-                  style={{
-                    background: 'linear-gradient(135deg, rgba(34,211,238,0.10), rgba(167,139,250,0.10))',
-                    border: '1px solid rgba(34,211,238,0.22)',
-                  }}
-                >
-                  <div className="flex items-center gap-2 mb-1.5">
-                    <GitCompare size={12} className="text-cyan-400" />
-                    <p className="text-xs font-semibold" style={{ color: 'var(--cyan-400)' }}>You vs @alex_dev</p>
-                  </div>
-                  <div className="flex items-center justify-between gap-3">
-                    <p
-                      className="text-2xl font-extrabold"
-                      style={{
-                        background: 'linear-gradient(135deg, var(--cyan-400), var(--violet-400))',
-                        WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
-                      }}
-                    >
-                      82% taste agreement
-                    </p>
-                    <span className="text-[10px] flex-shrink-0" style={{ color: 'var(--text-muted)' }}>
-                      14 drinks in common
-                    </span>
-                  </div>
-                </div>
-              </div>
+        {/* Showcase card — fixed min-height so the layout doesn't jump as scenes
+            of different heights rotate through. key={scene} replays the entrance
+            animation on each change for a soft cross-fade feel. */}
+        <div
+          className="w-full select-none"
+          style={{ maxWidth: '360px', touchAction: 'pan-y' }}
+          onTouchStart={onTouchStart}
+          onTouchEnd={onTouchEnd}
+        >
+          <div className="flex items-center justify-center" style={{ minHeight: '260px' }}>
+            <div key={scene} className="w-full animate-fade-in-up">
+              {scene === 0 && <TierScene />}
+              {scene === 1 && <ReviewScene />}
+              {scene === 2 && <CompareScene />}
             </div>
           </div>
-        </div>
-      </section>
 
-      <div className="glow-line" />
-
-      {/* How it works */}
-      <section className="py-20 px-4 section-alt">
-        <div className="max-w-4xl mx-auto">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl sm:text-4xl font-bold mb-3" style={{ fontFamily: 'var(--font-display)' }}>
-              How it <span className="gradient-text">works</span>
-            </h2>
-            <p style={{ color: 'var(--text-secondary)' }}>Three things you'll do on day one.</p>
-          </div>
-
-          <div className="grid sm:grid-cols-3 gap-6">
-            {[
-              {
-                step: '01',
-                icon: <PenSquare size={22} />,
-                title: 'Rate seltzers',
-                desc: 'Drop a quick review with a photo, rating, and optional title. Or tap "Tried It" on someone else\'s review for a one-tap rating.',
-                gradient: 'from-cyan-400 to-cyan-600',
-              },
-              {
-                step: '02',
-                icon: <Users size={22} />,
-                title: 'Build tier lists with friends',
-                desc: 'Start a shared list with a friend. Both of you add drinks freely — when you both rate the same one, the score averages automatically.',
-                gradient: 'from-violet-400 to-violet-600',
-              },
-              {
-                step: '03',
-                icon: <ListOrdered size={22} />,
-                title: 'Watch the rankings evolve',
-                desc: 'Subscribers follow along and rate drinks they\'ve tried. The list grows organically — and your taste profile sharpens with every entry.',
-                gradient: 'from-amber-400 to-orange-500',
-              },
-            ].map((s) => (
-              <div key={s.step} className="glass-card relative overflow-hidden group">
-                <div className="absolute top-3 right-4 text-4xl font-black opacity-[0.04]" style={{ fontFamily: 'var(--font-display)', color: 'var(--text-primary)' }}>{s.step}</div>
-                <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${s.gradient} flex items-center justify-center text-white mb-4 group-hover:scale-110 transition-transform`}>
-                  {s.icon}
-                </div>
-                <h3 className="font-bold mb-2" style={{ fontFamily: 'var(--font-display)', color: 'var(--text-primary)' }}>{s.title}</h3>
-                <p className="text-sm leading-relaxed" style={{ color: 'var(--text-secondary)' }}>{s.desc}</p>
-              </div>
+          {/* Scene label + dots */}
+          <p className="text-center text-xs font-semibold mt-4 mb-3 transition-colors" style={{ color: 'var(--text-secondary)' }}>
+            {SCENES[scene].label}
+          </p>
+          <div className="flex items-center justify-center gap-2">
+            {SCENES.map((s, i) => (
+              <button
+                key={s.key}
+                onClick={() => setScene(i)}
+                aria-label={s.label}
+                className="rounded-full transition-all duration-300"
+                style={{
+                  width: i === scene ? 20 : 7,
+                  height: 7,
+                  background: i === scene ? 'var(--cyan-400)' : 'rgba(148,163,184,0.3)',
+                }}
+              />
             ))}
           </div>
         </div>
-      </section>
+      </div>
 
-      {/* Review card preview */}
-      <section className="py-20 px-4">
-        <div className="max-w-4xl mx-auto">
-          <div className="grid lg:grid-cols-2 gap-10 items-center">
-            <div>
-              <h2 className="text-3xl sm:text-4xl font-bold mb-4" style={{ fontFamily: 'var(--font-display)' }}>
-                Rate it yourself,{' '}
-                <span className="gradient-text">then compare</span>
-              </h2>
-              <p className="mb-6 leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
-                Write full reviews with photos, give a one-tap "Tried It" rating, then see who has the same palate. Compare with anyone — agreement %, biggest disagreements, the works.
-              </p>
-              <div className="space-y-3">
-                {[
-                  'Reviews with photos, ratings, optional titles',
-                  '"Tried It" for one-tap quick rates',
-                  'Compare tastes with anyone you follow',
-                  'Earn dog-tag achievements as you rate',
-                  'A taste profile that gets sharper over time',
-                ].map((item) => (
-                  <div key={item} className="flex items-center gap-3">
-                    <div className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: 'rgba(6,182,212,0.15)' }}>
-                      <Check size={11} className="text-cyan-400" />
-                    </div>
-                    <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>{item}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Mini review card */}
-            <div className="glass-card">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-10 h-10 rounded-full avatar-gradient flex items-center justify-center text-sm font-bold">M</div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-sm" style={{ color: 'var(--text-primary)' }}>mwilson_sales</p>
-                  <p className="text-xs" style={{ color: 'var(--text-muted)' }}>45m ago</p>
-                </div>
-                <div className="badge-amber"><Star size={10} className="star-filled" />4.8</div>
-              </div>
-              <h3 className="font-bold text-lg mb-1" style={{ fontFamily: 'var(--font-display)' }}>Blood Orange</h3>
-              <p className="text-xs mb-3" style={{ color: 'var(--text-tertiary)' }}>Sanzo</p>
-              <div className="flex gap-0.5 mb-3">
-                {[1,2,3,4,5].map(i => <Star key={i} size={14} className="star-filled" />)}
-              </div>
-              <p className="text-sm mb-4" style={{ color: 'var(--text-secondary)' }}>
-                This one genuinely surprised me. The blood orange isn't artificial at all — tastes like someone squeezed an actual orange into sparkling water. Changed my whole view on Sanzo.
-              </p>
-              <div className="flex items-center gap-3 pt-3" style={{ borderTop: '1px solid var(--border-subtle)' }}>
-                <span className="action-btn active-like" style={{ padding: '4px 10px' }}>
-                  <Heart size={13} className="fill-current" />14
-                </span>
-                <span className="badge-cyan ml-auto" style={{ fontSize: '11px' }}>
-                  <Droplets size={11} />6 tried this
-                </span>
-              </div>
-            </div>
-          </div>
+      {/* Bottom-anchored CTAs */}
+      <div className="px-6 pt-4 animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
+        <div className="w-full mx-auto" style={{ maxWidth: '360px' }}>
+          <Link
+            href="/auth/signup"
+            className="btn-primary w-full justify-center"
+            style={{ fontSize: '16px', padding: '15px 28px', borderRadius: '16px' }}
+          >
+            Get Started <ArrowRight size={18} />
+          </Link>
+          <Link
+            href="/auth/login"
+            className="block text-center text-sm font-medium mt-4"
+            style={{ color: 'var(--text-secondary)' }}
+          >
+            I already have an account
+          </Link>
         </div>
-      </section>
+      </div>
+    </div>
+  );
+}
 
-      {/* Achievements showcase */}
-      <section className="py-20 px-4 section-alt">
-        <div className="max-w-4xl mx-auto">
-          <div className="grid lg:grid-cols-2 gap-10 items-center">
-            {/* Left — copy */}
-            <div>
-              <div className="flex items-center gap-2 mb-3">
-                <Award size={14} style={{ color: 'var(--violet-400)' }} />
-                <span className="text-xs font-semibold uppercase tracking-[0.18em]" style={{ color: 'var(--violet-400)' }}>Honors</span>
-              </div>
-              <h2 className="text-3xl sm:text-4xl font-bold mb-4" style={{ fontFamily: 'var(--font-display)' }}>
-                Earn dog tags{' '}
-                <span className="gradient-text">as you go</span>
-              </h2>
-              <p className="mb-6 leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
-                Every milestone unlocks a badge — bronze for getting started, all the way to legendary for the originals. Pin your favorites to your profile like military insignia.
-              </p>
-              <div className="space-y-3">
-                {[
-                  '20 badges across 5 tiers',
-                  'Earn by reviewing, exploring brands, getting likes',
-                  'Pin up to 3 to flex on your profile',
-                  'Founder + Beta Tester legendary tiers',
-                ].map((item) => (
-                  <div key={item} className="flex items-center gap-3">
-                    <div className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: 'rgba(167,139,250,0.15)' }}>
-                      <Check size={11} style={{ color: 'var(--violet-400)' }} />
-                    </div>
-                    <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>{item}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
+// ── Showcase scenes ──────────────────────────────────────────────────────────
 
-            {/* Right — sample dog tag wall */}
-            <div className="grid grid-cols-3 gap-3">
-              {[
-                { name: 'Connoisseur',  Icon: Trophy,    color: '#f4c430', tier: 'Gold'      },
-                { name: 'Founder',      Icon: Sparkles,  color: '#a78bfa', tier: 'Legendary' },
-                { name: 'Local Legend', Icon: Heart,     color: '#f4c430', tier: 'Gold'      },
-                { name: 'Brand Hopper', Icon: Star,      color: '#f4c430', tier: 'Gold'      },
-                { name: 'Curator',      Icon: ListOrdered, color: '#c0c4cc', tier: 'Silver'  },
-                { name: 'Crowd Pleaser', Icon: Users,    color: '#c0c4cc', tier: 'Silver'    },
-              ].map(({ name, Icon, color, tier }) => (
-                <div
-                  key={name}
-                  className="rounded-2xl p-3 flex flex-col items-center text-center"
-                  style={{ background: 'rgba(15,20,36,0.5)', border: '1px solid var(--border-subtle)' }}
-                >
-                  <div
-                    className="relative flex items-center justify-center mb-2"
-                    style={{
-                      width: 52, height: 52, borderRadius: '50%',
-                      background: `linear-gradient(135deg, ${color}33, ${color}10)`,
-                      border: `1.5px solid ${color}`,
-                      boxShadow: `0 0 24px ${color}55, inset 0 0 12px ${color}1f`,
-                    }}
-                  >
-                    <Icon size={22} style={{ color }} strokeWidth={2.2} />
-                    <span
-                      className="absolute"
-                      style={{
-                        bottom: -2, right: -2,
-                        width: 10, height: 10, borderRadius: '50%',
-                        background: color, boxShadow: `0 0 8px ${color}`,
-                        border: '2px solid var(--bg-primary)',
-                      }}
-                    />
-                  </div>
-                  <p className="text-[11px] font-bold leading-tight" style={{ color: 'var(--text-primary)' }}>{name}</p>
-                  <p className="text-[9px] uppercase tracking-wider mt-0.5" style={{ color }}>{tier}</p>
-                </div>
+function TierScene() {
+  return (
+    <div className="glass-card" style={{ padding: '16px' }}>
+      <div className="flex items-center justify-between mb-3">
+        <div className="min-w-0">
+          <p className="font-bold text-sm truncate" style={{ fontFamily: 'var(--font-display)', color: 'var(--text-primary)' }}>Office Tier List</p>
+          <p className="text-[11px] truncate" style={{ color: 'var(--text-muted)' }}>@alex_dev + @priya_design</p>
+        </div>
+        <span className="badge-cyan flex-shrink-0" style={{ fontSize: '10px', padding: '3px 8px' }}>Live</span>
+      </div>
+      <div className="space-y-2">
+        {TIER_PREVIEW.map(({ tier, color, border, label, items }) => (
+          <div key={tier} className="flex rounded-xl overflow-hidden" style={{ border: `1px solid ${border}` }}>
+            <div className="w-8 flex items-center justify-center text-sm font-black flex-shrink-0" style={{ background: color, color: label }}>{tier}</div>
+            <div className="flex-1 px-2 py-1.5 flex flex-wrap gap-1.5" style={{ background: 'rgba(15,20,36,0.5)' }}>
+              {items.map((item) => (
+                <span key={item} className="text-[11px] px-2 py-0.5 rounded-md" style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border-subtle)', color: 'var(--text-secondary)' }}>{item}</span>
               ))}
             </div>
           </div>
-        </div>
-      </section>
+        ))}
+      </div>
+    </div>
+  );
+}
 
-      {/* CTA */}
-      <section className="py-24 px-4 hero-gradient">
-        <div className="max-w-xl mx-auto text-center">
-          <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-cyan-400 to-cyan-600 flex items-center justify-center mx-auto mb-6 animate-float animate-glow">
-            <Droplets size={26} className="text-white" />
-          </div>
-          <h2 className="text-3xl sm:text-4xl font-bold mb-4" style={{ fontFamily: 'var(--font-display)' }}>
-            Your taste says more{' '}
-            <span className="gradient-text">than you think.</span>
-          </h2>
-          <p className="mb-8" style={{ color: 'var(--text-secondary)' }}>
-            Rate seltzers. Build lists. Find the people who get it.
+function ReviewScene() {
+  return (
+    <div className="glass-card" style={{ padding: '16px' }}>
+      <div className="flex items-center gap-3 mb-3">
+        <div className="w-9 h-9 rounded-full avatar-gradient flex items-center justify-center text-sm font-bold flex-shrink-0">M</div>
+        <div className="flex-1 min-w-0">
+          <p className="font-semibold text-sm truncate" style={{ color: 'var(--text-primary)' }}>mwilson_sales</p>
+          <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>45m ago</p>
+        </div>
+        <div className="badge-amber flex-shrink-0"><Star size={10} className="star-filled" />4.8</div>
+      </div>
+      <h3 className="font-bold text-base mb-0.5" style={{ fontFamily: 'var(--font-display)' }}>Blood Orange</h3>
+      <p className="text-[11px] mb-2" style={{ color: 'var(--text-tertiary)' }}>Sanzo</p>
+      <div className="flex gap-0.5 mb-2">
+        {[1, 2, 3, 4, 5].map((i) => <Star key={i} size={13} className="star-filled" />)}
+      </div>
+      <p className="text-[13px] leading-relaxed mb-3" style={{ color: 'var(--text-secondary)' }}>
+        Genuinely surprised me — tastes like someone squeezed a real orange into sparkling water. Changed my whole view on Sanzo.
+      </p>
+      <div className="flex items-center gap-3 pt-2.5" style={{ borderTop: '1px solid var(--border-subtle)' }}>
+        <span className="action-btn active-like" style={{ padding: '4px 10px' }}><Heart size={13} className="fill-current" />14</span>
+        <span className="badge-cyan ml-auto" style={{ fontSize: '11px' }}><Droplets size={11} />6 tried this</span>
+      </div>
+    </div>
+  );
+}
+
+function CompareScene() {
+  const tags = [
+    { name: 'Connoisseur', Icon: Trophy, color: '#f4c430' },
+    { name: 'Founder', Icon: Sparkles, color: '#a78bfa' },
+    { name: 'Curator', Icon: ListOrdered, color: '#c0c4cc' },
+  ];
+  return (
+    <div className="glass-card" style={{ padding: '16px' }}>
+      <div
+        className="rounded-xl p-3.5 mb-3"
+        style={{ background: 'linear-gradient(135deg, rgba(34,211,238,0.10), rgba(167,139,250,0.10))', border: '1px solid rgba(34,211,238,0.22)' }}
+      >
+        <div className="flex items-center gap-2 mb-1.5">
+          <GitCompare size={12} className="text-cyan-400" />
+          <p className="text-xs font-semibold" style={{ color: 'var(--cyan-400)' }}>You vs @alex_dev</p>
+        </div>
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-2xl font-extrabold" style={{ background: 'linear-gradient(135deg, var(--cyan-400), var(--violet-400))', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+            82% match
           </p>
-          <Link href="/auth/signup" className="btn-primary" style={{ fontSize: '16px', padding: '14px 32px' }}>
-            Join Seltzer Social <ArrowRight size={18} />
-          </Link>
+          <span className="text-[10px] flex-shrink-0" style={{ color: 'var(--text-muted)' }}>14 drinks in common</span>
         </div>
-      </section>
-
-      <footer className="py-8 px-4" style={{ borderTop: '1px solid var(--border-subtle)' }}>
-        <div className="max-w-5xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-2 text-sm" style={{ color: 'var(--text-muted)' }}>
-            <Droplets size={14} className="text-cyan-500" />
-            <span>Seltzer Social</span>
+      </div>
+      <div className="grid grid-cols-3 gap-2">
+        {tags.map(({ name, Icon, color }) => (
+          <div key={name} className="rounded-xl p-2 flex flex-col items-center text-center" style={{ background: 'rgba(15,20,36,0.5)', border: '1px solid var(--border-subtle)' }}>
+            <div
+              className="flex items-center justify-center mb-1.5"
+              style={{ width: 40, height: 40, borderRadius: '50%', background: `linear-gradient(135deg, ${color}33, ${color}10)`, border: `1.5px solid ${color}`, boxShadow: `0 0 16px ${color}44` }}
+            >
+              <Icon size={18} style={{ color }} strokeWidth={2.2} />
+            </div>
+            <p className="text-[10px] font-bold leading-tight" style={{ color: 'var(--text-primary)' }}>{name}</p>
           </div>
-          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Made with bubbles</p>
-        </div>
-      </footer>
+        ))}
+      </div>
     </div>
   );
 }

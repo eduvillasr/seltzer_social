@@ -14,6 +14,7 @@ import { Droplets, ArrowRight, Check, X, AlertCircle } from 'lucide-react';
 import {
   supabase, claimUsername, validateUsername, isUsernameAvailable, ensureUserProfile,
 } from '@/lib/supabase';
+import { resolveReferrer, clearReferral } from '@/lib/referral';
 import { showToast } from '@/components/Toast';
 
 export default function ChooseUsernameWrapper() {
@@ -98,12 +99,14 @@ function ChooseUsername() {
     if (!userId) return;
     setError('');
     setSubmitting(true);
-    const { data, error: claimErr } = await claimUsername(userId, username);
+    const referredBy = await resolveReferrer(userId);
+    const { data, error: claimErr } = await claimUsername(userId, username, referredBy);
     setSubmitting(false);
     if (claimErr || !data) {
       setError(claimErr?.message || 'Could not claim that username.');
       return;
     }
+    clearReferral();
     if (typeof window !== 'undefined') {
       window.localStorage.removeItem('seltzer:pending-username');
     }

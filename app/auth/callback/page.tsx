@@ -9,6 +9,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Droplets, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { supabase, ensureUserProfile } from '@/lib/supabase';
+import { resolveReferrer, clearReferral } from '@/lib/referral';
 import { showToast } from '@/components/Toast';
 
 export default function AuthCallback() {
@@ -76,10 +77,12 @@ export default function AuthCallback() {
       : null;
 
     if (stashed) {
+      const referredBy = await resolveReferrer(session.user.id);
       const { error } = await supabase
-        .from('users').insert([{ id: session.user.id, username: stashed }]);
+        .from('users').insert([{ id: session.user.id, username: stashed, ...(referredBy ? { referred_by: referredBy } : {}) }]);
       if (!error) {
         if (typeof window !== 'undefined') window.localStorage.removeItem('seltzer:pending-username');
+        clearReferral();
         showToast('Email confirmed 🥂', 'success', `You're @${stashed}`);
         router.replace('/onboarding');
         return;

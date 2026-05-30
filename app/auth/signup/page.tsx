@@ -7,6 +7,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Droplets, ArrowRight, Mail, CheckCircle2, Check, X } from 'lucide-react';
 import { supabase, validateUsername, isUsernameAvailable } from '@/lib/supabase';
+import { stashReferral, resolveReferrer, clearReferral } from '@/lib/referral';
 
 export default function Signup() {
   const router = useRouter();
@@ -22,6 +23,14 @@ export default function Signup() {
   //   • "pending"   — Supabase email confirmation is on. signUp returned a user but no
   //                   session. We show a "check your email" screen instead.
   const [confirmEmail, setConfirmEmail] = useState<string | null>(null);
+
+  // Capture a ?ref=<username> invite so we can credit the referrer once this
+  // user's profile row is created (here, in /auth/callback, or choose-username).
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const ref = new URLSearchParams(window.location.search).get('ref');
+    if (ref) stashReferral(ref);
+  }, []);
 
   // Username live-check
   type UsernameState =
@@ -83,11 +92,13 @@ export default function Signup() {
 
     // If we got a session back, email confirmation is off — claim the username now.
     if (data.session && data.user) {
+      const referredBy = await resolveReferrer(data.user.id);
       const { error: profileError } = await supabase
-        .from('users').insert([{ id: data.user.id, username: cleanUsername }]);
+        .from('users').insert([{ id: data.user.id, username: cleanUsername, ...(referredBy ? { referred_by: referredBy } : {}) }]);
       if (profileError && !profileError.message?.toLowerCase().includes('duplicate')) {
         setError(profileError.message); setLoading(false); return;
       }
+      clearReferral();
       router.push('/onboarding');
       return;
     }

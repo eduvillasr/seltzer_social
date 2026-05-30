@@ -11,7 +11,9 @@ import { Avatar } from '@/components/Avatar';
 import { AvatarCropper } from '@/components/AvatarCropper';
 import { showToast } from '@/components/Toast';
 import { ensureUserProfile, supabase, uploadAvatar, updateUserProfile, deleteMyAccount } from '@/lib/supabase';
-import { ArrowLeft, LogOut, Bell, Shield, HelpCircle, Info, ChevronRight, Droplets, Camera, Check, X, Upload, Sparkles, ImagePlus, FileText, ScrollText, Trash2, AlertTriangle, ShieldAlert } from 'lucide-react';
+import { referralLink } from '@/lib/referral';
+import { haptic } from '@/lib/haptics';
+import { ArrowLeft, LogOut, Bell, Shield, HelpCircle, Info, ChevronRight, Droplets, Camera, Check, X, Upload, Sparkles, ImagePlus, FileText, ScrollText, Trash2, AlertTriangle, ShieldAlert, UserPlus, Share2 } from 'lucide-react';
 import { CURRENT_VERSION, hasUnseenRelease } from '@/lib/changelog';
 
 export default function SettingsPage() {
@@ -107,6 +109,28 @@ export default function SettingsPage() {
     await updateUserProfile(userId, { bio });
     setSaving(false);
     showToast('Profile saved', 'success');
+  }
+
+  async function handleInvite() {
+    if (!username) return;
+    haptic('light');
+    const link = referralLink(username);
+    if (typeof navigator !== 'undefined' && (navigator as any).share) {
+      try {
+        await (navigator as any).share({
+          title: 'Join me on Seltzer Social',
+          text: 'Rate seltzers and build tier lists with me on Seltzer Social',
+          url: link,
+        });
+        return;
+      } catch { /* user cancelled — fall through to copy */ }
+    }
+    try {
+      await navigator.clipboard.writeText(link);
+      showToast('Invite link copied 🔗', 'success', 'Share it — you’ll earn referral trophies.');
+    } catch {
+      showToast('Could not copy', 'error', link);
+    }
   }
 
   async function handleLogout() {
@@ -281,6 +305,28 @@ export default function SettingsPage() {
             <SettingItem icon={<Bell size={18} />} label="Notifications" disabled />
             <SettingItem icon={<Shield size={18} />} label="Privacy" disabled />
           </div>
+        </div>
+
+        {/* Invite friends — referral link (earns referral trophies) */}
+        <div className="mb-5">
+          <p className="text-xs uppercase tracking-wider mb-3 px-1" style={{ color: 'var(--text-muted)' }}>Invite</p>
+          <button
+            onClick={handleInvite}
+            className="w-full rounded-2xl p-4 flex items-center gap-3 text-left transition-transform hover:scale-[1.01]"
+            style={{ background: 'linear-gradient(135deg, rgba(167,139,250,0.14), rgba(34,211,238,0.10))', border: '1px solid rgba(167,139,250,0.28)' }}
+          >
+            <div
+              className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+              style={{ background: 'linear-gradient(150deg, #c4b5fd, #7c3aed)', boxShadow: '0 0 16px rgba(124,58,237,0.4)' }}
+            >
+              <UserPlus size={18} color="#fff" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>Invite friends</p>
+              <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>Share your link & earn referral trophies</p>
+            </div>
+            <Share2 size={16} style={{ color: 'var(--text-muted)' }} />
+          </button>
         </div>
 
         {/* Curator (founders + beta testers only) */}

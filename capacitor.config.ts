@@ -17,7 +17,7 @@ const config: CapacitorConfig = {
   backgroundColor: '#0a0e1a',
   server: {
     // ⚠️ Replace with your production HTTPS domain before building a release.
-    url: 'https://seltzer-social.vercel.app',
+    url: 'https://project-8awhm.vercel.app',
     cleartext: false,
   },
   ios: {
